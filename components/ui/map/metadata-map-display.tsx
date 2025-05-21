@@ -117,111 +117,86 @@ export default function MetadataMapDisplay({
     }
   })
 
-  // Add bounding box layer when map is loaded
+  // Unified bounding box layer management - handles initial creation, style changes, and data updates
   useEffect(() => {
     if (!mapInstance || !isMapLoaded || !showBoundingBoxes) return
 
-    // Track whether we've successfully added the layers
-    let layersAdded = false
+    // Only proceed if the map style is fully loaded
+    if (!mapInstance.isStyleLoaded()) return
 
-    // Function to add/update layers when style is loaded
-    const addBoundingBoxLayers = () => {
-      if (!mapInstance || !mapInstance.isStyleLoaded()) return
+    try {
+      // Check if the source already exists
+      const existingSource = mapInstance.getSource("metadata-bounds")
 
-      try {
-        // Check if the source already exists
-        const existingSource = mapInstance.getSource("metadata-bounds")
-
-        if (existingSource) {
-          // Update existing source data
-          if ("setData" in existingSource) {
-            existingSource.setData(recordsToGeoJSON(records))
+      if (existingSource) {
+        // Update existing source data
+        if ("setData" in existingSource) {
+          existingSource.setData(recordsToGeoJSON(records))
+        }
+      } else {
+        // Add source and layer for bounding boxes
+        addLayer({
+          id: "metadata-bounds",
+          source: {
+            type: "geojson",
+            data: recordsToGeoJSON(records)
+          },
+          layer: {
+            type: "fill",
+            paint: {
+              "fill-color": "#3b82f6",
+              "fill-opacity": 0.2,
+              "fill-outline-color": "#2563eb"
+            }
           }
-        } else {
-          // Add source and layer for bounding boxes
-          addLayer({
-            id: "metadata-bounds",
-            source: {
-              type: "geojson",
-              data: recordsToGeoJSON(records)
-            },
-            layer: {
-              type: "fill",
-              paint: {
-                "fill-color": "#3b82f6",
-                "fill-opacity": 0.2,
-                "fill-outline-color": "#2563eb"
-              }
+        })
+
+        // Add outline layer
+        addLayer({
+          id: "metadata-bounds-outline",
+          source: "metadata-bounds",
+          layer: {
+            type: "line",
+            paint: {
+              "line-color": "#2563eb",
+              "line-width": 2
             }
-          })
-
-          // Add outline layer
-          addLayer({
-            id: "metadata-bounds-outline",
-            source: "metadata-bounds",
-            layer: {
-              type: "line",
-              paint: {
-                "line-color": "#2563eb",
-                "line-width": 2
-              }
-            }
-          })
-
-          // Set the flag to indicate layers were added
-          layersAdded = true
-        }
-
-        // Style is selected, set selected record styling
-        if (selectedRecordId) {
-          // Add a conditional filter to highlight the selected record
-          mapInstance.setFilter("metadata-bounds", [
-            "==",
-            ["get", "id"],
-            selectedRecordId
-          ])
-          mapInstance.setFilter("metadata-bounds-outline", [
-            "==",
-            ["get", "id"],
-            selectedRecordId
-          ])
-        } else {
-          // Reset filter to show all records
-          mapInstance.setFilter("metadata-bounds", null)
-          mapInstance.setFilter("metadata-bounds-outline", null)
-        }
-      } catch (err) {
-        // Use our centralized error logging
-        logMapError(
-          err instanceof Error ? err : new Error(String(err)),
-          "Bounding Box Layers"
-        )
-        toast.error(
-          "Error displaying bounding boxes. Using fallback configuration."
-        )
+          }
+        })
       }
-    }
 
-    // Try to add layers immediately if style is loaded
-    if (mapInstance.isStyleLoaded()) {
-      addBoundingBoxLayers()
-    }
-
-    // Set up a listener for style data to handle style changes
-    const handleStyleData = () => {
-      if (mapInstance.isStyleLoaded() && !layersAdded) {
-        addBoundingBoxLayers()
+      // Apply filters based on selected record
+      if (selectedRecordId) {
+        // Add a conditional filter to highlight the selected record
+        mapInstance.setFilter("metadata-bounds", [
+          "==",
+          ["get", "id"],
+          selectedRecordId
+        ])
+        mapInstance.setFilter("metadata-bounds-outline", [
+          "==",
+          ["get", "id"],
+          selectedRecordId
+        ])
+      } else {
+        // Reset filter to show all records
+        mapInstance.setFilter("metadata-bounds", null)
+        mapInstance.setFilter("metadata-bounds-outline", null)
       }
+    } catch (err) {
+      // Use our centralized error logging
+      logMapError(
+        err instanceof Error ? err : new Error(String(err)),
+        "Bounding Box Layers"
+      )
+      toast.error(
+        "Error displaying bounding boxes. Using fallback configuration."
+      )
     }
-
-    mapInstance.on("styledata", handleStyleData)
 
     // Cleanup function
     return () => {
       if (!mapInstance) return
-
-      // Remove event listener
-      mapInstance.off("styledata", handleStyleData)
 
       // Remove layers and source if they exist
       try {
@@ -247,33 +222,8 @@ export default function MetadataMapDisplay({
     selectedRecordId,
     addLayer,
     removeLayer,
-    activeStyleId // Add activeStyleId to dependency array
+    activeStyleId // Keep activeStyleId in dependency array to re-run when style changes
   ])
-
-  // Update bounding box layer when records change
-  useEffect(() => {
-    if (!mapInstance || !isMapLoaded || !showBoundingBoxes) return
-
-    // Make sure the style is loaded before trying to access sources
-    if (!mapInstance.isStyleLoaded()) return
-
-    // Check if the source exists before trying to update it
-    try {
-      // First check if the source exists to avoid errors
-      if (mapInstance.getSource("metadata-bounds")) {
-        const source = mapInstance.getSource("metadata-bounds")
-        if (source && "setData" in source) {
-          source.setData(recordsToGeoJSON(records))
-        }
-      }
-    } catch (err) {
-      // Use our centralized error logging
-      logMapError(
-        err instanceof Error ? err : new Error(String(err)),
-        "Updating Map Source Data"
-      )
-    }
-  }, [mapInstance, isMapLoaded, records, showBoundingBoxes])
 
   // Old marker useEffect (lines 250-338) is now removed.
   // useMapMarkers hook above handles marker creation/removal declaratively.
