@@ -79,12 +79,19 @@ export default function StylePreview({
 
   return (
     <Card className={`overflow-hidden ${!isAvailable ? "opacity-70" : ""}`}>
-      <div className={`${className} relative`}>
+      <div className={`${className} relative`} style={{ minHeight: "150px" }}>
         {isAvailable ? (
           <>
             <div
               ref={mapContainerRef}
               className={`w-full h-full ${!isLoaded ? "hidden" : ""}`}
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0
+              }}
             />
             {!isLoaded && !hasError && (
               <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
@@ -107,7 +114,7 @@ export default function StylePreview({
         )}
 
         {/* Style name overlay */}
-        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-2">
+        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-2 z-10">
           <div className="flex justify-between items-center">
             <p className="text-white text-sm font-medium">{styleName}</p>
             {!isAvailable && (

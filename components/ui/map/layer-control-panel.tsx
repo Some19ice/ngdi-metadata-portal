@@ -45,7 +45,7 @@ export default function LayerControlPanel({
   return (
     <div
       className={cn(
-        "absolute z-10 bg-white p-2 shadow-md rounded-md",
+        "absolute z-20 bg-white p-2 shadow-md rounded-md",
         positionClasses[position],
         className
       )}

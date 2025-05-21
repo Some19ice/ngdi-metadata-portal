@@ -203,12 +203,14 @@ export default function MetadataMapDemoPage() {
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 <div className="lg:col-span-2">
-                  <MetadataMapDisplay
-                    records={sampleRecords}
-                    className="h-[600px] w-full"
-                    onRecordClick={handleRecordClick}
-                    showBoundingBoxes={true}
-                  />
+                  <div className="h-[600px] w-full">
+                    <MetadataMapDisplay
+                      records={sampleRecords}
+                      className="h-full w-full"
+                      onRecordClick={handleRecordClick}
+                      showBoundingBoxes={true}
+                    />
+                  </div>
                 </div>
                 <div>
                   <Card>
@@ -418,13 +420,15 @@ export default function MetadataMapDemoPage() {
               <div className="space-y-6">
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                   <div className="lg:col-span-2">
-                    <TerrainMapDisplay
-                      className="h-[500px] w-full"
-                      initialCenter={[8.8775, 9.1778]} // Nigeria, slightly offset for better terrain view
-                      initialZoom={10}
-                      initialPitch={60}
-                      initialBearing={30}
-                    />
+                    <div className="h-[500px] w-full">
+                      <TerrainMapDisplay
+                        className="h-full w-full"
+                        initialCenter={[8.8775, 9.1778]} // Nigeria, slightly offset for better terrain view
+                        initialZoom={10}
+                        initialPitch={60}
+                        initialBearing={30}
+                      />
+                    </div>
                   </div>
                   <div>
                     <Card>
