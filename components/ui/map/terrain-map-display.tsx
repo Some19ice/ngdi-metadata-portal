@@ -185,7 +185,7 @@ export default function TerrainMapDisplay({
 
         {/* API Key Missing Overlay */}
         {!isApiKeyValid && (
-          <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-md">
+          <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-md z-20">
             <div className="bg-white p-6 max-w-md rounded-lg shadow-lg text-center">
               <Mountain className="h-12 w-12 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-semibold mb-2">
