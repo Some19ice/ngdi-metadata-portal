@@ -28,6 +28,14 @@ const FormFieldContext = React.createContext<FormFieldContextValue>(
   {} as FormFieldContextValue
 )
 
+const FormItemContext = React.createContext<FormItemContextValue>(
+  {} as FormItemContextValue
+)
+
+type FormItemContextValue = {
+  id: string
+}
+
 const FormField = <
   TFieldValues extends FieldValues = FieldValues,
   TName extends FieldPath<TFieldValues> = FieldPath<TFieldValues>
@@ -44,7 +52,16 @@ const FormField = <
 const useFormField = () => {
   const fieldContext = React.useContext(FormFieldContext)
   const itemContext = React.useContext(FormItemContext)
-  const { getFieldState, formState } = useFormContext()
+
+  const formContext = useFormContext()
+
+  if (!formContext) {
+    throw new Error(
+      "Form components must be used within a Form component or FormProvider. Check if you're using FormLabel, FormItem, FormControl, etc. outside of a Form."
+    )
+  }
+
+  const { getFieldState, formState } = formContext
 
   const fieldState = getFieldState(fieldContext.name, formState)
 
@@ -63,14 +80,6 @@ const useFormField = () => {
     ...fieldState
   }
 }
-
-type FormItemContextValue = {
-  id: string
-}
-
-const FormItemContext = React.createContext<FormItemContextValue>(
-  {} as FormItemContextValue
-)
 
 const FormItem = React.forwardRef<
   HTMLDivElement,

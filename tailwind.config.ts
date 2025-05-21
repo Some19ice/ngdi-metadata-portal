@@ -95,12 +95,35 @@ const config = {
           to: {
             backgroundPosition: "var(--bg-size) 0"
           }
+        },
+        "fade-in": {
+          "0%": { opacity: "0" },
+          "100%": { opacity: "1" }
+        },
+        "fade-in-up": {
+          "0%": { opacity: "0", transform: "translateY(10px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" }
+        },
+        "fade-in-down": {
+          "0%": { opacity: "0", transform: "translateY(-10px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" }
+        },
+        float: {
+          "0%": { transform: "translateY(0) translateX(0)" },
+          "25%": { transform: "translateY(-10px) translateX(10px)" },
+          "50%": { transform: "translateY(0) translateX(0)" },
+          "75%": { transform: "translateY(10px) translateX(-10px)" },
+          "100%": { transform: "translateY(0) translateX(0)" }
         }
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
-        gradient: "gradient 8s linear infinite"
+        gradient: "gradient 8s linear infinite",
+        "fade-in": "fade-in 0.5s ease-in",
+        "fade-in-up": "fade-in-up 0.5s ease-out",
+        "fade-in-down": "fade-in-down 0.5s ease-out",
+        float: "float 15s ease-in-out infinite"
       }
     }
   },

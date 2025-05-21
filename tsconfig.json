@@ -18,13 +18,15 @@ Configures the TypeScript compiler options for the app.
     "isolatedModules": true,
     "jsx": "preserve",
     "incremental": true,
+    "baseUrl": ".",
     "plugins": [
       {
         "name": "next"
       }
     ],
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "@/hooks/*": ["lib/hooks/*"]
     },
     "target": "ES2017"
   },

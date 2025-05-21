@@ -1,0 +1,87 @@
+# NGDI Portal Product Requirements Document
+
+## Overview
+The NGDI (National Geospatial Data Infrastructure) Portal is a comprehensive web-based platform designed to facilitate the discovery, access, management, and visualization of geospatial metadata and data. It serves as a central hub for various stakeholders, including government agencies, researchers, private sector entities, and the public, to interact with geospatial information in a standardized and efficient manner.
+
+## Goals
+- Provide a centralized access point for geospatial metadata and data
+- Ensure metadata conforms to NGDI standards for consistency and interoperability
+- Enable users to easily search, find, and evaluate relevant geospatial datasets
+- Offer tools for visualizing geospatial data on interactive maps
+- Allow authorized users to create, update, manage, and validate metadata records
+- Facilitate data sharing and collaboration among different user groups
+- Implement robust authentication and authorization mechanisms
+- Provide an intuitive and accessible user interface
+
+## User Roles
+- General Public/Basic Users: Discover and view publicly available data
+- Registered Users: Access specific datasets
+- Node Officers: Manage organizational metadata and users
+- Metadata Creators: Create and submit metadata for approval
+- Metadata Approvers: Review and validate metadata
+- System Administrators: Overall system management
+
+## Key Features
+
+### User Authentication and Authorization
+- Registration and secure login
+- Role-Based Access Control (RBAC)
+- Profile management
+- Organization management for Node Officers
+
+### Metadata Management
+- Creation, viewing, editing, and deletion of metadata records
+- Validation and workflow for metadata approval
+- Draft management and versioning
+- Export functionality for metadata records
+
+### Search and Discovery
+- Keyword search across metadata fields
+- Faceted search/filtering by attributes
+- Spatial search (map-based)
+- Search results display with sorting and filtering
+
+### Map Visualization
+- Interactive map interface
+- Layer management
+- Basic mapping tools
+- Integration with metadata records
+
+### Admin Dashboard
+- System overview and statistics
+- User management
+- Organization management
+- Platform-wide metadata oversight
+- System configuration options
+- Audit trail and activity logs
+
+### Node Officer Dashboard
+- Organization-specific statistics
+- Metadata management for their organization
+- User role management within their organization
+
+### Content Pages
+- Homepage with featured datasets
+- About page and documentation
+- News/Publications
+- Contact information
+- Terms of service and privacy policy
+
+## Technical Requirements
+- Next.js frontend with App Router
+- PostgreSQL database with Drizzle ORM
+- Authentication via Clerk
+- Responsive design for all devices
+- High performance and accessibility
+- Secure data handling and HTTPS
+
+## Deliverables
+1. Core user roles and organization management
+2. Metadata schema implementation and CRUD operations
+3. Metadata validation and approval workflow
+4. Search and discovery functionality
+5. Map visualization components
+6. Admin dashboard
+7. Node Officer dashboard
+8. Content pages and documentation
+9. Testing and deployment preparation 

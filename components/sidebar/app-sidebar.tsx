@@ -7,18 +7,21 @@ This client component provides the sidebar for the app.
 "use client"
 
 import {
-  AudioWaveform,
-  BookOpen,
-  Bot,
-  Command,
-  Frame,
-  GalleryVerticalEnd,
+  BarChart3,
+  Building2,
+  FileText,
+  FolderSync,
+  Home,
+  Laptop2,
+  LayersIcon,
+  Lightbulb,
   Map,
-  PieChart,
-  Settings2,
-  SquareTerminal
+  Settings,
+  ShieldCheck,
+  Users
 } from "lucide-react"
 import * as React from "react"
+import { usePathname } from "next/navigation"
 
 import {
   Sidebar,
@@ -28,95 +31,95 @@ import {
   SidebarRail
 } from "@/components/ui/sidebar"
 import { NavMain } from "./nav-main"
-import { NavProjects } from "./nav-projects"
 import { NavUser } from "./nav-user"
 import { TeamSwitcher } from "./team-switcher"
 
-// Sample data
-const data = {
-  user: {
-    name: "shadcn",
-    email: "m@example.com",
-    avatar: "/avatars/shadcn.jpg"
-  },
-  teams: [
-    {
-      name: "Acme Inc",
-      logo: GalleryVerticalEnd,
-      plan: "Enterprise"
-    },
-    {
-      name: "Acme Corp.",
-      logo: AudioWaveform,
-      plan: "Startup"
-    },
-    {
-      name: "Evil Corp.",
-      logo: Command,
-      plan: "Free"
-    }
-  ],
-  navMain: [
-    {
-      title: "Playground",
-      url: "#",
-      icon: SquareTerminal,
-      isActive: true,
-      items: [
-        { title: "History", url: "#" },
-        { title: "Starred", url: "#" },
-        { title: "Settings", url: "#" }
-      ]
-    },
-    {
-      title: "Models",
-      url: "#",
-      icon: Bot,
-      items: [
-        { title: "Genesis", url: "#" },
-        { title: "Explorer", url: "#" },
-        { title: "Quantum", url: "#" }
-      ]
-    },
-    {
-      title: "Documentation",
-      url: "#",
-      icon: BookOpen,
-      items: [
-        { title: "Introduction", url: "#" },
-        { title: "Get Started", url: "#" },
-        { title: "Tutorials", url: "#" },
-        { title: "Changelog", url: "#" }
-      ]
-    },
-    {
-      title: "Settings",
-      url: "#",
-      icon: Settings2,
-      items: [
-        { title: "General", url: "#" },
-        { title: "Team", url: "#" },
-        { title: "Billing", url: "#" },
-        { title: "Limits", url: "#" }
-      ]
-    }
-  ],
-  projects: [
-    { name: "Design Engineering", url: "#", icon: Frame },
-    { name: "Sales & Marketing", url: "#", icon: PieChart },
-    { name: "Travel", url: "#", icon: Map }
-  ]
-}
-
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const pathname = usePathname()
+
+  // Define navigation items based on NGDI Portal requirements
+  const navItems = [
+    {
+      title: "Dashboard",
+      url: "/",
+      icon: Home,
+      isActive: pathname === "/",
+      items: []
+    },
+    {
+      title: "Metadata",
+      url: "/metadata",
+      icon: FileText,
+      isActive: pathname.includes("/metadata"),
+      items: [
+        { title: "My Metadata", url: "/metadata" },
+        { title: "Create New", url: "/metadata/create" },
+        { title: "Search", url: "/metadata/search" }
+      ]
+    },
+    {
+      title: "Map Visualization",
+      url: "/map",
+      icon: Map,
+      isActive: pathname.includes("/map"),
+      items: [
+        { title: "Main Map", url: "/map" },
+        { title: "Metadata Map", url: "/map/metadata-demo" }
+      ]
+    }
+  ]
+
+  // Admin-specific navigation
+  const adminNavItems = [
+    {
+      title: "Admin",
+      url: "/dashboard",
+      icon: ShieldCheck,
+      isActive:
+        pathname.includes("/dashboard") ||
+        pathname.includes("/system-users") ||
+        pathname.includes("/organizations") ||
+        pathname.includes("/metadata-oversight") ||
+        pathname.includes("/system-settings") ||
+        pathname.includes("/audit-logs"),
+      items: [
+        { title: "Dashboard", url: "/dashboard" },
+        { title: "Users", url: "/system-users" },
+        { title: "Organizations", url: "/organizations" },
+        { title: "Metadata Oversight", url: "/metadata-oversight" },
+        { title: "System Settings", url: "/system-settings" },
+        { title: "Audit Logs", url: "/audit-logs" }
+      ]
+    }
+  ]
+
+  // Node Officer specific navigation
+  const nodeOfficerNavItems = [
+    {
+      title: "Node Officer",
+      url: "/officer-dashboard",
+      icon: Building2,
+      isActive:
+        pathname.includes("/officer-dashboard") ||
+        pathname.includes("/organization-users"),
+      items: [
+        { title: "Dashboard", url: "/officer-dashboard" },
+        { title: "Users", url: "/organization-users" }
+      ]
+    }
+  ]
+
+  // Combine navigation items based on user role - in a real app, this would check user permissions
+  // For now, we'll include all items for demonstration purposes
+  const allNavItems = [...navItems, ...adminNavItems, ...nodeOfficerNavItems]
+
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
-        <TeamSwitcher teams={data.teams} />
+        <TeamSwitcher />
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={data.navMain} />
-        <NavProjects projects={data.projects} />
+        <NavMain items={allNavItems} />
       </SidebarContent>
       <SidebarFooter>
         <NavUser />

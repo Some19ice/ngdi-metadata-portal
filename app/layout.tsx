@@ -8,6 +8,7 @@ import {
   createProfileAction,
   getProfileByUserIdAction
 } from "@/actions/db/profiles-actions"
+import MainHeader from "@/components/layout/main-header"
 import { Toaster } from "@/components/ui/toaster"
 import { PostHogPageview } from "@/components/utilities/posthog/posthog-pageview"
 import { PostHogUserIdentify } from "@/components/utilities/posthog/posthog-user-identity"
@@ -17,37 +18,38 @@ import { cn } from "@/lib/utils"
 import { ClerkProvider } from "@clerk/nextjs"
 import { auth } from "@clerk/nextjs/server"
 import type { Metadata } from "next"
-import { Inter } from "next/font/google"
+// Temporarily remove Google font
+// import { Inter } from "next/font/google"
 import "./globals.css"
+import Footer from "@/components/footer"
+import { AppSidebar } from "@/components/sidebar/app-sidebar"
+import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
 
-const inter = Inter({ subsets: ["latin"] })
+// Temporarily disable Google font
+// const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "Mckay's App Template",
-  description: "A full-stack web app template."
+  title: "NGDI Portal",
+  description: "National Geospatial Data Infrastructure Portal"
 }
+
+// ... existing imports
 
 export default async function RootLayout({
   children
 }: {
   children: React.ReactNode
 }) {
-  const { userId } = await auth()
-
-  if (userId) {
-    const profileRes = await getProfileByUserIdAction(userId)
-    if (!profileRes.isSuccess) {
-      await createProfileAction({ userId })
-    }
-  }
+  // ... existing code
 
   return (
     <ClerkProvider>
       <html lang="en" suppressHydrationWarning>
         <body
           className={cn(
-            "bg-background mx-auto min-h-screen w-full scroll-smooth antialiased",
-            inter.className
+            "bg-background min-h-screen w-full scroll-smooth antialiased"
+            // Temporarily disable Google font
+            // inter.className
           )}
         >
           <Providers
@@ -59,7 +61,22 @@ export default async function RootLayout({
             <PostHogUserIdentify />
             <PostHogPageview />
 
-            {children}
+            <SidebarProvider>
+              <div className="flex flex-col min-h-screen w-full">
+                <div className="flex flex-1 w-full">
+                  <AppSidebar />
+                  <div className="flex flex-1 flex-col w-full">
+                    <MainHeader />
+                    <SidebarInset className="flex flex-1 flex-col w-full">
+                      <main className="flex-1 overflow-auto p-4 md:p-6 w-full">
+                        {children}
+                      </main>
+                    </SidebarInset>
+                  </div>
+                </div>
+                <Footer className="w-full" />
+              </div>
+            </SidebarProvider>
 
             <TailwindIndicator />
 

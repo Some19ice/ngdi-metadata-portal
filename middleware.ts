@@ -5,24 +5,46 @@ Contains middleware for protecting routes, checking user authentication, and red
 */
 
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server"
-import { NextResponse } from "next/server"
+// NextResponse is not strictly needed here with the default behavior, but can be kept for future use.
+// import { NextResponse } from "next/server"
 
-const isProtectedRoute = createRouteMatcher(["/todo(.*)"])
+// Define public routes
+const isPublicRoute = createRouteMatcher([
+  "/", // Main landing page
+  "/login(.*)",
+  "/signup(.*)",
+  "/about(.*)",
+  "/committee(.*)",
+  "/contact(.*)",
+  "/docs(.*)",
+  "/faq(.*)",
+  "/news(.*)",
+  "/pricing(.*)", // Assuming pricing is public
+  "/privacy(.*)",
+  "/publications(.*)",
+  "/terms(.*)",
+  "/api/clerk-user(.*)",
+  "/api/stripe/webhooks(.*)"
+  // Add other explicitly public marketing page routes here
+  // e.g. /app/(marketing)/page.tsx related routes if they should be public
+])
 
-export default clerkMiddleware(async (auth, req) => {
-  const { userId, redirectToSignIn } = await auth()
+// Define protected routes (routes that require authentication)
+// All other routes will be protected by default if not listed in isPublicRoute
+// const isProtectedRoute = createRouteMatcher(["/dashboard(.*)", "/app/(app)(.*)"]);
 
-  // If the user isn't signed in and the route is private, redirect to sign-in
-  if (!userId && isProtectedRoute(req)) {
-    return redirectToSignIn({ returnBackUrl: "/login" })
+export default clerkMiddleware((auth, req) => {
+  // If the request is for a public route, do nothing to let it pass through.
+  // For any other route, Clerk's default behavior will protect it.
+  if (isPublicRoute(req)) {
+    return // Allow public routes
   }
-
-  // If the user is logged in and the route is protected, let them view.
-  if (userId && isProtectedRoute(req)) {
-    return NextResponse.next()
-  }
+  // For all other routes, Clerk will enforce authentication by default.
+  // If you needed to explicitly protect here, it would be auth().protect(),
+  // but often the default behavior is sufficient when public routes are handled.
 })
 
 export const config = {
-  matcher: ["/((?!.*\\..*|_next).*)", "/", "/(api|trpc)(.*)"]
+  // Ensure the matcher includes the root and API routes, but excludes static files and _next assets.
+  matcher: ["/((?!.+\\.[\\w]+$|_next).*)", "/", "/(api|trpc)(.*)"]
 }

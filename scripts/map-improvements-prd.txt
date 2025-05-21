@@ -1,0 +1,57 @@
+# Map Feature Improvements for NGDI Metadata Portal
+
+## Overview
+The NGDI Metadata Portal currently has a basic map feature implemented using MapLibre GL JS and Leaflet. Based on a code review, several areas for improvement have been identified to enhance the functionality, reliability, and user experience of the map feature.
+
+## Current Implementation
+- Main map page at `/map` using MapLibre GL JS
+- Map demo at `/todo/map-demo` showing Nigerian cities
+- Basic layer control for switching between map styles (streets, satellite, terrain)
+- Integration with metadata records to display geographic bounds
+- MapTiler API key required for satellite and terrain styles
+
+## Improvement Areas
+
+### 1. Error Handling
+The current implementation lacks robust error handling for cases where the MapTiler API key is missing or invalid. This can lead to a poor user experience when map styles fail to load.
+
+**Requirements:**
+- Implement proper error handling for missing or invalid MapTiler API key
+- Add fallback mechanisms for when map styles fail to load
+- Provide user-friendly error messages when map components cannot be rendered
+- Add logging for map-related errors to aid in debugging
+
+### 2. Performance Optimization
+The map libraries (MapLibre GL JS and Leaflet) are relatively large and can impact initial load time. Performance optimizations are needed to improve the user experience.
+
+**Requirements:**
+- Optimize the loading of map libraries to reduce initial page load time
+- Implement progressive loading of map features
+- Optimize marker rendering for large datasets
+- Implement caching strategies for map tiles and styles
+- Reduce unnecessary re-renders of map components
+
+### 3. Feature Enhancements
+The current map functionality is basic and could be expanded to include more interactive features and better integration with the metadata management aspects of the portal.
+
+**Requirements:**
+- Add location search functionality to the map
+- Implement drawing tools for creating custom areas/polygons
+- Enhance integration with metadata visualization
+- Add the ability to filter and display metadata records on the map
+- Implement clustering for markers when displaying multiple points
+- Add measurement tools for distances and areas
+- Support for exporting map views as images or sharing links
+
+## Success Criteria
+- All map components should gracefully handle error conditions
+- Map page should load within 3 seconds on standard connections
+- Users should be able to search for locations and navigate the map easily
+- Drawing and measurement tools should be intuitive and accurate
+- Metadata records should be properly visualized on the map when applicable
+
+## Technical Constraints
+- Continue using MapLibre GL JS as the primary mapping library
+- Maintain compatibility with the existing MapTiler integration
+- Ensure all new features work on both desktop and mobile devices
+- Follow the existing project structure and coding standards

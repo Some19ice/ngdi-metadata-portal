@@ -18,7 +18,18 @@ import { eq } from "drizzle-orm"
 export async function createProfileAction(
   data: InsertProfile
 ): Promise<ActionState<SelectProfile>> {
+  console.log(
+    "createProfileAction called with data:",
+    JSON.stringify(data, null, 2)
+  )
   try {
+    if (!data || typeof data.userId === "undefined") {
+      console.error("createProfileAction received invalid data:", data)
+      return {
+        isSuccess: false,
+        message: "Invalid data provided for profile creation."
+      }
+    }
     const [newProfile] = await db.insert(profilesTable).values(data).returning()
     return {
       isSuccess: true,
@@ -60,7 +71,7 @@ export async function updateProfileAction(
   try {
     const [updatedProfile] = await db
       .update(profilesTable)
-      .set(data)
+      .set({ ...data, updatedAt: new Date() })
       .where(eq(profilesTable.userId, userId))
       .returning()
 
@@ -86,7 +97,7 @@ export async function updateProfileByStripeCustomerIdAction(
   try {
     const [updatedProfile] = await db
       .update(profilesTable)
-      .set(data)
+      .set({ ...data, updatedAt: new Date() })
       .where(eq(profilesTable.stripeCustomerId, stripeCustomerId))
       .returning()
 

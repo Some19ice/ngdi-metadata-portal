@@ -9,7 +9,7 @@ This client component provides a theme switcher for the app.
 import { cn } from "@/lib/utils"
 import { Moon, Sun } from "lucide-react"
 import { useTheme } from "next-themes"
-import { HTMLAttributes, ReactNode } from "react"
+import { HTMLAttributes, ReactNode, useEffect, useState } from "react"
 
 interface ThemeSwitcherProps extends HTMLAttributes<HTMLDivElement> {
   children?: ReactNode
@@ -17,10 +17,17 @@ interface ThemeSwitcherProps extends HTMLAttributes<HTMLDivElement> {
 
 export const ThemeSwitcher = ({ children, ...props }: ThemeSwitcherProps) => {
   const { setTheme, theme } = useTheme()
+  const [mounted, setMounted] = useState(false)
 
-  const handleChange = (theme: "dark" | "light") => {
-    localStorage.setItem("theme", theme)
-    setTheme(theme)
+  useEffect(() => setMounted(true), [])
+
+  const handleChange = (newTheme: "dark" | "light") => {
+    localStorage.setItem("theme", newTheme)
+    setTheme(newTheme)
+  }
+
+  if (!mounted) {
+    return <div className={cn("size-6 p-1", props.className)} />
   }
 
   return (
@@ -30,6 +37,7 @@ export const ThemeSwitcher = ({ children, ...props }: ThemeSwitcherProps) => {
         props.className
       )}
       onClick={() => handleChange(theme === "light" ? "dark" : "light")}
+      title={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
     >
       {theme === "dark" ? (
         <Moon className="size-6" />
