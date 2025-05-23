@@ -8,7 +8,8 @@ import {
   jsonb,
   pgEnum,
   date,
-  integer
+  integer,
+  real
 } from "drizzle-orm/pg-core"
 // import { usersTable } from "./users-schema"
 import { organizationsTable } from "./organizations-schema"
@@ -286,19 +287,42 @@ export const metadataRecordsTable = pgTable("metadata_records", {
   validationStatusPrd: text("validation_status_prd"),
   assessment: text("assessment"),
 
+  // Contact Information - flat fields for form compatibility
+  contactName: text("contact_name"),
+  contactEmail: text("contact_email"),
+  contactPhone: text("contact_phone"),
+  contactAddress: text("contact_address"),
+
+  // Additional flat fields for form compatibility
+  lineage: text("lineage"),
+  doi: text("doi"),
+  licence: text("licence"),
+  accessAndUseLimitations: text("access_and_use_limitations"),
+  dataSources: text("data_sources"),
+  methodology: text("methodology"),
+  notes: text("notes"),
+  additionalInformation: text("additional_information"),
+  spatialRepresentationType: text("spatial_representation_type"),
+  spatialReferenceSystem: text("spatial_reference_system"),
+  spatialResolution: text("spatial_resolution"),
+  geographicDescription: text("geographic_description"),
+  boundingBoxNorth: real("bounding_box_north"),
+  boundingBoxSouth: real("bounding_box_south"),
+  boundingBoxEast: real("bounding_box_east"),
+  boundingBoxWest: real("bounding_box_west"),
+  geometry: jsonb("geometry"),
+  temporalExtentFrom: date("temporal_extent_from"),
+  temporalExtentTo: date("temporal_extent_to"),
+  dataQualityScope: text("data_quality_scope"),
+  dataQualityReport: text("data_quality_report"),
+
   // Spatial Information (from PRD 5.2)
-  locationInfo: jsonb("location_info")
-    .$type<LocationInfo>()
-    .default(sql`'{}'::jsonb`),
-  spatialInfo: jsonb("spatial_info")
-    .$type<SpatialInfo>()
-    .default(sql`'{}'::jsonb`),
+  locationInfo: jsonb("location_info").$type<LocationInfo>(),
+  spatialInfo: jsonb("spatial_info").$type<SpatialInfo>(),
 
   // Temporal Information (from PRD 5.3)
-  productionDate: date("production_date"),
-  temporalInfo: jsonb("temporal_info")
-    .$type<TemporalInfo>()
-    .default(sql`'{}'::jsonb`),
+  productionDate: text("production_date"), // Changed to text for ISO string compatibility
+  temporalInfo: jsonb("temporal_info").$type<TemporalInfo>(),
   updateFrequency: text("update_frequency"),
   plannedAvailableDateTime: timestamp("planned_available_date_time"),
   dateInfo: jsonb("date_info"),
@@ -310,9 +334,7 @@ export const metadataRecordsTable = pgTable("metadata_records", {
   metadataContact: jsonb("metadata_contact"),
 
   // Distribution Information (from PRD 5.5)
-  distributionInfo: jsonb("distribution_info")
-    .$type<DistributionInfo>()
-    .default(sql`'{}'::jsonb`),
+  distributionInfo: jsonb("distribution_info").$type<DistributionInfo>(),
   distributorNamePrd: text("distributor_name_prd"),
   resourceDescriptionPrd: text("resource_description_prd"),
   distributionLiability: text("distribution_liability"),
@@ -336,9 +358,7 @@ export const metadataRecordsTable = pgTable("metadata_records", {
   numberOfFeatures: text("number_of_features"),
 
   // Data Quality Information (from PRD 5.6)
-  dataQualityInfo: jsonb("data_quality_info")
-    .$type<DataQualityInfo>()
-    .default(sql`'{}'::jsonb`),
+  dataQualityInfo: jsonb("data_quality_info").$type<DataQualityInfo>(),
   cloudCover: text("cloud_cover"),
   attributeAccuracyReport: text("attribute_accuracy_report"),
   positionalAccuracy: jsonb("positional_accuracy"),
@@ -358,27 +378,24 @@ export const metadataRecordsTable = pgTable("metadata_records", {
   metadataLinkage: text("metadata_linkage"),
 
   // System Specific / Other Internal Fields (from PRD 5.9)
-  publicationDate: timestamp("publication_date"),
+  publicationDate: text("publication_date"), // Changed to text for ISO string compatibility
+  lastRevisionDate: text("last_revision_date"), // Added missing field
   internalNotes: text("internal_notes"),
   legacyId: text("legacy_id"),
-  fundamentalDatasetsInfo: jsonb("fundamental_datasets_info")
-    .$type<FundamentalDatasetsInfo>()
-    .default(sql`'{}'::jsonb`),
+  fundamentalDatasetsInfo: jsonb(
+    "fundamental_datasets_info"
+  ).$type<FundamentalDatasetsInfo>(),
 
   // JSONB Fields from data-models.md
-  technicalDetailsInfo: jsonb("technical_details_info")
-    .$type<TechnicalDetailsInfo>()
-    .default(sql`'{}'::jsonb`),
-  constraintsInfo: jsonb("constraints_info")
-    .$type<ConstraintsInfo>()
-    .default(sql`'{}'::jsonb`),
-  processingInfo: jsonb("processing_info")
-    .$type<ProcessingInfo>()
-    .default(sql`'{}'::jsonb`),
-  metadataReferenceInfo: jsonb("metadata_reference_info")
-    .$type<MetadataReferenceInfo>()
-    .default(sql`'{}'::jsonb`),
-  additionalInfo: jsonb("additional_info").default({}), // For any other relevant information
+  technicalDetailsInfo: jsonb(
+    "technical_details_info"
+  ).$type<TechnicalDetailsInfo>(),
+  constraintsInfo: jsonb("constraints_info").$type<ConstraintsInfo>(),
+  processingInfo: jsonb("processing_info").$type<ProcessingInfo>(),
+  metadataReferenceInfo: jsonb(
+    "metadata_reference_info"
+  ).$type<MetadataReferenceInfo>(),
+  additionalInfo: jsonb("additional_info"), // For any other relevant information
 
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()

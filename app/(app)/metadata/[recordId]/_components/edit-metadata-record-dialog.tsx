@@ -69,47 +69,65 @@ export default function EditMetadataRecordDialog({
 
   useEffect(() => {
     if (record && isOpen) {
+      // Extract spatial info from the JSON field
+      const spatialInfo = record.spatialInfo as any
+      const temporalInfo = record.temporalInfo as any
+      const distributionInfo = record.distributionInfo as any
+
       const defaultVals: Partial<MetadataRecordFormValues> = {
         title: record.title,
         abstract: record.abstract,
-        purpose: record.purpose,
-        datasetType: record.datasetType,
+        purpose: record.purpose || undefined,
+        datasetType: record.dataType, // Map dataType to datasetType for form
         keywords: record.keywords || [],
-        thumbnailUrl: record.thumbnailUrl,
-        imageName: record.imageName,
-        westBoundLongitude: record.westBoundLongitude?.toString(),
-        eastBoundLongitude: record.eastBoundLongitude?.toString(),
-        southBoundLatitude: record.southBoundLatitude?.toString(),
-        northBoundLatitude: record.northBoundLatitude?.toString(),
-        coordinateSystem: record.coordinateSystem,
-        projectionName: record.projectionName,
-        spatialResolution: record.spatialResolution || undefined,
+        thumbnailUrl: record.thumbnailUrl || undefined,
+        imageName: record.imageName || undefined,
+
+        // Extract spatial coordinates from spatialInfo.boundingBox
+        westBoundLongitude:
+          spatialInfo?.boundingBox?.westBoundingCoordinate?.toString(),
+        eastBoundLongitude:
+          spatialInfo?.boundingBox?.eastBoundingCoordinate?.toString(),
+        southBoundLatitude:
+          spatialInfo?.boundingBox?.southBoundingCoordinate?.toString(),
+        northBoundLatitude:
+          spatialInfo?.boundingBox?.northBoundingCoordinate?.toString(),
+        coordinateSystem: spatialInfo?.coordinateSystem || undefined,
+        projectionName: spatialInfo?.projectionName || undefined,
+        spatialResolution: spatialInfo?.spatialResolution || undefined,
+
+        // Extract temporal information
         productionDate: record.productionDate
           ? new Date(record.productionDate).toISOString().split("T")[0]
           : undefined,
-        dateFrom: record.dateFrom
-          ? new Date(record.dateFrom).toISOString().split("T")[0]
+        dateFrom: temporalInfo?.dateFrom
+          ? new Date(temporalInfo.dateFrom).toISOString().split("T")[0]
           : undefined,
-        dateTo: record.dateTo
-          ? new Date(record.dateTo).toISOString().split("T")[0]
+        dateTo: temporalInfo?.dateTo
+          ? new Date(temporalInfo.dateTo).toISOString().split("T")[0]
           : undefined,
-        updateFrequency: record.updateFrequency,
-        distributionFormatName: record.distributionFormatName,
-        distributionFormatVersion:
-          record.distributionFormatVersion || undefined,
-        accessMethod: record.accessMethod,
-        downloadUrl: record.downloadUrl || undefined,
-        apiUrl: record.apiUrl || undefined,
-        licenseType: record.licenseType,
-        usageTerms: record.usageTerms,
-        fileFormat: record.fileFormat
+        updateFrequency: temporalInfo?.updateFrequency || undefined,
+
+        // Extract distribution information
+        distributionFormatName: distributionInfo?.formatName || undefined,
+        distributionFormatVersion: distributionInfo?.formatVersion || undefined,
+        accessMethod: record.accessMethod || undefined,
+        downloadUrl: distributionInfo?.downloadUrl || undefined,
+        apiUrl: distributionInfo?.apiUrl || undefined,
+        licenseType: distributionInfo?.licenseType || undefined,
+        usageTerms: distributionInfo?.usageTerms || undefined,
+        fileFormat: distributionInfo?.fileFormat || undefined
       }
       form.reset(defaultVals as MetadataRecordFormValues)
     }
   }, [record, form, isOpen])
 
   async function onSubmit(values: MetadataRecordFormValues) {
-    const promise = updateMetadataRecordAction(record.id, values)
+    const promise = updateMetadataRecordAction({
+      id: record.id,
+      data: values,
+      userId: record.creatorUserId // Use the creator's userId for now
+    })
 
     toast.promise(promise, {
       loading: "Updating metadata record...",

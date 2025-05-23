@@ -86,6 +86,14 @@ export function useMapStyles({
       if (map.isStyleLoaded()) {
         setIsStyleActuallyLoaded(true)
         lastAppliedStyleUrlRef.current = styleToLoad.url // Successfully loaded this URL
+
+        // Ensure map resizes to fill container after style change
+        setTimeout(() => {
+          if (map && map.getContainer()) {
+            map.resize()
+          }
+        }, 100)
+
         if (onStyleChange) {
           onStyleChange(activeStyleId)
         }
@@ -93,10 +101,12 @@ export function useMapStyles({
       }
     }
 
-    // Remove any previous 'styledata' listeners to avoid multiple triggers or leaks
-    // MapLibre's 'off' without a handler function argument removes all listeners for that event type.
-    // This is generally okay if this hook is the sole manager of 'styledata' for this purpose.
-    map.off("styledata")
+    // Store current viewport before changing style
+    const currentCenter = map.getCenter()
+    const currentZoom = map.getZoom()
+    const currentBearing = map.getBearing()
+    const currentPitch = map.getPitch()
+
     map.on("styledata", onStyleDataHandler)
 
     try {
@@ -105,7 +115,20 @@ export function useMapStyles({
         throw new Error(`Style URL is missing for style ID: ${activeStyleId}`)
       }
 
-      map.setStyle(styleToLoad.url)
+      map.setStyle(styleToLoad.url, {
+        diff: false // Disable diff to ensure clean style change
+      })
+
+      // Restore viewport after style change
+      map.once("styledata", () => {
+        if (map.isStyleLoaded()) {
+          map.setCenter(currentCenter)
+          map.setZoom(currentZoom)
+          map.setBearing(currentBearing)
+          map.setPitch(currentPitch)
+        }
+      })
+
       // Note: lastAppliedStyleUrlRef is set inside onStyleDataHandler upon successful load.
       // If setStyle throws synchronously, onStyleDataHandler might not be called.
     } catch (error) {
@@ -156,14 +179,7 @@ export function useMapStyles({
       // Cleanup: remove the specific listener if the effect re-runs or component unmounts
       map.off("styledata", onStyleDataHandler)
     }
-  }, [
-    map,
-    activeStyleId,
-    availableStyles,
-    onStyleChange,
-    onStyleError,
-    isStyleActuallyLoaded
-  ]) // Added isStyleActuallyLoaded to deps for the check inside
+  }, [map, activeStyleId, availableStyles, onStyleChange, onStyleError]) // Removed isStyleActuallyLoaded to prevent infinite loops
 
   const handleStyleChange = useCallback(
     (newStyleId: string) => {

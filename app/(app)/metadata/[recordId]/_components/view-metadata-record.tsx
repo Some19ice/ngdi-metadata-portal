@@ -36,7 +36,8 @@ import {
   FilePenLine,
   Send,
   XCircle,
-  MapPin
+  MapPin,
+  ExternalLink
 } from "lucide-react"
 import { toast } from "sonner"
 import EditMetadataRecordDialog from "./edit-metadata-record-dialog"
@@ -51,6 +52,7 @@ import {
 import dynamic from "next/dynamic"
 import { Skeleton } from "@/components/ui/skeleton"
 import { LatLngBoundsExpression } from "leaflet"
+import { Suspense } from "react"
 
 // Dynamically import the map component
 const BasicMapDisplay = dynamic(
@@ -138,6 +140,11 @@ export default function ViewMetadataRecord({
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
 
+  // Extract spatial info once for reuse
+  const spatialInfo = record.spatialInfo as any
+  const boundingBox = spatialInfo?.boundingBox
+  const temporalInfo = record.temporalInfo as any
+
   // Prepare display for formTypeDistributionFormat
   const formatInfo = record.formTypeDistributionFormat as {
     name?: string
@@ -180,10 +187,10 @@ export default function ViewMetadataRecord({
   }
 
   const handleViewOnMap = () => {
-    const sLat = parseFloat(record.southBoundLatitude || "")
-    const nLat = parseFloat(record.northBoundLatitude || "")
-    const wLng = parseFloat(record.westBoundLongitude || "")
-    const eLng = parseFloat(record.eastBoundLongitude || "")
+    const sLat = parseFloat(boundingBox?.southBoundingCoordinate || "")
+    const nLat = parseFloat(boundingBox?.northBoundingCoordinate || "")
+    const wLng = parseFloat(boundingBox?.westBoundingCoordinate || "")
+    const eLng = parseFloat(boundingBox?.eastBoundingCoordinate || "")
 
     if (!isNaN(sLat) && !isNaN(nLat) && !isNaN(wLng) && !isNaN(eLng)) {
       const mapUrl = `https://www.openstreetmap.org/#map=5/${(sLat + nLat) / 2}/${(wLng + eLng) / 2}&bbox=${wLng},${sLat},${eLng},${nLat}`
@@ -300,16 +307,12 @@ export default function ViewMetadataRecord({
 
   // Prepare bounds for the map
   let mapBounds: LatLngBoundsExpression | null = null
-  if (
-    record.southBoundLatitude &&
-    record.northBoundLatitude &&
-    record.westBoundLongitude &&
-    record.eastBoundLongitude
-  ) {
-    const sLat = parseFloat(record.southBoundLatitude)
-    const nLat = parseFloat(record.northBoundLatitude)
-    const wLng = parseFloat(record.westBoundLongitude)
-    const eLng = parseFloat(record.eastBoundLongitude)
+
+  if (boundingBox) {
+    const sLat = parseFloat(boundingBox.southBoundingCoordinate || "")
+    const nLat = parseFloat(boundingBox.northBoundingCoordinate || "")
+    const wLng = parseFloat(boundingBox.westBoundingCoordinate || "")
+    const eLng = parseFloat(boundingBox.eastBoundingCoordinate || "")
 
     if (!isNaN(sLat) && !isNaN(nLat) && !isNaN(wLng) && !isNaN(eLng)) {
       mapBounds = [
@@ -404,7 +407,7 @@ export default function ViewMetadataRecord({
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-x-6">
                 <DetailItem label="Abstract" value={record.abstract} />
                 <DetailItem label="Purpose" value={record.purpose} />
-                <DetailItem label="Dataset Type" value={record.datasetType} />
+                <DetailItem label="Dataset Type" value={record.dataType} />
                 <DetailItem label="Author" value={record.author} />
                 <DetailItem
                   label="Framework Type"
@@ -433,32 +436,32 @@ export default function ViewMetadataRecord({
               </h2>
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-x-6">
                 <DetailItem
-                  label="West Longitude"
-                  value={record.westBoundLongitude}
+                  label="West Bound Longitude"
+                  value={boundingBox?.westBoundingCoordinate}
                 />
                 <DetailItem
-                  label="East Longitude"
-                  value={record.eastBoundLongitude}
+                  label="East Bound Longitude"
+                  value={boundingBox?.eastBoundingCoordinate}
                 />
                 <DetailItem
-                  label="South Latitude"
-                  value={record.southBoundLatitude}
+                  label="South Bound Latitude"
+                  value={boundingBox?.southBoundingCoordinate}
                 />
                 <DetailItem
-                  label="North Latitude"
-                  value={record.northBoundLatitude}
+                  label="North Bound Latitude"
+                  value={boundingBox?.northBoundingCoordinate}
                 />
                 <DetailItem
                   label="Coordinate System"
-                  value={record.coordinateSystem}
+                  value={spatialInfo?.coordinateSystem}
                 />
                 <DetailItem
                   label="Projection Name"
-                  value={record.projectionName}
+                  value={spatialInfo?.projectionName}
                 />
                 <DetailItem
                   label="Spatial Resolution"
-                  value={record.spatialResolution}
+                  value={spatialInfo?.spatialResolution}
                 />
               </div>
               <Button
@@ -468,14 +471,14 @@ export default function ViewMetadataRecord({
                 className="mt-3"
                 disabled={
                   !(
-                    record.westBoundLongitude &&
-                    record.eastBoundLongitude &&
-                    record.southBoundLatitude &&
-                    record.northBoundLatitude
+                    boundingBox?.westBoundingCoordinate &&
+                    boundingBox?.eastBoundingCoordinate &&
+                    boundingBox?.southBoundingCoordinate &&
+                    boundingBox?.northBoundingCoordinate
                   )
                 }
               >
-                <Globe className="mr-2 h-4 w-4" /> View on Map (External)
+                <ExternalLink className="mr-2 h-4 w-4" /> View on OpenStreetMap
               </Button>
             </section>
 
@@ -498,16 +501,16 @@ export default function ViewMetadataRecord({
                 <DetailItem
                   label="Date From"
                   value={
-                    record.dateFrom
-                      ? new Date(record.dateFrom).toLocaleDateString()
+                    temporalInfo?.dateFrom
+                      ? new Date(temporalInfo.dateFrom).toLocaleDateString()
                       : null
                   }
                 />
                 <DetailItem
                   label="Date To"
                   value={
-                    record.dateTo
-                      ? new Date(record.dateTo).toLocaleDateString()
+                    temporalInfo?.dateTo
+                      ? new Date(temporalInfo.dateTo).toLocaleDateString()
                       : null
                   }
                 />
@@ -552,20 +555,32 @@ export default function ViewMetadataRecord({
             <Separator />
 
             {/* Section: Interactive Map */}
-            {mapBounds && (
-              <section>
-                <h2 className="text-lg font-semibold mb-3 flex items-center">
-                  <MapPin className="mr-2 h-5 w-5 text-primary" /> Spatial
-                  Extent Map
-                </h2>
-                <div className="rounded-md overflow-hidden border">
-                  <BasicMapDisplay
-                    bounds={mapBounds}
-                    style={{ height: "350px", width: "100%" }}
-                  />
+            {boundingBox &&
+              boundingBox.westBoundingCoordinate &&
+              boundingBox.eastBoundingCoordinate &&
+              boundingBox.southBoundingCoordinate &&
+              boundingBox.northBoundingCoordinate && (
+                <div className="mt-6">
+                  <h3 className="text-lg font-medium mb-4">Spatial Extent</h3>
+                  <div className="h-64 w-full rounded-md overflow-hidden border">
+                    <Suspense fallback={<Skeleton className="h-full w-full" />}>
+                      <BasicMapDisplay
+                        bounds={mapBounds}
+                        style={{ height: "350px", width: "100%" }}
+                      />
+                    </Suspense>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-2"
+                    onClick={handleViewOnMap}
+                  >
+                    <ExternalLink className="mr-2 h-4 w-4" />
+                    View on OpenStreetMap
+                  </Button>
                 </div>
-              </section>
-            )}
+              )}
 
             <Separator />
 

@@ -5,6 +5,8 @@ import ViewMetadataRecordClient from "./view-metadata-record"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Terminal } from "lucide-react"
 import { redirect } from "next/navigation"
+import { auth } from "@clerk/nextjs/server"
+import { hasPermission, isNodeOfficerForOrg } from "@/lib/rbac"
 
 interface ViewMetadataRecordFetcherProps {
   recordId: string
@@ -17,6 +19,11 @@ export default async function ViewMetadataRecordFetcher({
     // This case should ideally be caught by routing or page structure
     console.error("ViewMetadataRecordFetcher: recordId is missing.")
     redirect("/metadata") // Or a more appropriate error page
+  }
+
+  const { userId } = await auth()
+  if (!userId) {
+    redirect("/login")
   }
 
   const result = await getMetadataRecordByIdAction(recordId)
@@ -52,5 +59,45 @@ export default async function ViewMetadataRecordFetcher({
     )
   }
 
-  return <ViewMetadataRecordClient record={result.data} />
+  const record = result.data
+
+  // Calculate permissions
+  const canEditGlobal = await hasPermission(userId, "edit", "metadata")
+  const canDeleteGlobal = await hasPermission(userId, "delete", "metadata")
+  const canApproveGlobal = await hasPermission(userId, "approve", "metadata")
+
+  const isRecordOwner = record.creatorUserId === userId
+  const isNOForRecordOrg = record.organizationId
+    ? await isNodeOfficerForOrg(userId, record.organizationId)
+    : false
+
+  // Determine specific permissions
+  const currentUserCanEdit =
+    canEditGlobal ||
+    (isRecordOwner &&
+      (record.status === "Draft" || record.status === "Needs Revision")) ||
+    isNOForRecordOrg
+
+  const currentUserCanDelete =
+    canDeleteGlobal || (isRecordOwner && record.status === "Draft")
+
+  const currentUserCanSubmitForValidation =
+    isRecordOwner &&
+    (record.status === "Draft" || record.status === "Needs Revision")
+
+  const currentUserCanApproveReject = canApproveGlobal || isNOForRecordOrg
+
+  const currentUserCanResubmit =
+    isRecordOwner && record.status === "Needs Revision"
+
+  return (
+    <ViewMetadataRecordClient
+      record={result.data}
+      currentUserCanEdit={currentUserCanEdit}
+      currentUserCanDelete={currentUserCanDelete}
+      currentUserCanSubmitForValidation={currentUserCanSubmitForValidation}
+      currentUserCanApproveReject={currentUserCanApproveReject}
+      currentUserCanResubmit={currentUserCanResubmit}
+    />
+  )
 }

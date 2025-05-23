@@ -87,8 +87,6 @@ export function useMapLayers({ map, initialLayers = [] }: UseMapLayersOptions) {
         )
       }
     })
-
-    setLayers(initialLayers)
   }, [map, initialLayers])
 
   // Function to add a layer

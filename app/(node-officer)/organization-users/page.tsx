@@ -6,15 +6,16 @@ import OrganizationUserListFetcher from "./_components/organization-user-list-fe
 import { getOrganizationByIdAction } from "@/actions/db/organizations-actions"
 
 interface NodeOfficerUsersPageProps {
-  searchParams: {
+  searchParams: Promise<{
     orgId?: string
-  }
+  }>
 }
 
 export default async function NodeOfficerUsersPage({
   searchParams
 }: NodeOfficerUsersPageProps) {
-  const { orgId } = searchParams
+  const params = await searchParams
+  const { orgId } = params
 
   if (!orgId) {
     return (
@@ -32,9 +33,10 @@ export default async function NodeOfficerUsersPage({
 
   // Fetch organization details to display its name
   const orgDetailsState = await getOrganizationByIdAction(orgId)
-  const orgName = orgDetailsState.isSuccess
-    ? orgDetailsState.data.name
-    : "Selected Organization"
+  const orgName =
+    orgDetailsState.isSuccess && orgDetailsState.data
+      ? orgDetailsState.data.name
+      : "Selected Organization"
 
   return (
     <div>

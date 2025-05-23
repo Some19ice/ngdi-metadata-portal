@@ -3,6 +3,8 @@
 import { Suspense } from "react"
 import { getNodeOfficerManagedOrganizationsAction } from "@/actions/db/user-organizations-actions"
 import { getMetadataRecordCountsForOrgByStatusAction } from "@/actions/db/metadata-records-actions"
+import { getPendingValidationMetadataAction } from "@/actions/db/metadata-workflow-actions"
+import { getOrganizationAnalyticsAction } from "@/actions/db/node-officer-analytics-actions"
 import { SelectOrganization, metadataStatusEnum } from "@/db/schema"
 import {
   Card,
@@ -23,7 +25,9 @@ import {
   ChevronDownSquare,
   Clock,
   Users,
-  PlusSquare
+  PlusSquare,
+  BarChart3,
+  Bell
 } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -31,6 +35,9 @@ import OrganizationSelector from "./_components/organization-selector"
 import { RecentMetadataActivity } from "./_components/recent-metadata-activity"
 import StatCard from "./_components/stat-card"
 import { ManagedUsersStatFetcher } from "./_components/managed-users-stat-fetcher"
+import MetadataApprovalQueue from "./_components/metadata-approval-queue"
+import OrganizationAnalytics from "./_components/organization-analytics"
+import NotificationCenter from "./_components/notification-center"
 
 // StatCard similar to Admin Dashboard, but can be simpler or adapted
 /*
@@ -130,11 +137,120 @@ async function OrgDashboardStatsFetcher({
   )
 }
 
+async function MetadataApprovalQueueFetcher({
+  organization
+}: OrgDashboardStatsProps) {
+  const result = await getPendingValidationMetadataAction(organization.id)
+
+  if (!result.isSuccess || !result.data) {
+    return (
+      <Alert variant="destructive">
+        <AlertTriangle className="h-4 w-4" />
+        <AlertTitle>Error Loading Approval Queue</AlertTitle>
+        <AlertDescription>
+          {result.message || "Failed to load pending records."}
+        </AlertDescription>
+      </Alert>
+    )
+  }
+
+  return (
+    <MetadataApprovalQueue
+      initialRecords={result.data}
+      organizationId={organization.id}
+    />
+  )
+}
+
+async function OrganizationAnalyticsFetcher({
+  organization
+}: OrgDashboardStatsProps) {
+  const result = await getOrganizationAnalyticsAction(
+    organization.id,
+    "6months"
+  )
+
+  if (!result.isSuccess || !result.data) {
+    return (
+      <Alert variant="destructive">
+        <AlertTriangle className="h-4 w-4" />
+        <AlertTitle>Error Loading Analytics</AlertTitle>
+        <AlertDescription>
+          {result.message || "Failed to load analytics data."}
+        </AlertDescription>
+      </Alert>
+    )
+  }
+
+  return (
+    <OrganizationAnalytics
+      organizationId={organization.id}
+      organizationName={organization.name}
+      analyticsData={result.data}
+    />
+  )
+}
+
+async function NotificationCenterFetcher({
+  organization
+}: OrgDashboardStatsProps) {
+  // Mock notifications for now - in a real implementation, you'd fetch from a notifications table
+  const mockNotifications = [
+    {
+      id: "1",
+      type: "approval_required" as const,
+      title: "New metadata record pending approval",
+      message: "A new metadata record has been submitted for validation",
+      createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
+      isRead: false,
+      priority: "high" as const,
+      actionUrl: `/app/metadata/search?organizationId=${organization.id}&status=Pending+Validation`,
+      metadata: {
+        organizationId: organization.id
+      }
+    },
+    {
+      id: "2",
+      type: "user_added" as const,
+      title: "New user added to organization",
+      message: "A new metadata creator has been added to your organization",
+      createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000), // 1 day ago
+      isRead: true,
+      priority: "medium" as const,
+      actionUrl: `/app/(node-officer)/organization-users?orgId=${organization.id}`,
+      metadata: {
+        organizationId: organization.id
+      }
+    },
+    {
+      id: "3",
+      type: "deadline_approaching" as const,
+      title: "Metadata review deadline approaching",
+      message: "3 metadata records have been pending review for over 7 days",
+      createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), // 3 days ago
+      isRead: false,
+      priority: "medium" as const,
+      actionUrl: `/app/metadata/search?organizationId=${organization.id}&status=Pending+Validation`,
+      metadata: {
+        organizationId: organization.id
+      }
+    }
+  ]
+
+  return (
+    <NotificationCenter
+      organizationId={organization.id}
+      initialNotifications={mockNotifications}
+    />
+  )
+}
+
 export default async function NodeOfficerDashboardPage({
   searchParams
 }: {
-  searchParams: { orgId?: string }
+  searchParams: Promise<{ orgId?: string }>
 }) {
+  const params = await searchParams
   const orgsResult = await getNodeOfficerManagedOrganizationsAction()
 
   if (!orgsResult.isSuccess) {
@@ -166,14 +282,14 @@ export default async function NodeOfficerDashboardPage({
     managedOrganizations[0]
 
   if (managedOrganizations.length > 1) {
-    if (searchParams.orgId) {
+    if (params.orgId) {
       currentOrganization = managedOrganizations.find(
-        org => org.id === searchParams.orgId
+        org => org.id === params.orgId
       )
       // Fallback to the first org if the orgId from params is invalid or not managed by the user
       if (!currentOrganization) {
         console.warn(
-          `Node Officer does not manage orgId: ${searchParams.orgId} or it is invalid. Defaulting to first managed org.`
+          `Node Officer does not manage orgId: ${params.orgId} or it is invalid. Defaulting to first managed org.`
         )
         currentOrganization = managedOrganizations[0]
       }
@@ -202,6 +318,9 @@ export default async function NodeOfficerDashboardPage({
   // Key for Suspense should depend on the current organization ID
   const suspenseKey = `stats-${currentOrganization.id}`
   const recentActivityKey = `recent-activity-${currentOrganization.id}` // Key for recent activity
+  const approvalQueueKey = `approval-queue-${currentOrganization.id}`
+  const analyticsKey = `analytics-${currentOrganization.id}`
+  const notificationsKey = `notifications-${currentOrganization.id}`
 
   return (
     <div className="space-y-6">
@@ -287,13 +406,121 @@ export default async function NodeOfficerDashboardPage({
         </div>
       </section>
 
+      {/* Enhanced Sections */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Metadata Approval Queue */}
+        <section>
+          <Suspense
+            key={approvalQueueKey}
+            fallback={
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <CheckSquare className="h-5 w-5" />
+                    <Skeleton className="h-6 w-48" />
+                  </CardTitle>
+                  <Skeleton className="h-4 w-64" />
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {[...Array(3)].map((_, i) => (
+                      <Skeleton key={i} className="h-16 w-full" />
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            }
+          >
+            <MetadataApprovalQueueFetcher organization={currentOrganization} />
+          </Suspense>
+        </section>
+
+        {/* Notification Center */}
+        <section>
+          <Suspense
+            key={notificationsKey}
+            fallback={
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Bell className="h-5 w-5" />
+                    <Skeleton className="h-6 w-32" />
+                  </CardTitle>
+                  <Skeleton className="h-4 w-48" />
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {[...Array(3)].map((_, i) => (
+                      <Skeleton key={i} className="h-20 w-full" />
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            }
+          >
+            <NotificationCenterFetcher organization={currentOrganization} />
+          </Suspense>
+        </section>
+      </div>
+
+      {/* Organization Analytics */}
+      <section>
+        <h2 className="text-xl font-semibold mb-3 flex items-center gap-2">
+          <BarChart3 className="h-5 w-5" />
+          Analytics & Insights
+        </h2>
+        <Suspense
+          key={analyticsKey}
+          fallback={
+            <div className="space-y-6">
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                {[...Array(4)].map((_, i) => (
+                  <Card key={i}>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <Skeleton className="h-4 w-24" />
+                      <Skeleton className="h-4 w-4" />
+                    </CardHeader>
+                    <CardContent>
+                      <Skeleton className="h-8 w-16 mb-2" />
+                      <Skeleton className="h-3 w-32" />
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+              <div className="grid gap-6 md:grid-cols-2">
+                <Card>
+                  <CardHeader>
+                    <Skeleton className="h-6 w-48" />
+                    <Skeleton className="h-4 w-64" />
+                  </CardHeader>
+                  <CardContent>
+                    <Skeleton className="h-[300px] w-full" />
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <Skeleton className="h-6 w-40" />
+                    <Skeleton className="h-4 w-56" />
+                  </CardHeader>
+                  <CardContent>
+                    <Skeleton className="h-[300px] w-full" />
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          }
+        >
+          <OrganizationAnalyticsFetcher organization={currentOrganization} />
+        </Suspense>
+      </section>
+
       <section>
         <Suspense key={recentActivityKey} fallback={<RecentActivitySkeleton />}>
           <RecentMetadataActivity organization={currentOrganization} />
         </Suspense>
       </section>
 
-      {/* Placeholder for future sections like User Management and Reports */}
+      {/* User Management Section */}
       <section>
         <h2 className="text-xl font-semibold mb-3">
           Manage Organization Users
@@ -301,35 +528,19 @@ export default async function NodeOfficerDashboardPage({
         <Card>
           <CardContent className="pt-6">
             <Alert className="border-l-sky-500 border-l-4">
-              <ChevronDownSquare className="h-4 w-4" />
-              <AlertTitle>Coming Soon</AlertTitle>
+              <Users className="h-4 w-4" />
+              <AlertTitle>User Management</AlertTitle>
               <AlertDescription>
-                Functionality to manage Metadata Creators and Approvers for your
-                organization will be available here.
+                Manage Metadata Creators and Approvers for your organization.
                 <Link
                   href={`/app/(node-officer)/organization-users?orgId=${currentOrganization.id}`}
                   className="block mt-2"
                 >
                   <Button variant="default" size="sm">
+                    <Users className="mr-2 h-4 w-4" />
                     Manage Users for {currentOrganization.name}
                   </Button>
                 </Link>
-              </AlertDescription>
-            </Alert>
-          </CardContent>
-        </Card>
-      </section>
-
-      <section>
-        <h2 className="text-xl font-semibold mb-3">Reporting</h2>
-        <Card>
-          <CardContent className="pt-6">
-            <Alert className="border-l-sky-500 border-l-4">
-              <ChevronDownSquare className="h-4 w-4" />
-              <AlertTitle>Coming Soon</AlertTitle>
-              <AlertDescription>
-                Basic reporting capabilities for your organization's metadata
-                will be available here.
               </AlertDescription>
             </Alert>
           </CardContent>

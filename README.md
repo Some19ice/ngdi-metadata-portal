@@ -23,6 +23,7 @@ The NGDI Metadata Portal serves as a centralized hub for Nigeria's geospatial da
 - **Authentication**: [Clerk](https://clerk.com/)
 - **Analytics**: [PostHog](https://posthog.com/)
 - **Mapping**: [Leaflet](https://leafletjs.com/), [MapLibre](https://maplibre.org/)
+- **GIS Services**: ArcGIS REST API, OGC WMS/WFS
 
 ## Environment Variables
 
@@ -74,7 +75,30 @@ NEXT_PUBLIC_POSTHOG_HOST=
    npm run dev
    ```
 
-6. Open [http://localhost:3000](http://localhost:3000) in your browser
+## GIS Service Integration
+
+The NGDI Metadata Portal supports integration with various GIS services:
+
+### Supported Service Types
+
+- **ArcGIS Services**: MapServer, FeatureServer, ImageServer, VectorTileServer
+- **OGC Services**: WMS, WFS
+
+### Using GIS Services
+
+1. **Adding Services to the Map**: Use the GIS Services panel in the map view to add external services.
+2. **Validating Service URLs**: The portal includes a service validator to check if a URL points to a valid GIS service.
+3. **Metadata Integration**: When creating metadata records, you can validate and add GIS service endpoints in the GIS Services section.
+
+### Example Service URLs
+
+- ArcGIS MapServer: `https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/World_Cities/MapServer`
+- WMS: `https://ows.terrestris.de/osm/service?SERVICE=WMS&REQUEST=GetCapabilities`
+- WFS: `https://demo.pygeoapi.io/master?service=WFS&request=GetCapabilities`
+
+### Accessing the GIS Services Demo
+
+After starting the development server, visit [http://localhost:3000/map/gis-services](http://localhost:3000/map/gis-services) to explore the GIS services integration demo.
 
 ## Contributing
 

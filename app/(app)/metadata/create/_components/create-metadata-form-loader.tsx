@@ -6,11 +6,13 @@ import CreateMetadataFormClient from "./create-metadata-form-client" // This cli
 
 interface CreateMetadataFormLoaderProps {
   availableOrganizations: SelectOrganization[]
+  currentUserOrganizationId?: string
   // We could also pass other pre-fetched data like metadata standards, controlled vocabularies, etc.
 }
 
 export default async function CreateMetadataFormLoader({
-  availableOrganizations
+  availableOrganizations,
+  currentUserOrganizationId
 }: CreateMetadataFormLoaderProps) {
   // Fetch any additional server-side data needed for the form here.
   // For example, a list of metadata standards:
@@ -20,7 +22,8 @@ export default async function CreateMetadataFormLoader({
   // Then pass everything to the client form component.
   return (
     <CreateMetadataFormClient
-      availableOrganizations={availableOrganizations}
+      organizations={availableOrganizations}
+      currentUserOrganizationId={currentUserOrganizationId}
       // metadataStandards={metadataStandards}
     />
   )

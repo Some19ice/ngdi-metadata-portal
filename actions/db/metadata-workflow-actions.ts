@@ -62,10 +62,9 @@ export async function resubmitRevisedMetadataAction(
     // Verify ownership or permissions
     const isOwner = record.creatorUserId === currentUserId
     const canEditGlobal = await hasPermission(currentUserId, "edit", "metadata")
-    const isOrgManager = await isNodeOfficerForOrg(
-      currentUserId,
-      record.organizationId
-    )
+    const isOrgManager = record.organizationId
+      ? await isNodeOfficerForOrg(currentUserId, record.organizationId)
+      : false
 
     if (!isOwner && !canEditGlobal && !isOrgManager) {
       return {
@@ -128,7 +127,8 @@ export async function performAutomatedValidationAction(
 
     // Check permissions
     const canValidate =
-      (await isNodeOfficerForOrg(currentUserId, record.organizationId)) ||
+      (record.organizationId &&
+        (await isNodeOfficerForOrg(currentUserId, record.organizationId))) ||
       (await hasPermission(currentUserId, "approve", "metadata"))
 
     if (!canValidate) {
@@ -158,18 +158,24 @@ export async function performAutomatedValidationAction(
     }
 
     // 3. Check for spatial extent (if applicable)
+    const spatialInfo = record.spatialInfo as any
     const hasSpatialInfo =
-      record.southBoundLatitude ||
-      record.northBoundLatitude ||
-      record.westBoundLongitude ||
-      record.eastBoundLongitude
+      spatialInfo?.boundingBox?.southBoundingCoordinate ||
+      spatialInfo?.boundingBox?.northBoundingCoordinate ||
+      spatialInfo?.boundingBox?.westBoundingCoordinate ||
+      spatialInfo?.boundingBox?.eastBoundingCoordinate
 
     if (!hasSpatialInfo) {
       issues.push("Spatial extent information is recommended")
     }
 
     // 4. Check for temporal information (if applicable)
-    if (!record.dateFrom && !record.dateTo && !record.productionDate) {
+    const temporalInfo = record.temporalInfo as any
+    if (
+      !temporalInfo?.dateFrom &&
+      !temporalInfo?.dateTo &&
+      !record.productionDate
+    ) {
       issues.push("Temporal information is recommended")
     }
 
@@ -183,9 +189,12 @@ export async function performAutomatedValidationAction(
       metadataRecordId: recordId,
       userId: currentUserId,
       actionType: "Other",
-      fieldName: "validation",
-      notes: `Automated validation performed. Issues found: ${issues.length}`,
-      newValue: issues.length > 0 ? JSON.stringify(issues) : "No issues found"
+      comments: `Automated validation performed. Issues found: ${issues.length}`,
+      details: {
+        validationType: "automated",
+        issuesCount: issues.length,
+        issues: issues.length > 0 ? issues : null
+      }
     })
 
     return {
@@ -371,10 +380,10 @@ export async function getPendingValidationMetadataAction(
       with: {
         organization: true,
         changeLogs: {
-          orderBy: [metadataChangeLogsTable.changedAt],
+          orderBy: [metadataChangeLogsTable.createdAt],
           where: and(
             eq(metadataChangeLogsTable.actionType, "StatusChange"),
-            eq(metadataChangeLogsTable.newValue, "Pending Validation")
+            eq(metadataChangeLogsTable.newStatus, "Pending Validation")
           ),
           limit: 1
         }
@@ -444,7 +453,7 @@ export async function getNeedsRevisionMetadataAction(options?: {
           // Check if current user is a Node Officer for any of these organizations
           let hasOrgPermission = false
           for (const orgId of uniqueOrgIds) {
-            if (await isNodeOfficerForOrg(currentUserId, orgId)) {
+            if (orgId && (await isNodeOfficerForOrg(currentUserId, orgId))) {
               hasOrgPermission = true
               break
             }
@@ -512,10 +521,10 @@ export async function getNeedsRevisionMetadataAction(options?: {
       with: {
         organization: true,
         changeLogs: {
-          orderBy: [metadataChangeLogsTable.changedAt],
+          orderBy: [metadataChangeLogsTable.createdAt],
           where: and(
             eq(metadataChangeLogsTable.actionType, "StatusChange"),
-            eq(metadataChangeLogsTable.newValue, "Needs Revision")
+            eq(metadataChangeLogsTable.newStatus, "Needs Revision")
           ),
           limit: 1
         }

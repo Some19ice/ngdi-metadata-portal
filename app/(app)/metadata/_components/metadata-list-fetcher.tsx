@@ -12,7 +12,7 @@ import MetadataListClient from "./metadata-list" // This will be the client comp
 import { hasPermission } from "@/lib/rbac"
 
 export default async function MetadataListFetcher() {
-  const { userId } = auth()
+  const { userId } = await auth()
   if (!userId) {
     redirect("/login") // Should be caught by page or middleware earlier
   }

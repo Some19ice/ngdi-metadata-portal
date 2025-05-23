@@ -19,24 +19,33 @@ export const MAPTILER_STYLES: MapStyle[] = [
     url: "https://api.maptiler.com/maps/hybrid/style.json?key=${apiKey}"
   },
   {
-    id: "terrain",
-    name: "Terrain",
-    url: "https://api.maptiler.com/maps/topo-v2/style.json?key=${apiKey}"
-  },
-  {
-    id: "basic",
-    name: "Basic",
-    url: "https://api.maptiler.com/maps/basic-v2/style.json?key=${apiKey}"
-  },
-  {
     id: "streets-v2",
-    name: "Streets v2",
+    name: "Streets",
     url: "https://api.maptiler.com/maps/streets-v2/style.json?key=${apiKey}"
   },
   {
-    id: "outdoor-v2",
-    name: "Outdoor",
-    url: "https://api.maptiler.com/maps/outdoor-v2/style.json?key=${apiKey}"
+    id: "terrain",
+    name: "Terrain",
+    url: "https://api.maptiler.com/maps/topo-v2/style.json?key=${apiKey}"
+  }
+]
+
+// Fallback style definitions with unique URLs for each style
+export const FALLBACK_STYLES: MapStyle[] = [
+  {
+    id: "fallback-satellite",
+    name: "Satellite",
+    url: "https://demotiles.maplibre.org/style.json" // Base fallback
+  },
+  {
+    id: "fallback-streets",
+    name: "Streets",
+    url: "https://api.maptiler.com/maps/openstreetmap/style.json?key=get_your_own_OpIi9ZULNHzrESv6T2vL" // Different fallback
+  },
+  {
+    id: "fallback-terrain",
+    name: "Terrain",
+    url: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json" // Alternative free style
   }
 ]
 
@@ -87,21 +96,31 @@ export function getAvailableMapStyles(
   customStyles: MapStyle[] = []
 ): MapStyle[] {
   const { isValid, apiKey } = validateMapTilerApiKey()
+  const styles: MapStyle[] = []
 
-  // Always include the free style that doesn't require an API key
-  const styles: MapStyle[] = [DEFAULT_FREE_STYLE]
-
-  // Add MapTiler styles with API key if valid
+  // Add MapTiler styles with API key if valid, or use fallback styles if not
   if (isValid && apiKey) {
     const maptilerStyles = MAPTILER_STYLES.map(style => ({
       ...style,
       url: style.url.replace("${apiKey}", apiKey)
     }))
     styles.push(...maptilerStyles)
+  } else {
+    // If API key is invalid, use distinct fallback styles for each type
+    styles.push(...FALLBACK_STYLES)
   }
 
-  // Add any custom styles
+  // Add any custom styles (though typically base styles are managed here)
   styles.push(...customStyles)
+
+  // Ensure there's always at least one style, even if customStyles is empty and API key is invalid
+  if (styles.length === 0) {
+    styles.push({
+      id: "ultra-fallback",
+      name: "Basic Map",
+      url: "https://demotiles.maplibre.org/style.json" // Absolute fallback
+    })
+  }
 
   return styles
 }
@@ -129,7 +148,7 @@ export function logMapError(error: Error, context: string): void {
  * @returns True if the style requires an API key
  */
 export function styleRequiresApiKey(styleId: string): boolean {
-  return styleId !== DEFAULT_FREE_STYLE.id
+  return MAPTILER_STYLES.some(style => style.id === styleId)
 }
 
 /**
@@ -138,6 +157,20 @@ export function styleRequiresApiKey(styleId: string): boolean {
  * @returns A fallback style that should work
  */
 export function getFallbackStyle(requestedStyleId: string): MapStyle {
-  // Always fall back to the free style that doesn't require an API key
-  return DEFAULT_FREE_STYLE
+  // Find matching fallback style by original style ID
+  const styleIndex = MAPTILER_STYLES.findIndex(s => s.id === requestedStyleId)
+
+  if (styleIndex >= 0 && styleIndex < FALLBACK_STYLES.length) {
+    // Return the corresponding fallback style
+    return FALLBACK_STYLES[styleIndex]
+  }
+
+  // If no matching style found, use the first fallback
+  return (
+    FALLBACK_STYLES[0] || {
+      id: "ultra-fallback",
+      name: "Basic Map",
+      url: "https://demotiles.maplibre.org/style.json"
+    }
+  )
 }

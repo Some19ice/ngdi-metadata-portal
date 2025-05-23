@@ -3,6 +3,7 @@
  */
 
 import { LngLatBounds } from "maplibre-gl"
+import { SelectMetadataRecord } from "@/db/schema"
 
 export interface MetadataRecord {
   id: string
@@ -11,7 +12,68 @@ export interface MetadataRecord {
   southBoundLatitude?: string | null
   eastBoundLongitude?: string | null
   westBoundLongitude?: string | null
+  description?: string | null
   [key: string]: any
+}
+
+/**
+ * Transform a database metadata record to the MetadataRecord interface expected by map components
+ */
+export function transformDatabaseRecordToMapRecord(
+  dbRecord: SelectMetadataRecord
+): MetadataRecord | null {
+  // Extract spatial bounds from the spatialInfo JSONB field
+  const spatialInfo = dbRecord.spatialInfo as any
+  const boundingBox = spatialInfo?.boundingBox
+
+  if (!boundingBox) {
+    return null // No spatial bounds available
+  }
+
+  const {
+    northBoundingCoordinate,
+    southBoundingCoordinate,
+    eastBoundingCoordinate,
+    westBoundingCoordinate
+  } = boundingBox
+
+  // Validate that all coordinates exist
+  if (
+    northBoundingCoordinate == null ||
+    southBoundingCoordinate == null ||
+    eastBoundingCoordinate == null ||
+    westBoundingCoordinate == null
+  ) {
+    return null
+  }
+
+  return {
+    id: dbRecord.id,
+    title: dbRecord.title,
+    northBoundLatitude: String(northBoundingCoordinate),
+    southBoundLatitude: String(southBoundingCoordinate),
+    eastBoundLongitude: String(eastBoundingCoordinate),
+    westBoundLongitude: String(westBoundingCoordinate),
+    description: dbRecord.abstract,
+    // Include additional metadata for potential use
+    dataType: dbRecord.dataType,
+    status: dbRecord.status,
+    keywords: dbRecord.keywords,
+    organization: (dbRecord as any).organization,
+    createdAt: dbRecord.createdAt,
+    updatedAt: dbRecord.updatedAt
+  }
+}
+
+/**
+ * Transform multiple database records to map records, filtering out those without spatial bounds
+ */
+export function transformDatabaseRecordsToMapRecords(
+  dbRecords: SelectMetadataRecord[]
+): MetadataRecord[] {
+  return dbRecords
+    .map(transformDatabaseRecordToMapRecord)
+    .filter((record): record is MetadataRecord => record !== null)
 }
 
 /**

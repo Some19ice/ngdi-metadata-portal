@@ -32,7 +32,7 @@ export interface OrganizationUsersData {
   counts: {
     metadataCreator: number
     metadataApprover: number
-    member: number // Or other roles you might track
+    member: number // Organization role for regular members
     total: number
   }
 }
@@ -158,7 +158,7 @@ export async function getOrganizationUsersForNOAction(
     const counts = {
       metadataCreator: 0,
       metadataApprover: 0,
-      member: 0,
+      member: 0, // Organization role for regular members
       total: organizationUsers.length
     }
 
@@ -166,7 +166,7 @@ export async function getOrganizationUsersForNOAction(
       if (user.roles.includes("Metadata Creator")) counts.metadataCreator++
       else if (user.roles.includes("Metadata Approver"))
         counts.metadataApprover++
-      else if (user.roles.includes("Member")) counts.member++ // Assuming 'Member' is a possible role
+      else if (user.roles.includes("Registered User")) counts.member++ // Count Registered Users as members
     })
 
     return {
@@ -270,7 +270,7 @@ export async function addUserToOrganizationForNOAction(
       await tx.insert(userOrganizationsTable).values({
         userId: targetUserId,
         organizationId: organizationId,
-        isNodeOfficer: false // New users added by NO are not NOs by default
+        role: "Member" // New users added by NO are Members by default
       })
 
       // 6. If initialRoleName is provided, assign it

@@ -1,10 +1,13 @@
 "use client"
 
 import { zodResolver } from "@hookform/resolvers/zod"
-import { useForm } from "react-hook-form"
+import { useForm, useFieldArray } from "react-hook-form"
 import { useRouter } from "next/navigation"
 import { useState, useTransition, useEffect, useMemo } from "react"
 import { toast } from "sonner"
+import { Progress } from "@/components/ui/progress"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 
 import {
   metadataFormSchema,
@@ -44,13 +47,130 @@ import {
   ProcessingInformationSection,
   ReviewForm
 } from "./metadata-form-sections"
-import { Loader2 } from "lucide-react"
+import { GISServiceFormSection } from "./gis-service-form-section"
+import { Loader2, Wand2, Lightbulb, Plus } from "lucide-react"
 import { Form } from "@/components/ui/form"
 
 interface MultiStepMetadataFormClientProps {
   currentUserId?: string | null
   existingRecordId?: string | null
   initialData?: Partial<SelectMetadataRecord> | null
+}
+
+// Smart suggestions based on field content
+const getSmartSuggestions = (
+  fieldName: string,
+  value: string,
+  dataType?: string
+) => {
+  const suggestions: string[] = []
+
+  if (fieldName === "keywords" && value.length > 2) {
+    const commonKeywords = [
+      "geospatial",
+      "GIS",
+      "mapping",
+      "spatial analysis",
+      "remote sensing",
+      "urban planning",
+      "environmental",
+      "transportation",
+      "infrastructure",
+      "demographics",
+      "land use",
+      "topography",
+      "climate",
+      "hydrology"
+    ]
+
+    suggestions.push(
+      ...commonKeywords.filter(
+        k =>
+          k.toLowerCase().includes(value.toLowerCase()) &&
+          !suggestions.includes(k)
+      )
+    )
+  }
+
+  if (fieldName === "coordinateSystem") {
+    const systems = ["WGS84", "UTM Zone 31N", "NAD83", "EPSG:4326", "EPSG:3857"]
+    suggestions.push(
+      ...systems.filter(s => s.toLowerCase().includes(value.toLowerCase()))
+    )
+  }
+
+  if (fieldName === "fileFormat" && dataType) {
+    const formatsByType: Record<string, string[]> = {
+      Vector: ["Shapefile", "GeoJSON", "KML", "GeoPackage", "PostGIS"],
+      Raster: ["GeoTIFF", "NetCDF", "JPEG2000", "PNG", "HDF5"],
+      Table: ["CSV", "Excel", "JSON", "Parquet", "SQLite"],
+      "Point Cloud": ["LAS", "LAZ", "PLY", "XYZ", "E57"]
+    }
+
+    suggestions.push(...(formatsByType[dataType] || []))
+  }
+
+  return suggestions.slice(0, 5)
+}
+
+// Validation quality scoring
+const calculateFormQuality = (data: Partial<MetadataFormValues>) => {
+  let score = 0
+  let maxScore = 0
+
+  // Title quality (max 15 points)
+  maxScore += 15
+  if (data.title) {
+    if (data.title.length >= 10) score += 10
+    if (data.title.split(" ").length >= 3) score += 5
+  }
+
+  // Abstract quality (max 20 points)
+  maxScore += 20
+  if (data.abstract) {
+    if (data.abstract.length >= 100) score += 10
+    if (data.abstract.length >= 200) score += 5
+    if (data.abstract.split(" ").length >= 20) score += 5
+  }
+
+  // Keywords quality (max 15 points)
+  maxScore += 15
+  if (data.keywords && data.keywords.length >= 3) score += 10
+  if (data.keywords && data.keywords.length >= 5) score += 5
+
+  // Spatial info (max 20 points)
+  maxScore += 20
+  if (data.spatialReferenceSystem) score += 10
+  if (
+    data.boundingBoxNorth !== null &&
+    data.boundingBoxSouth !== null &&
+    data.boundingBoxEast !== null &&
+    data.boundingBoxWest !== null
+  ) {
+    if (
+      data.boundingBoxNorth !== 0 ||
+      data.boundingBoxSouth !== 0 ||
+      data.boundingBoxEast !== 0 ||
+      data.boundingBoxWest !== 0
+    ) {
+      score += 10
+    }
+  }
+
+  // Technical info (max 15 points)
+  maxScore += 15
+  if (data.technicalDetailsInfo?.fileFormat) score += 10
+  if (data.technicalDetailsInfo?.fileSizeMB) score += 5
+
+  // Quality info (max 15 points)
+  maxScore += 15
+  if (
+    data.dataQualityInfo?.logicalConsistencyReport &&
+    data.dataQualityInfo.logicalConsistencyReport.length >= 20
+  )
+    score += 15
+
+  return Math.round((score / maxScore) * 100)
 }
 
 const FORM_STEPS: FormStep[] = [
@@ -77,6 +197,11 @@ const FORM_STEPS: FormStep[] = [
     component: ProcessingInformationSection
   },
   {
+    id: "gis-services",
+    title: "GIS Services",
+    component: GISServiceFormSection
+  },
+  {
     id: "contact",
     title: "Contact & Other Information",
     component: ContactAndOtherInformationSection
@@ -89,10 +214,7 @@ function preparePayload(
   data: MetadataFormValues,
   currentUserId?: string | null,
   existingRecordId?: string | null
-): Omit<
-  InsertMetadataRecord,
-  "id" | "creatorUserId" | "createdAt" | "updatedAt" | "status"
-> {
+): Omit<InsertMetadataRecord, "id" | "createdAt" | "updatedAt" | "status"> {
   const formatDateString = (
     date: Date | string | null | undefined
   ): string | null => {
@@ -116,93 +238,118 @@ function preparePayload(
     lastRevisionDate: formatDateString(data.lastRevisionDate),
     keywords: data.keywords && data.keywords.length > 0 ? data.keywords : null,
     thumbnailUrl: data.thumbnailUrl ?? null,
-    cloudCoverPercentage: data.cloudCoverPercentage ?? null,
     frameworkType: data.frameworkType ?? null,
-    locationInfo: data.locationInfo ? { ...data.locationInfo } : null,
-    spatialInfo: data.spatialInfo ? { ...data.spatialInfo } : null,
-    temporalInfo: data.temporalInfo ? { ...data.temporalInfo } : null,
-    technicalDetailsInfo: data.technicalDetailsInfo
-      ? { ...data.technicalDetailsInfo }
-      : null,
-    constraintsInfo: data.constraintsInfo ? { ...data.constraintsInfo } : null,
-    dataQualityInfo: data.dataQualityInfo ? { ...data.dataQualityInfo } : null,
-    processingInfo: data.processingInfo ? { ...data.processingInfo } : null,
-    distributionInfo: data.distributionInfo
-      ? { ...data.distributionInfo }
-      : null,
-    metadataReferenceInfo: data.metadataReferenceInfo
-      ? { ...data.metadataReferenceInfo }
-      : null,
-    fundamentalDatasetsInfo: data.fundamentalDatasetsInfo
-      ? { ...data.fundamentalDatasetsInfo }
-      : null,
-    additionalInfo: data.additionalInfo ? { ...data.additionalInfo } : null,
-    contactName:
-      (data.metadataReferenceInfo as any)?.metadataPoc
-        ?.contactName_metadataPOC ??
-      data.contactName ??
-      null,
-    contactEmail:
-      (data.metadataReferenceInfo as any)?.metadataPoc?.email_metadataPOC ??
-      data.contactEmail ??
-      null,
-    contactPhone:
-      (data.metadataReferenceInfo as any)?.metadataPoc
-        ?.phoneNumber_metadataPOC ??
-      data.contactPhone ??
-      null,
-    contactAddress:
-      (data.metadataReferenceInfo as any)?.metadataPoc?.address_metadataPOC ??
-      data.contactAddress ??
-      null,
-    lineage: (data.dataQualityInfo as any)?.dataQualityLineage ?? null,
-    doi: (data.distributionInfo as any)?.doi ?? null,
-    licence: (data.distributionInfo as any)?.licenseInfo?.licenseType ?? null,
-    accessAndUseLimitations:
-      (data.constraintsInfo as any)?.accessConstraints ?? null,
-    dataSources:
-      (data.processingInfo as any)?.sourceInfo?.sourceCitation ?? null,
-    methodology:
-      (data.processingInfo as any)?.processingStepsDescription ?? null,
-    notes: (data.additionalInfo as any)?.notes ?? null,
-    additionalInformation: (data.additionalInfo as any)?.details ?? null,
-    spatialRepresentationType:
-      data.spatialInfo?.spatialRepresentationType ??
-      data.spatialRepresentationType ??
-      null,
-    spatialReferenceSystem:
-      data.spatialInfo?.coordinateSystem ?? data.spatialReferenceSystem ?? null,
-    spatialResolution:
-      data.spatialInfo?.resolution ?? data.spatialResolution ?? null,
-    geographicDescription:
-      (data.locationInfo as any)?.geographicDescription ??
-      data.geographicDescription ??
-      null,
-    boundingBoxNorth:
-      data.spatialInfo?.maxLatitude ?? data.boundingBoxNorth ?? null,
-    boundingBoxSouth:
-      data.spatialInfo?.minLatitude ?? data.boundingBoxSouth ?? null,
-    boundingBoxEast:
-      data.spatialInfo?.maxLongitude ?? data.boundingBoxEast ?? null,
-    boundingBoxWest:
-      data.spatialInfo?.minLongitude ?? data.boundingBoxWest ?? null,
-    geometry: data.geometry ? JSON.stringify(data.geometry) : null,
-    temporalExtentFrom: data.temporalInfo?.dateFrom
-      ? formatDateString(data.temporalInfo.dateFrom)
-      : formatDateString(data.temporalExtentFrom),
-    temporalExtentTo: data.temporalInfo?.dateTo
-      ? formatDateString(data.temporalInfo.dateTo)
-      : formatDateString(data.temporalExtentTo),
-    dataQualityScope:
-      (data.dataQualityInfo as any)?.scope ?? data.dataQualityScope ?? null,
-    dataQualityLineage:
-      (data.dataQualityInfo as any)?.dataQualityLineage ??
-      data.dataQualityLineage ??
-      null,
-    dataQualityReport:
-      (data.dataQualityInfo as any)?.logicalConsistencyReport ??
-      data.dataQualityReport ??
-      null
+
+    // Flat contact fields
+    contactName: data.contactName ?? null,
+    contactEmail: data.contactEmail ?? null,
+    contactPhone: data.contactPhone ?? null,
+    contactAddress: data.contactAddress ?? null,
+
+    // Additional flat fields
+    lineage: data.lineage ?? null,
+    doi: data.doi ?? null,
+    licence: data.licence ?? null,
+    accessAndUseLimitations: data.accessAndUseLimitations ?? null,
+    dataSources: data.dataSources ?? null,
+    methodology: data.methodology ?? null,
+    notes: data.notes ?? null,
+    additionalInformation: data.additionalInformation ?? null,
+    spatialRepresentationType: data.spatialRepresentationType ?? null,
+    spatialReferenceSystem: data.spatialReferenceSystem ?? null,
+    spatialResolution: data.spatialResolution ?? null,
+    geographicDescription: data.geographicDescription ?? null,
+    boundingBoxNorth: data.boundingBoxNorth ?? null,
+    boundingBoxSouth: data.boundingBoxSouth ?? null,
+    boundingBoxEast: data.boundingBoxEast ?? null,
+    boundingBoxWest: data.boundingBoxWest ?? null,
+    geometry: data.geometry ? JSON.parse(data.geometry) : null,
+    temporalExtentFrom: data.temporalExtentFrom,
+    temporalExtentTo: data.temporalExtentTo,
+    dataQualityScope: data.dataQualityScope ?? null,
+    dataQualityReport: data.dataQualityReport ?? null,
+
+    // JSONB fields - use undefined when empty to avoid assignment issues
+    locationInfo:
+      data.locationInfo &&
+      Object.values(data.locationInfo).some(v => v !== null)
+        ? { ...data.locationInfo }
+        : undefined,
+    spatialInfo:
+      data.spatialInfo && Object.values(data.spatialInfo).some(v => v !== null)
+        ? { ...data.spatialInfo }
+        : undefined,
+    temporalInfo:
+      data.temporalInfo &&
+      (data.temporalInfo.dateFrom || data.temporalInfo.dateTo)
+        ? {
+            dateFrom: formatDateString(data.temporalInfo.dateFrom),
+            dateTo: formatDateString(data.temporalInfo.dateTo)
+          }
+        : undefined,
+    technicalDetailsInfo:
+      data.technicalDetailsInfo &&
+      Object.values(data.technicalDetailsInfo).some(v => v !== null)
+        ? { ...data.technicalDetailsInfo }
+        : undefined,
+    constraintsInfo:
+      data.constraintsInfo &&
+      Object.values(data.constraintsInfo).some(v => v !== null)
+        ? { ...data.constraintsInfo }
+        : undefined,
+    dataQualityInfo:
+      data.dataQualityInfo &&
+      Object.values(data.dataQualityInfo).some(v => v !== null)
+        ? { ...data.dataQualityInfo }
+        : undefined,
+    processingInfo:
+      data.processingInfo &&
+      Object.values(data.processingInfo).some(v => v !== null)
+        ? {
+            ...data.processingInfo,
+            processedDate: formatDateString(data.processingInfo.processedDate),
+            sourceInfo: data.processingInfo.sourceInfo
+              ? {
+                  ...data.processingInfo.sourceInfo,
+                  contractDate: formatDateString(
+                    data.processingInfo.sourceInfo.contractDate
+                  )
+                }
+              : null
+          }
+        : undefined,
+    distributionInfo:
+      data.distributionInfo &&
+      Object.values(data.distributionInfo).some(v => v !== null)
+        ? { ...data.distributionInfo }
+        : undefined,
+    metadataReferenceInfo:
+      data.metadataReferenceInfo &&
+      Object.values(data.metadataReferenceInfo).some(v => v !== null)
+        ? {
+            ...data.metadataReferenceInfo,
+            metadataCreationDate: formatDateString(
+              data.metadataReferenceInfo.metadataCreationDate
+            ),
+            metadataReviewDate: formatDateString(
+              data.metadataReferenceInfo.metadataReviewDate
+            )
+          }
+        : undefined,
+    fundamentalDatasetsInfo:
+      data.fundamentalDatasetsInfo &&
+      Object.values(data.fundamentalDatasetsInfo).some(v => v !== null)
+        ? { ...data.fundamentalDatasetsInfo }
+        : undefined,
+    additionalInfo:
+      data.additionalInfo && Object.keys(data.additionalInfo).length > 0
+        ? { ...data.additionalInfo }
+        : undefined,
+
+    // Required fields for database
+    creatorUserId: currentUserId || "",
+    metadataStandard: "NGDI Standard v1.0",
+    metadataStandardVersion: "1.0"
   }
 
   return payload
@@ -221,6 +368,8 @@ export default function MultiStepMetadataFormClient({
     SelectOrganization[]
   >([])
   const [currentStep, setCurrentStep] = useState(0)
+  const [qualityScore, setQualityScore] = useState(0)
+  const [suggestions, setSuggestions] = useState<Record<string, string[]>>({})
 
   const transformedInitialData = useMemo(() => {
     if (!initialData) return defaultMetadataFormValues
@@ -492,6 +641,106 @@ export default function MultiStepMetadataFormClient({
     mode: "onChange"
   })
 
+  const {
+    fields: keywordFields,
+    append: appendKeyword,
+    remove: removeKeyword
+  } = useFieldArray({
+    control: form.control,
+    name: "keywords"
+  })
+
+  const watchedValues = form.watch()
+
+  // Update quality score in real-time
+  useEffect(() => {
+    const score = calculateFormQuality(watchedValues)
+    setQualityScore(score)
+  }, [watchedValues])
+
+  // Generate smart suggestions
+  const handleFieldFocus = (fieldName: string, value: string) => {
+    const smartSuggestions = getSmartSuggestions(
+      fieldName,
+      value,
+      watchedValues.dataType
+    )
+    setSuggestions(prev => ({
+      ...prev,
+      [fieldName]: smartSuggestions
+    }))
+  }
+
+  const applySuggestion = (fieldName: string, suggestion: string) => {
+    if (fieldName === "keywords") {
+      appendKeyword(suggestion)
+    } else {
+      form.setValue(fieldName as any, suggestion)
+    }
+    setSuggestions(prev => ({
+      ...prev,
+      [fieldName]: []
+    }))
+  }
+
+  // Suggestion list component
+  const SuggestionList = ({ fieldName }: { fieldName: string }) => {
+    const fieldSuggestions = suggestions[fieldName] || []
+
+    if (fieldSuggestions.length === 0) return null
+
+    return (
+      <div className="mt-2 p-2 border rounded-md bg-muted/50">
+        <div className="text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1">
+          <Lightbulb className="h-3 w-3" />
+          Suggestions:
+        </div>
+        <div className="flex flex-wrap gap-1">
+          {fieldSuggestions.map((suggestion, index) => (
+            <Badge
+              key={index}
+              variant="outline"
+              className="text-xs cursor-pointer hover:bg-primary hover:text-primary-foreground"
+              onClick={() => applySuggestion(fieldName, suggestion)}
+            >
+              {suggestion}
+            </Badge>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  // Quality indicator component
+  const QualityIndicator = () => (
+    <Card className="mb-6">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <Wand2 className="h-4 w-4" />
+          Metadata Quality Score
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-2">
+          <div className="flex justify-between text-sm">
+            <span>Overall Quality</span>
+            <span className="font-medium">{qualityScore}%</span>
+          </div>
+          <Progress value={qualityScore} className="h-2" />
+          <div className="text-xs text-muted-foreground">
+            {qualityScore >= 80
+              ? "Excellent metadata quality"
+              : qualityScore >= 60
+                ? "Good quality, minor improvements suggested"
+                : qualityScore >= 40
+                  ? "Fair quality, several improvements needed"
+                  : "Poor quality, significant improvements required"}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+
   useEffect(() => {
     async function fetchOrgsAndSetLoading() {
       try {
@@ -590,6 +839,7 @@ export default function MultiStepMetadataFormClient({
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+        <QualityIndicator />
         <MultiStepForm
           form={form}
           onSubmit={onSubmit}

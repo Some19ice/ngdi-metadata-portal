@@ -1,0 +1,91 @@
+{
+  "meta": {
+    "generatedAt": "2025-05-22T23:35:32.758Z",
+    "tasksAnalyzed": 10,
+    "thresholdScore": 5,
+    "projectName": "Taskmaster",
+    "usedResearch": false
+  },
+  "complexityAnalysis": [
+    {
+      "taskId": 26,
+      "taskTitle": "Implement Advanced Admin Feature (Phase 2)",
+      "complexityScore": 7,
+      "recommendedSubtask": 7,
+      "expansionPrompt": "Expand admin dashboard features with role management, analytics, content management, audit trails, auth settings, API controls, and maintenance mode",
+      "reasoning": "Complex multi-component system requiring coordination of security, analytics, and content management with potential integration challenges"
+    },
+    {
+      "taskId": 29,
+      "taskTitle": "Add location search functionality to map",
+      "complexityScore": 5,
+      "recommendedSubtask": 3,
+      "expansionPrompt": "Implement search input, autocomplete service, and map integration with coordinate handling",
+      "reasoning": "Moderate complexity due to geocoding integration and user experience requirements"
+    },
+    {
+      "taskId": 30,
+      "taskTitle": "Implement drawing tools for custom areas",
+      "complexityScore": 7,
+      "recommendedSubtask": 3,
+      "expansionPrompt": "Develop drawing interface, core functionality, and spatial filtering integration",
+      "reasoning": "Complex spatial manipulation requirements with multiple interaction modes and filtering logic"
+    },
+    {
+      "taskId": 31,
+      "taskTitle": "Enhance metadata visualization",
+      "complexityScore": 8,
+      "recommendedSubtask": 4,
+      "expansionPrompt": "Implement real data integration, clustering, search connectivity, and mobile optimization",
+      "reasoning": "High complexity due to database integration, performance optimization, and cross-platform requirements"
+    },
+    {
+      "taskId": 32,
+      "taskTitle": "Implement marker clustering",
+      "complexityScore": 6,
+      "recommendedSubtask": 3,
+      "expansionPrompt": "Integrate clustering library, create visualization components, and implement dynamic logic",
+      "reasoning": "Moderate complexity requiring performance optimization and dynamic data handling"
+    },
+    {
+      "taskId": 33,
+      "taskTitle": "Add measurement tools",
+      "complexityScore": 5,
+      "recommendedSubtask": 3,
+      "expansionPrompt": "Develop distance/area measurement, visualization, and management system",
+      "reasoning": "Moderate complexity with multiple measurement modes and data management needs"
+    },
+    {
+      "taskId": 34,
+      "taskTitle": "Export map views",
+      "complexityScore": 5,
+      "recommendedSubtask": 3,
+      "expansionPrompt": "Implement image export, URL sharing, and data export features",
+      "reasoning": "Moderate complexity requiring multiple export formats and state serialization"
+    },
+    {
+      "taskId": 35,
+      "taskTitle": "Thematic mapping",
+      "complexityScore": 7,
+      "recommendedSubtask": 3,
+      "expansionPrompt": "Develop choropleth mapping, heatmaps, and data-driven styling system",
+      "reasoning": "High complexity with advanced visualization techniques and data processing"
+    },
+    {
+      "taskId": 36,
+      "taskTitle": "Temporal visualization",
+      "complexityScore": 6,
+      "recommendedSubtask": 2,
+      "expansionPrompt": "Create timeline controls and animation system",
+      "reasoning": "Moderate complexity requiring time-based filtering and animation integration"
+    },
+    {
+      "taskId": 37,
+      "taskTitle": "Accessibility features",
+      "complexityScore": 7,
+      "recommendedSubtask": 3,
+      "expansionPrompt": "Implement navigation, screen reader support, and visual accessibility features",
+      "reasoning": "High complexity requiring comprehensive accessibility compliance and UX optimization"
+    }
+  ]
+}

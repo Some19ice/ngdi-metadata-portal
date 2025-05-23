@@ -10,7 +10,9 @@ import {
 } from "react-leaflet"
 import "leaflet/dist/leaflet.css"
 import L, { LatLngExpression, LatLngBoundsExpression } from "leaflet"
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
+import MapErrorBoundary from "./map/map-error-boundary"
+import { useLeafletMapKey } from "@/hooks"
 
 // Fix for default marker icon issue with webpack
 // @ts-ignore
@@ -73,6 +75,9 @@ const BasicMapDisplay: React.FC<BasicMapDisplayProps> = ({
   style = { height: "400px", width: "100%" },
   className = ""
 }) => {
+  // Use the custom hook for stable map key generation
+  const mapKey = useLeafletMapKey("basic-map")
+
   // Determine initial center and zoom for MapContainer
   // If bounds are provided, MapContainer's center/zoom are less critical as fitBounds will take over.
   // However, providing a sensible initial center/zoom can prevent an initial flash or weird state.
@@ -97,35 +102,46 @@ const BasicMapDisplay: React.FC<BasicMapDisplayProps> = ({
     }
   }
 
+  // Create a stable key that includes bounds information
+  const boundsKey = bounds
+    ? Array.isArray(bounds)
+      ? `${bounds[0]}-${bounds[1]}`
+      : bounds instanceof L.LatLngBounds
+        ? `${bounds.getSouth()}-${bounds.getWest()}-${bounds.getNorth()}-${bounds.getEast()}`
+        : "bounds-object"
+    : "no-bounds"
+
   return (
-    <MapContainer
-      key={`basic-map-${bounds ? "with-bounds" : "default"}`}
-      center={initialCenter}
-      zoom={initialZoom}
-      scrollWheelZoom={true}
-      style={style}
-      className={className}
-      // whenCreated={(map) => { // Alternative way to fitBounds, but useMap hook is cleaner for components
-      //   if (bounds) map.fitBounds(bounds, { padding: [10, 10] });
-      // }}
-    >
-      <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-      />
-      {bounds && <ChangeView bounds={bounds} />}
-      {bounds && (
-        <Rectangle
-          bounds={bounds as L.LatLngBoundsExpression}
-          pathOptions={{ color: "blue", weight: 2, fillOpacity: 0.1 }}
+    <MapErrorBoundary>
+      <MapContainer
+        key={`${mapKey}-${boundsKey}`}
+        center={initialCenter}
+        zoom={initialZoom}
+        scrollWheelZoom={true}
+        style={style}
+        className={className}
+        // whenCreated={(map) => { // Alternative way to fitBounds, but useMap hook is cleaner for components
+        //   if (bounds) map.fitBounds(bounds, { padding: [10, 10] });
+        // }}
+      >
+        <TileLayer
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-      )}
-      {markers.map((marker, idx) => (
-        <Marker key={idx} position={marker.position}>
-          {marker.popupContent && <Popup>{marker.popupContent}</Popup>}
-        </Marker>
-      ))}
-    </MapContainer>
+        {bounds && <ChangeView bounds={bounds} />}
+        {bounds && (
+          <Rectangle
+            bounds={bounds as L.LatLngBoundsExpression}
+            pathOptions={{ color: "blue", weight: 2, fillOpacity: 0.1 }}
+          />
+        )}
+        {markers.map((marker, idx) => (
+          <Marker key={idx} position={marker.position}>
+            {marker.popupContent && <Popup>{marker.popupContent}</Popup>}
+          </Marker>
+        ))}
+      </MapContainer>
+    </MapErrorBoundary>
   )
 }
 

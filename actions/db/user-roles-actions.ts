@@ -6,10 +6,7 @@ import { ActionState } from "@/types"
 import { auth } from "@clerk/nextjs/server"
 import { requiresSystemAdmin } from "@/lib/rbac"
 import { and, eq, inArray } from "drizzle-orm"
-import {
-  clerkClient as getClerkClient,
-  EmailAddress
-} from "@clerk/nextjs/server"
+import { clerkClient, EmailAddress } from "@clerk/nextjs/server"
 
 interface ClerkUser {
   id: string
@@ -99,7 +96,7 @@ export async function getUserWithRolesAction(
   }
 
   try {
-    const clerk = getClerkClient()
+    const clerk = await clerkClient()
     const clerkUser = await clerk.users.getUser(targetUserId)
     if (!clerkUser) {
       return { isSuccess: false, message: "Clerk user not found." }

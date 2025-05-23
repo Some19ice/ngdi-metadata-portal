@@ -36,6 +36,10 @@ export default function TerrainMapDisplay({
   const [activeStyleId, setActiveStyleId] = useState<string>("terrain")
   const [is3DEnabled, setIs3DEnabled] = useState(true)
   const [isMapLoaded, setIsMapLoaded] = useState(false)
+  // Store the internal style change handler from MapView
+  const [internalStyleChangeHandler, setInternalStyleChangeHandler] = useState<
+    ((styleId: string) => void) | null
+  >(null)
 
   // Check if MapTiler API key is valid
   const { isValid: isApiKeyValid, apiKey } = validateMapTilerApiKey()
@@ -59,10 +63,32 @@ export default function TerrainMapDisplay({
     )
   }, [availableBaseStyles])
 
-  // Handle style change
-  const handleStyleChange = useCallback((styleId: string) => {
+  // Handle style change from LayerControlPanel - forward to MapView's internal handler
+  const handleStyleChange = useCallback(
+    (styleId: string) => {
+      if (internalStyleChangeHandler) {
+        // Use MapView's internal style change handler
+        internalStyleChangeHandler(styleId)
+      } else {
+        // Fallback: update local state if internal handler not available yet
+        setActiveStyleId(styleId)
+      }
+    },
+    [internalStyleChangeHandler]
+  )
+
+  // Handle style change from MapView (when style actually changes)
+  const handleStyleChangeFromMapView = useCallback((styleId: string) => {
     setActiveStyleId(styleId)
   }, [])
+
+  // Store the internal style change handler when MapView provides it
+  const handleStyleChangeHandlerRef = useCallback(
+    (handler: (styleId: string) => void) => {
+      setInternalStyleChangeHandler(() => handler)
+    },
+    []
+  )
 
   // Handle map load
   const handleMapLoad = useCallback(
@@ -132,7 +158,8 @@ export default function TerrainMapDisplay({
           availableBaseStyles={terrainStyles}
           className="h-full w-full rounded-md"
           onMapLoad={handleMapLoad}
-          onStyleChange={handleStyleChange}
+          onStyleChange={handleStyleChangeFromMapView}
+          onStyleChangeHandler={handleStyleChangeHandlerRef}
         />
         <LayerControlPanel
           availableStyles={terrainStyles}

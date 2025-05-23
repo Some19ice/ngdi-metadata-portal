@@ -1,11 +1,11 @@
 "use client"
 
-import { useRef, useState, useEffect } from "react"
+import { useRef, useState, useEffect, useCallback } from "react"
 import maplibregl, { Map, MapOptions } from "maplibre-gl"
 import { logMapError } from "@/lib/map-config"
 
 interface UseMapInstanceOptions {
-  container: HTMLElement | string
+  container: HTMLElement | string | null
   initialOptions: Omit<MapOptions, "container">
   onLoad?: (map: Map) => void
   onError?: (error: Error) => void
@@ -25,12 +25,45 @@ export function useMapInstance({
 }: UseMapInstanceOptions) {
   const mapRef = useRef<Map | null>(null)
   const containerRef = useRef<HTMLElement | string | null>(null)
+  const initialOptionsRef =
+    useRef<Omit<MapOptions, "container">>(initialOptions)
   const [isLoaded, setIsLoaded] = useState(false)
   const [error, setError] = useState<Error | null>(null)
 
+  // Update initial options ref when they change meaningfully
+  useEffect(() => {
+    const hasChanged =
+      JSON.stringify(initialOptionsRef.current) !==
+      JSON.stringify(initialOptions)
+    if (hasChanged) {
+      initialOptionsRef.current = initialOptions
+    }
+  }, [initialOptions])
+
+  // Stable error handler
+  const handleError = useCallback(
+    (mapError: Error) => {
+      logMapError(mapError, "Map Runtime Error")
+      setError(mapError)
+      if (onError) onError(mapError)
+    },
+    [onError]
+  )
+
+  // Stable load handler
+  const handleLoad = useCallback(
+    (map: Map) => {
+      setIsLoaded(true)
+      if (onLoad) onLoad(map)
+    },
+    [onLoad]
+  )
+
   useEffect(() => {
     // Skip initialization if container is not available
-    if (!container) return
+    if (!container) {
+      return
+    }
 
     // Check if the container reference has changed
     const containerChanged = containerRef.current !== container
@@ -45,7 +78,9 @@ export function useMapInstance({
     }
 
     // Don't re-initialize if we already have a map and the container hasn't changed
-    if (mapRef.current && !containerChanged) return
+    if (mapRef.current && !containerChanged) {
+      return
+    }
 
     try {
       // Update our reference to the current container
@@ -54,23 +89,17 @@ export function useMapInstance({
       // Create new map instance
       const map = new Map({
         container,
-        ...initialOptions
+        ...initialOptionsRef.current
       })
 
       // Set up event handlers
-      map.on("load", () => {
-        setIsLoaded(true)
-        if (onLoad) onLoad(map)
-      })
+      map.on("load", () => handleLoad(map))
 
       map.on("error", e => {
         const mapError = new Error(
           `Map error: ${e.error?.message || "Unknown error"}`
         )
-        // Use our centralized error logging
-        logMapError(mapError, "Map Runtime Error")
-        setError(mapError)
-        if (onError) onError(mapError)
+        handleError(mapError)
       })
 
       // Store map reference
@@ -96,9 +125,9 @@ export function useMapInstance({
       setError(initError)
 
       // Call the error handler if provided
-      if (onError) onError(initError)
+      handleError(initError)
     }
-  }, [container, initialOptions, onLoad, onError])
+  }, [container, handleLoad, handleError])
 
   return {
     map: mapRef.current,

@@ -37,7 +37,7 @@ export default function MainHeader() {
   return (
     <div className="sticky top-0 z-40 flex flex-col">
       {/* Banner Section */}
-      <div className="bg-slate-700 h-[var(--banner-height)] flex items-center text-white">
+      <div className="bg-gradient-to-r from-slate-800 to-slate-600 h-[var(--banner-height)] flex items-center text-white">
         <div className="container mx-auto flex items-center justify-center">
           <Link href="/" className="flex items-center">
             <Image
@@ -56,8 +56,8 @@ export default function MainHeader() {
         className={cn(
           "w-full h-[var(--header-height)] border-b transition-colors",
           isScrolled
-            ? "bg-background/80 shadow-sm backdrop-blur-sm"
-            : "bg-background"
+            ? "bg-gradient-to-r from-background/90 to-background/70 shadow-sm backdrop-blur-sm"
+            : "bg-gradient-to-r from-background/95 to-background/85"
         )}
       >
         <div className="container mx-auto flex h-full items-center justify-between space-x-4 px-4 sm:justify-between sm:space-x-0">

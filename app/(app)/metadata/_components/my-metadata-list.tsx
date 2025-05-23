@@ -5,12 +5,23 @@ import {
   MetadataRecordWithOrganization,
   columns
 } from "./metadata-table-columns"
+import { useState } from "react"
 
 interface MyMetadataListProps {
   initialData: MetadataRecordWithOrganization[]
 }
 
 export default function MyMetadataList({ initialData }: MyMetadataListProps) {
+  const [sortBy, setSortBy] = useState("updatedAt")
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc")
+
+  const handleSort = (newSortBy: string, newSortOrder: "asc" | "desc") => {
+    setSortBy(newSortBy)
+    setSortOrder(newSortOrder)
+    // Note: In a real implementation, you might want to trigger a server action
+    // to re-fetch data with the new sort parameters
+  }
+
   if (!initialData || initialData.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full py-10">
@@ -25,9 +36,15 @@ export default function MyMetadataList({ initialData }: MyMetadataListProps) {
     )
   }
 
+  const columnDefinitions = columns({
+    onSort: handleSort,
+    currentSortBy: sortBy,
+    currentSortOrder: sortOrder
+  })
+
   return (
     <div className="container mx-auto py-10">
-      <DataTable columns={columns} data={initialData} />
+      <DataTable columns={columnDefinitions} data={initialData} />
     </div>
   )
 }

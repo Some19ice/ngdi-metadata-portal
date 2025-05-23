@@ -6,12 +6,8 @@ import { toast } from "sonner"
 import MapView from "./map-view"
 import LayerControlPanel from "./layer-control-panel"
 import { MapStyle } from "./map-view"
-import {
-  useMapLayers,
-  useMapMarkers,
-  useMapViewport,
-  MarkerData
-} from "@/hooks"
+import { useMapMarkers, useMapViewport, MarkerData } from "@/hooks"
+import { useMapLayers } from "@/lib/hooks/use-map-layers"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Layers, ZoomIn, ZoomOut, Home, Info } from "lucide-react"
@@ -43,6 +39,10 @@ export default function MetadataMapDisplay({
   const [activeStyleId, setActiveStyleId] = useState<string>("streets")
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null)
   const [isMapLoaded, setIsMapLoaded] = useState(false)
+  // Store the internal style change handler from MapView
+  const [internalStyleChangeHandler, setInternalStyleChangeHandler] = useState<
+    ((styleId: string) => void) | null
+  >(null)
 
   // Use our centralized map configuration utility to get available styles
   const availableBaseStyles: MapStyle[] = useMemo(
@@ -50,10 +50,32 @@ export default function MetadataMapDisplay({
     []
   )
 
-  // Handle style change
-  const handleStyleChange = useCallback((styleId: string) => {
+  // Handle style change from LayerControlPanel - forward to MapView's internal handler
+  const handleStyleChange = useCallback(
+    (styleId: string) => {
+      if (internalStyleChangeHandler) {
+        // Use MapView's internal style change handler
+        internalStyleChangeHandler(styleId)
+      } else {
+        // Fallback: update local state if internal handler not available yet
+        setActiveStyleId(styleId)
+      }
+    },
+    [internalStyleChangeHandler]
+  )
+
+  // Handle style change from MapView (when style actually changes)
+  const handleStyleChangeFromMapView = useCallback((styleId: string) => {
     setActiveStyleId(styleId)
   }, [])
+
+  // Store the internal style change handler when MapView provides it
+  const handleStyleChangeHandlerRef = useCallback(
+    (handler: (styleId: string) => void) => {
+      setInternalStyleChangeHandler(() => handler)
+    },
+    []
+  )
 
   // Handle map load
   const handleMapLoad = useCallback((map: Map) => {
@@ -131,7 +153,7 @@ export default function MetadataMapDisplay({
       if (existingSource) {
         // Update existing source data
         if ("setData" in existingSource) {
-          existingSource.setData(recordsToGeoJSON(records))
+          ;(existingSource as any).setData(recordsToGeoJSON(records))
         }
       } else {
         // Add source and layer for bounding boxes
@@ -381,7 +403,8 @@ export default function MetadataMapDisplay({
           availableBaseStyles={availableBaseStyles}
           className="h-full w-full rounded-md"
           onMapLoad={handleMapLoad}
-          onStyleChange={handleStyleChange}
+          onStyleChange={handleStyleChangeFromMapView}
+          onStyleChangeHandler={handleStyleChangeHandlerRef}
         />
         <LayerControlPanel
           availableStyles={availableBaseStyles}

@@ -73,18 +73,21 @@ export async function getNotificationsForUserAction(
   const { limit = 10, offset = 0, status = "all" } = params
 
   try {
-    let condition = eq(notificationsTable.recipientUserId, currentUserId)
+    const conditions = [eq(notificationsTable.recipientUserId, currentUserId)]
 
     if (status === "read") {
-      condition = and(condition, eq(notificationsTable.isRead, true))
+      conditions.push(eq(notificationsTable.isRead, true))
     } else if (status === "unread") {
-      condition = and(condition, eq(notificationsTable.isRead, false))
+      conditions.push(eq(notificationsTable.isRead, false))
     }
+
+    const whereCondition =
+      conditions.length > 1 ? and(...conditions) : conditions[0]
 
     const notifications = await db
       .select()
       .from(notificationsTable)
-      .where(condition)
+      .where(whereCondition)
       .orderBy(desc(notificationsTable.createdAt))
       .limit(limit)
       .offset(offset)
@@ -92,7 +95,7 @@ export async function getNotificationsForUserAction(
     const totalResult = await db
       .select({ count: sql<number>`count(*)` })
       .from(notificationsTable)
-      .where(condition)
+      .where(whereCondition)
 
     const totalCount = totalResult[0]?.count || 0
 

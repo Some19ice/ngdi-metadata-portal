@@ -14,6 +14,7 @@ import { PostHogPageview } from "@/components/utilities/posthog/posthog-pageview
 import { PostHogUserIdentify } from "@/components/utilities/posthog/posthog-user-identity"
 import { Providers } from "@/components/utilities/providers"
 import { TailwindIndicator } from "@/components/utilities/tailwind-indicator"
+import { StagewiseToolbar } from "@/components/utilities/stagewise-toolbar"
 import { cn } from "@/lib/utils"
 import { ClerkProvider } from "@clerk/nextjs"
 import { auth } from "@clerk/nextjs/server"
@@ -79,6 +80,8 @@ export default async function RootLayout({
             </SidebarProvider>
 
             <TailwindIndicator />
+
+            <StagewiseToolbar />
 
             <Toaster />
           </Providers>

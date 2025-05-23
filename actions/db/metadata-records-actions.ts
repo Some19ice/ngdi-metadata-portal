@@ -385,12 +385,7 @@ export async function updateMetadataRecordAction(params: {
         productionDate: processDateField(data.productionDate)
       }),
       ...(data.publicationDate && {
-        publicationDate:
-          data.publicationDate instanceof Date
-            ? data.publicationDate
-            : typeof data.publicationDate === "string"
-              ? new Date(data.publicationDate)
-              : null
+        publicationDate: processDateField(data.publicationDate)
       }),
       ...(data.temporalInfo && {
         temporalInfo: {
@@ -1096,6 +1091,45 @@ export async function getOrganizationsAction(): Promise<
     return {
       isSuccess: false,
       message: "Failed to retrieve organizations."
+    }
+  }
+}
+
+export async function getMetadataRecordsWithSpatialBoundsAction(): Promise<
+  ActionState<SelectMetadataRecord[]>
+> {
+  try {
+    // Fetch published metadata records that have spatial bounds
+    const records = await db.query.metadataRecords.findMany({
+      where: and(
+        eq(metadataRecordsTable.status, "Published"),
+        // Check if spatialInfo exists and has boundingBox with coordinates
+        sql`${metadataRecordsTable.spatialInfo} ? 'boundingBox' AND 
+            ${metadataRecordsTable.spatialInfo} -> 'boundingBox' ? 'northBoundingCoordinate' AND
+            ${metadataRecordsTable.spatialInfo} -> 'boundingBox' ? 'southBoundingCoordinate' AND
+            ${metadataRecordsTable.spatialInfo} -> 'boundingBox' ? 'eastBoundingCoordinate' AND
+            ${metadataRecordsTable.spatialInfo} -> 'boundingBox' ? 'westBoundingCoordinate' AND
+            ${metadataRecordsTable.spatialInfo} -> 'boundingBox' ->> 'northBoundingCoordinate' IS NOT NULL AND
+            ${metadataRecordsTable.spatialInfo} -> 'boundingBox' ->> 'southBoundingCoordinate' IS NOT NULL AND
+            ${metadataRecordsTable.spatialInfo} -> 'boundingBox' ->> 'eastBoundingCoordinate' IS NOT NULL AND
+            ${metadataRecordsTable.spatialInfo} -> 'boundingBox' ->> 'westBoundingCoordinate' IS NOT NULL`
+      ),
+      orderBy: [desc(metadataRecordsTable.updatedAt)],
+      with: {
+        organization: true
+      }
+    })
+
+    return {
+      isSuccess: true,
+      message: "Metadata records with spatial bounds retrieved successfully.",
+      data: records
+    }
+  } catch (error) {
+    console.error("Error getting metadata records with spatial bounds:", error)
+    return {
+      isSuccess: false,
+      message: "Failed to retrieve metadata records with spatial bounds."
     }
   }
 }

@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import {
   FormControl,
   FormField,
@@ -39,6 +40,8 @@ import {
   metadataTopicCategoryEnum
 } from "@/db/schema/metadata-records-schema"
 import { Switch } from "@/components/ui/switch"
+import { Badge } from "@/components/ui/badge"
+import { Lightbulb } from "lucide-react"
 
 // Section 1: General Information (Renamed from IdentificationSection)
 export function GeneralInformationSection({
@@ -46,6 +49,124 @@ export function GeneralInformationSection({
 }: {
   form: UseFormReturn<MetadataFormValues>
 }) {
+  // State for smart suggestions
+  const [suggestions, setSuggestions] = useState<Record<string, string[]>>({})
+
+  // Generate smart suggestions
+  const handleFieldFocus = (fieldName: string, value: string) => {
+    const dataType = form.getValues("dataType")
+    const smartSuggestions = getSmartSuggestions(fieldName, value, dataType)
+    setSuggestions(prev => ({
+      ...prev,
+      [fieldName]: smartSuggestions
+    }))
+  }
+
+  const applySuggestion = (fieldName: string, suggestion: string) => {
+    if (fieldName === "keywords") {
+      const currentKeywords = form.getValues("keywords") || []
+      form.setValue("keywords", [...currentKeywords, suggestion], {
+        shouldValidate: true
+      })
+    } else {
+      form.setValue(fieldName as any, suggestion)
+    }
+    setSuggestions(prev => ({
+      ...prev,
+      [fieldName]: []
+    }))
+  }
+
+  // Smart suggestions based on field content
+  const getSmartSuggestions = (
+    fieldName: string,
+    value: string,
+    dataType?: string
+  ) => {
+    const suggestions: string[] = []
+
+    if (fieldName === "keywords" && value.length > 2) {
+      const commonKeywords = [
+        "geospatial",
+        "GIS",
+        "mapping",
+        "spatial analysis",
+        "remote sensing",
+        "urban planning",
+        "environmental",
+        "transportation",
+        "infrastructure",
+        "demographics",
+        "land use",
+        "topography",
+        "climate",
+        "hydrology"
+      ]
+
+      suggestions.push(
+        ...commonKeywords.filter(
+          k =>
+            k.toLowerCase().includes(value.toLowerCase()) &&
+            !suggestions.includes(k)
+        )
+      )
+    }
+
+    if (fieldName === "coordinateSystem") {
+      const systems = [
+        "WGS84",
+        "UTM Zone 31N",
+        "NAD83",
+        "EPSG:4326",
+        "EPSG:3857"
+      ]
+      suggestions.push(
+        ...systems.filter(s => s.toLowerCase().includes(value.toLowerCase()))
+      )
+    }
+
+    if (fieldName === "fileFormat" && dataType) {
+      const formatsByType: Record<string, string[]> = {
+        Vector: ["Shapefile", "GeoJSON", "KML", "GeoPackage", "PostGIS"],
+        Raster: ["GeoTIFF", "NetCDF", "JPEG2000", "PNG", "HDF5"],
+        Table: ["CSV", "Excel", "JSON", "Parquet", "SQLite"],
+        "Point Cloud": ["LAS", "LAZ", "PLY", "XYZ", "E57"]
+      }
+
+      suggestions.push(...(formatsByType[dataType] || []))
+    }
+
+    return suggestions.slice(0, 5)
+  }
+
+  // Suggestion list component
+  const SuggestionList = ({ fieldName }: { fieldName: string }) => {
+    const fieldSuggestions = suggestions[fieldName] || []
+
+    if (fieldSuggestions.length === 0) return null
+
+    return (
+      <div className="mt-2 p-2 border rounded-md bg-muted/50">
+        <div className="text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1">
+          <Lightbulb className="h-3 w-3" />
+          Suggestions:
+        </div>
+        <div className="flex flex-wrap gap-1">
+          {fieldSuggestions.map((suggestion, index) => (
+            <Badge
+              key={index}
+              variant="outline"
+              className="text-xs cursor-pointer hover:bg-primary hover:text-primary-foreground"
+              onClick={() => applySuggestion(fieldName, suggestion)}
+            >
+              {suggestion}
+            </Badge>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
   // Helper for keywords, can be expanded later
   const handleAddKeyword = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && e.currentTarget.value.trim() !== "") {
@@ -267,6 +388,8 @@ export function GeneralInformationSection({
               <Input
                 placeholder="Type keyword and press Enter"
                 onKeyDown={handleAddKeyword}
+                onFocus={e => handleFieldFocus("keywords", e.target.value)}
+                onChange={e => handleFieldFocus("keywords", e.target.value)}
               />
             </FormControl>
             <div className="mt-2 flex flex-wrap gap-2">
@@ -287,6 +410,7 @@ export function GeneralInformationSection({
                 </div>
               ))}
             </div>
+            <SuggestionList fieldName="keywords" />
             <FormMessage />
           </FormItem>
         )}
@@ -479,9 +603,80 @@ export function SpatialInformationSection({
 }: {
   form: UseFormReturn<MetadataFormValues>
 }) {
+  const [suggestions, setSuggestions] = useState<Record<string, string[]>>({})
   const spatialRepresentationType = form.watch(
     "spatialInfo.spatialRepresentationType"
   )
+
+  // Generate smart suggestions
+  const handleFieldFocus = (fieldName: string, value: string) => {
+    const dataType = form.getValues("dataType")
+    const smartSuggestions = getSmartSuggestions(fieldName, value, dataType)
+    setSuggestions(prev => ({
+      ...prev,
+      [fieldName]: smartSuggestions
+    }))
+  }
+
+  const applySuggestion = (fieldName: string, suggestion: string) => {
+    form.setValue(fieldName as any, suggestion)
+    setSuggestions(prev => ({
+      ...prev,
+      [fieldName]: []
+    }))
+  }
+
+  // Smart suggestions based on field content
+  const getSmartSuggestions = (
+    fieldName: string,
+    value: string,
+    dataType?: string
+  ) => {
+    const suggestions: string[] = []
+
+    if (fieldName === "spatialInfo.coordinateSystem") {
+      const systems = [
+        "WGS84",
+        "UTM Zone 31N",
+        "NAD83",
+        "EPSG:4326",
+        "EPSG:3857"
+      ]
+      suggestions.push(
+        ...systems.filter(s => s.toLowerCase().includes(value.toLowerCase()))
+      )
+    }
+
+    return suggestions.slice(0, 5)
+  }
+
+  // Suggestion list component
+  const SuggestionList = ({ fieldName }: { fieldName: string }) => {
+    const fieldSuggestions = suggestions[fieldName] || []
+
+    if (fieldSuggestions.length === 0) return null
+
+    return (
+      <div className="mt-2 p-2 border rounded-md bg-muted/50">
+        <div className="text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1">
+          <Lightbulb className="h-3 w-3" />
+          Suggestions:
+        </div>
+        <div className="flex flex-wrap gap-1">
+          {fieldSuggestions.map((suggestion, index) => (
+            <Badge
+              key={index}
+              variant="outline"
+              className="text-xs cursor-pointer hover:bg-primary hover:text-primary-foreground"
+              onClick={() => applySuggestion(fieldName, suggestion)}
+            >
+              {suggestion}
+            </Badge>
+          ))}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -499,8 +694,22 @@ export function SpatialInformationSection({
                   placeholder="e.g., WGS 84, NAD 83"
                   {...field}
                   value={field.value ?? ""}
+                  onFocus={e =>
+                    handleFieldFocus(
+                      "spatialInfo.coordinateSystem",
+                      e.target.value
+                    )
+                  }
+                  onChange={e => {
+                    field.onChange(e)
+                    handleFieldFocus(
+                      "spatialInfo.coordinateSystem",
+                      e.target.value
+                    )
+                  }}
                 />
               </FormControl>
+              <SuggestionList fieldName="spatialInfo.coordinateSystem" />
               <FormMessage />
             </FormItem>
           )}
@@ -1312,7 +1521,7 @@ export function DataQualitySection({
 
       <FormField
         control={form.control}
-        name="dataQualityInfo.lineage"
+        name="dataQualityLineage"
         render={({ field }) => (
           <FormItem>
             <FormLabel>Lineage / Data Source History *</FormLabel>
@@ -1331,7 +1540,7 @@ export function DataQualitySection({
 
       <FormField
         control={form.control}
-        name="dataQualityInfo.accuracyReport"
+        name="dataQualityInfo.attributeAccuracyReport"
         render={({ field }) => (
           <FormItem>
             <FormLabel>Accuracy Report</FormLabel>
@@ -1443,7 +1652,7 @@ export function ProcessingInformationSection({
       <div className="grid md:grid-cols-2 gap-6">
         <FormField
           control={form.control}
-          name="processingInfo.processorContact.name"
+          name="contactName"
           render={({ field }) => (
             <FormItem>
               <FormLabel>Processor Name</FormLabel>
@@ -1460,13 +1669,14 @@ export function ProcessingInformationSection({
         />
         <FormField
           control={form.control}
-          name="processingInfo.processorContact.email"
+          name="contactEmail"
           render={({ field }) => (
             <FormItem>
               <FormLabel>Processor Email</FormLabel>
               <FormControl>
                 <Input
-                  placeholder="Email of the person who processed the data"
+                  type="email"
+                  placeholder="contact@example.com"
                   {...field}
                   value={field.value ?? ""}
                 />
@@ -1479,7 +1689,7 @@ export function ProcessingInformationSection({
 
       <FormField
         control={form.control}
-        name="processingInfo.processorContact.organization"
+        name="contactAddress"
         render={({ field }) => (
           <FormItem>
             <FormLabel>Processor Organization</FormLabel>
@@ -1554,7 +1764,7 @@ export function ProcessingInformationSection({
 
         <FormField
           control={form.control}
-          name="processingInfo.sourceInfo.sourceCitation"
+          name="dataSources"
           render={({ field }) => (
             <FormItem>
               <FormLabel>Source Citation</FormLabel>
@@ -1574,7 +1784,7 @@ export function ProcessingInformationSection({
         <div className="grid md:grid-cols-2 gap-6 mt-4">
           <FormField
             control={form.control}
-            name="processingInfo.sourceInfo.sourceScale"
+            name="spatialResolution"
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Source Scale</FormLabel>
@@ -1591,7 +1801,7 @@ export function ProcessingInformationSection({
           />
           <FormField
             control={form.control}
-            name="processingInfo.sourceInfo.sourceFormat"
+            name="technicalDetailsInfo.fileFormat"
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Source Format</FormLabel>
@@ -1626,7 +1836,7 @@ export function ContactAndOtherInformationSection({
       <h4 className="text-md font-medium pt-2">Contact Information</h4>
       <FormField
         control={form.control}
-        name="contactInfo.pointOfContact"
+        name="contactName"
         render={({ field }) => (
           <FormItem>
             <FormLabel>Point of Contact *</FormLabel>
@@ -1644,7 +1854,7 @@ export function ContactAndOtherInformationSection({
       <div className="grid md:grid-cols-2 gap-6">
         <FormField
           control={form.control}
-          name="contactInfo.contactEmail"
+          name="contactEmail"
           render={({ field }) => (
             <FormItem>
               <FormLabel>Contact Email *</FormLabel>
@@ -1662,7 +1872,7 @@ export function ContactAndOtherInformationSection({
         />
         <FormField
           control={form.control}
-          name="contactInfo.contactPhone"
+          name="contactPhone"
           render={({ field }) => (
             <FormItem>
               <FormLabel>Contact Phone</FormLabel>
@@ -1681,7 +1891,7 @@ export function ContactAndOtherInformationSection({
       </div>
       <FormField
         control={form.control}
-        name="contactInfo.organizationName"
+        name="contactAddress"
         render={({ field }) => (
           <FormItem>
             <FormLabel>Organization Name</FormLabel>
@@ -1702,7 +1912,7 @@ export function ContactAndOtherInformationSection({
       <div className="grid md:grid-cols-2 gap-6">
         <FormField
           control={form.control}
-          name="technicalDetailsInfo.dataStandard"
+          name="spatialReferenceSystem"
           render={({ field }) => (
             <FormItem>
               <FormLabel>Data Standard</FormLabel>
@@ -1719,7 +1929,7 @@ export function ContactAndOtherInformationSection({
         />
         <FormField
           control={form.control}
-          name="technicalDetailsInfo.dataDictionary"
+          name="notes"
           render={({ field }) => (
             <FormItem>
               <FormLabel>Data Dictionary URL</FormLabel>
@@ -1742,7 +1952,7 @@ export function ContactAndOtherInformationSection({
       <div className="grid md:grid-cols-2 gap-6">
         <FormField
           control={form.control}
-          name="distributionInfo.formatName"
+          name="technicalDetailsInfo.fileFormat"
           render={({ field }) => (
             <FormItem>
               <FormLabel>Distribution Format Name *</FormLabel>
@@ -1759,7 +1969,7 @@ export function ContactAndOtherInformationSection({
         />
         <FormField
           control={form.control}
-          name="distributionInfo.formatVersion"
+          name="version"
           render={({ field }) => (
             <FormItem>
               <FormLabel>Format Version</FormLabel>
@@ -1777,7 +1987,7 @@ export function ContactAndOtherInformationSection({
       </div>
       <FormField
         control={form.control}
-        name="distributionInfo.accessUrl"
+        name="distributionInfo.downloadUrl"
         render={({ field }) => (
           <FormItem>
             <FormLabel>Access URL (Download/Service/API)</FormLabel>
@@ -1798,7 +2008,7 @@ export function ContactAndOtherInformationSection({
       <h4 className="text-md font-medium pt-4">Metadata Reference</h4>
       <FormField
         control={form.control}
-        name="metadataReferenceInfo.metadataStandard"
+        name="spatialReferenceSystem"
         render={({ field }) => (
           <FormItem>
             <FormLabel>Metadata Standard</FormLabel>
@@ -1815,7 +2025,7 @@ export function ContactAndOtherInformationSection({
       />
       <FormField
         control={form.control}
-        name="metadataReferenceInfo.metadataLanguage"
+        name="language"
         render={({ field }) => (
           <FormItem>
             <FormLabel>Metadata Language</FormLabel>
@@ -1833,7 +2043,7 @@ export function ContactAndOtherInformationSection({
 
       <FormField
         control={form.control}
-        name="additionalInfo"
+        name="additionalInformation"
         render={({ field }) => (
           <FormItem>
             <FormLabel>Additional Information</FormLabel>

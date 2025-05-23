@@ -22,7 +22,8 @@ const navLinks = [
     label: "Map",
     subLinks: [
       { href: "/map", label: "Main Map" },
-      { href: "/map/metadata-demo", label: "Metadata Map" }
+      { href: "/map/metadata-demo", label: "Metadata Map" },
+      { href: "/map/gis-services", label: "GIS Services" }
     ]
   },
   { href: "/about", label: "About" },

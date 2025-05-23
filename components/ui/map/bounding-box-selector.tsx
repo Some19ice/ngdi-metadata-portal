@@ -1,9 +1,10 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import dynamic from "next/dynamic"
 import { Button } from "@/components/ui/button"
 import { Undo2 } from "lucide-react"
+import MapErrorBoundary from "./map-error-boundary"
 
 // Define the props for the component
 interface BoundingBoxSelectorProps {
@@ -44,6 +45,9 @@ export default function BoundingBoxSelector({
     west: number
   } | null>(initialBounds || null)
 
+  // Create a unique key for the map component to prevent re-initialization issues
+  const mapKeyRef = useRef(`bbox-selector-${Date.now()}-${Math.random()}`)
+
   // Handle local bound changes
   const handleBoundsChange = (
     newBounds: {
@@ -67,6 +71,11 @@ export default function BoundingBoxSelector({
     }
   }
 
+  // Update bounds when initialBounds prop changes
+  useEffect(() => {
+    setBounds(initialBounds || null)
+  }, [initialBounds])
+
   return (
     <div className="relative w-full rounded-md overflow-hidden">
       <div className="absolute z-10 top-2 right-2">
@@ -80,10 +89,13 @@ export default function BoundingBoxSelector({
           <Undo2 className="h-4 w-4" />
         </Button>
       </div>
-      <BoundingBoxMap
-        onBoundsChange={handleBoundsChange}
-        initialBounds={initialBounds}
-      />
+      <MapErrorBoundary>
+        <BoundingBoxMap
+          key={mapKeyRef.current}
+          onBoundsChange={handleBoundsChange}
+          initialBounds={initialBounds}
+        />
+      </MapErrorBoundary>
       <div className="text-xs text-muted-foreground mt-2">
         Click and drag on the map to define a search bounding box.
       </div>

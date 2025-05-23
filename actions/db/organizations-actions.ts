@@ -575,6 +575,8 @@ export async function assignNodeOfficerAction(
       "This feature is currently unavailable. Database migration required to add nodeOfficerId column."
   }
 
+  // TODO: Uncomment and fix when migration is complete
+  /*
   const isAdmin = await hasPermission(userId, "manage", "organizations")
   if (!isAdmin) {
     return {
@@ -636,4 +638,5 @@ export async function assignNodeOfficerAction(
       message: "Failed to update Node Officer assignment."
     }
   }
+  */
 }

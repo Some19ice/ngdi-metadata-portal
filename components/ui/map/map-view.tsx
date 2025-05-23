@@ -17,6 +17,8 @@ import {
   getFallbackStyle,
   styleRequiresApiKey
 } from "@/lib/map-config"
+import { preloadMapStyles } from "@/lib/map-loader"
+import MapControls from "./map-controls"
 
 // Define a type for our map styles
 export interface MapStyle {
@@ -28,6 +30,14 @@ export interface MapStyle {
 // Define available base map styles with proper fallbacks
 const defaultAvailableBaseStyles: MapStyle[] = getAvailableMapStyles()
 
+// Define default controls configuration outside component to prevent re-creation
+const DEFAULT_MAP_CONTROLS = {
+  navigation: true,
+  scale: true,
+  fullscreen: true,
+  geolocate: true
+} as const
+
 interface MapViewProps {
   initialOptions?: Omit<maplibregl.MapOptions, "container">
   className?: string
@@ -36,6 +46,9 @@ interface MapViewProps {
   onMapLoad?: (map: Map) => void
   onStyleChange?: (styleId: string) => void
   onError?: (error: Error) => void
+  showControls?: boolean
+  controlsPosition?: "side" | "overlay"
+  onStyleChangeHandler?: (styleChangeHandler: (styleId: string) => void) => void
 }
 
 const defaultInitialOptions: Omit<maplibregl.MapOptions, "container"> = {
@@ -46,16 +59,27 @@ const defaultInitialOptions: Omit<maplibregl.MapOptions, "container"> = {
 }
 
 export default function MapView({
-  initialOptions,
+  initialOptions = {},
   className = "h-[700px] w-full",
   initialStyleId = defaultAvailableBaseStyles[0].id, // Default to the first style
   availableBaseStyles = defaultAvailableBaseStyles,
   onMapLoad,
   onStyleChange,
-  onError
+  onError,
+  showControls = true,
+  controlsPosition = "side",
+  onStyleChangeHandler
 }: MapViewProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null)
+  const [isContainerReady, setIsContainerReady] = useState(false)
   const [isInitialized, setIsInitialized] = useState(false)
+
+  // Set container ready when ref is attached
+  useEffect(() => {
+    if (mapContainerRef.current) {
+      setIsContainerReady(true)
+    }
+  }, [])
 
   // Validate map styles and handle missing API keys
   const validatedStyles = useMemo(() => {
@@ -91,7 +115,7 @@ export default function MapView({
     return activeStyle.url
   }, [validatedStyles, initialStyleId])
 
-  // Prepare initial options
+  // Prepare initial options - memoize to prevent constant re-creation
   const mergedInitialOptions = useMemo(() => {
     return {
       ...defaultInitialOptions,
@@ -103,9 +127,15 @@ export default function MapView({
   const handleMapLoad = useCallback(
     (mapInstance: Map) => {
       setIsInitialized(true)
+
+      // Preload other available styles for faster switching
+      preloadMapStyles(
+        validatedStyles.filter(style => style.url !== activeStyleUrl)
+      )
+
       if (onMapLoad) onMapLoad(mapInstance)
     },
-    [onMapLoad]
+    [onMapLoad, validatedStyles, activeStyleUrl]
   )
 
   const handleMapError = useCallback(
@@ -122,9 +152,12 @@ export default function MapView({
     [onError]
   )
 
-  // Initialize map instance
+  // Initialize map instance - only when container is ready
   const { map, isLoaded, error } = useMapInstance({
-    container: mapContainerRef.current || "",
+    container:
+      isContainerReady && mapContainerRef.current
+        ? mapContainerRef.current
+        : null!,
     initialOptions: mergedInitialOptions,
     onLoad: handleMapLoad,
     onError: handleMapError
@@ -174,14 +207,19 @@ export default function MapView({
     onStyleError: handleStyleError
   })
 
-  // Set up map controls
+  // Expose the style change handler to parent components if needed
+  useEffect(() => {
+    if (onStyleChangeHandler) {
+      onStyleChangeHandler(handleStyleChange)
+    }
+  }, [handleStyleChange, onStyleChangeHandler])
+
+  // Set up map controls with default configuration
+  // Note: The hook doesn't support custom positions for default controls directly
+  // The positions are hardcoded in the hook implementation
   useMapControls({
     map,
-    defaultControls: {
-      navigation: true,
-      scale: true,
-      fullscreen: false
-    }
+    defaultControls: DEFAULT_MAP_CONTROLS
   })
 
   // Set up map viewport
@@ -203,6 +241,18 @@ export default function MapView({
     }
   }, [map, isInitialized, activeStyleId, onStyleChange])
 
+  // Ensure map resizes to fill container when loaded
+  useEffect(() => {
+    if (map && isLoaded) {
+      // Small delay to ensure container dimensions are available
+      const resizeTimer = setTimeout(() => {
+        map.resize()
+      }, 100)
+
+      return () => clearTimeout(resizeTimer)
+    }
+  }, [map, isLoaded])
+
   // Check if the API key is missing and we're trying to use a style that requires it
   const isApiKeyMissing = useMemo(() => {
     // If we have an active style URL, the API key is either not needed or is present
@@ -216,12 +266,31 @@ export default function MapView({
   }, [activeStyleUrl, initialStyleId])
 
   return (
-    <div
-      ref={mapContainerRef}
-      className={`relative ${className}`}
-      data-testid="map-container"
-      style={{ minHeight: "300px" }} // Ensure minimum height
-    >
+    <div className={`relative ${className}`}>
+      <div ref={mapContainerRef} className="h-full w-full" />
+
+      {showControls && controlsPosition === "overlay" && (
+        <MapControls
+          map={map}
+          isLoaded={isLoaded}
+          validatedStyles={validatedStyles}
+          activeStyleId={activeStyleId}
+          handleStyleChange={handleStyleChange}
+          className="absolute top-4 right-4 z-20"
+        />
+      )}
+
+      {showControls && controlsPosition === "side" && (
+        <MapControls
+          map={map}
+          isLoaded={isLoaded}
+          validatedStyles={validatedStyles}
+          activeStyleId={activeStyleId}
+          handleStyleChange={handleStyleChange}
+          className="absolute top-4 left-4 z-20"
+        />
+      )}
+
       {!isLoaded && (
         <div className="absolute inset-0 flex items-center justify-center bg-gray-200/50 z-10">
           <div className="text-center">
@@ -234,6 +303,7 @@ export default function MapView({
           </div>
         </div>
       )}
+
       {error && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-200/80 p-4 text-center z-10">
           <p className="text-red-600 font-semibold mb-2">Failed to load map</p>
