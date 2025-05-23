@@ -287,7 +287,7 @@ export async function publishMetadataAction(
     const [updatedRecord] = await db
       .update(metadataRecordsTable)
       .set({
-        publicationDate: new Date(),
+        publicationDate: new Date().toISOString(),
         updatedAt: new Date()
       })
       .where(eq(metadataRecordsTable.id, recordId))

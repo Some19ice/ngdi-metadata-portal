@@ -264,8 +264,12 @@ function preparePayload(
     boundingBoxEast: data.boundingBoxEast ?? null,
     boundingBoxWest: data.boundingBoxWest ?? null,
     geometry: data.geometry ? JSON.parse(data.geometry) : null,
-    temporalExtentFrom: data.temporalExtentFrom,
-    temporalExtentTo: data.temporalExtentTo,
+    temporalExtentFrom: data.temporalExtentFrom
+      ? data.temporalExtentFrom.toISOString().split("T")[0]
+      : null,
+    temporalExtentTo: data.temporalExtentTo
+      ? data.temporalExtentTo.toISOString().split("T")[0]
+      : null,
     dataQualityScope: data.dataQualityScope ?? null,
     dataQualityReport: data.dataQualityReport ?? null,
 
@@ -277,7 +281,43 @@ function preparePayload(
         : undefined,
     spatialInfo:
       data.spatialInfo && Object.values(data.spatialInfo).some(v => v !== null)
-        ? { ...data.spatialInfo }
+        ? {
+            coordinateSystem: data.spatialInfo.coordinateSystem ?? null,
+            projection: data.spatialInfo.projection ?? null,
+            datum: data.spatialInfo.datum ?? null,
+            resolutionScale:
+              (data.spatialInfo as any).scale !== null
+                ? String((data.spatialInfo as any).scale)
+                : (data.spatialInfo.resolutionScale ?? null),
+            geometricObjectType: data.spatialInfo.geometricObjectType ?? null,
+            numFeaturesOrLayers: data.spatialInfo.numFeaturesOrLayers ?? null,
+            format: data.spatialInfo.format ?? null,
+            distributionFormat: data.spatialInfo.distributionFormat ?? null,
+            spatialRepresentationType: data.spatialInfo
+              .spatialRepresentationType as
+              | "Vector"
+              | "Raster"
+              | "Text Table"
+              | "TIN"
+              | "Stereo Model"
+              | "Video"
+              | null,
+            vectorSpatialRepresentation:
+              data.spatialInfo.vectorSpatialRepresentation ?? null,
+            rasterSpatialRepresentation:
+              data.spatialInfo.rasterSpatialRepresentation ?? null,
+            boundingBox: {
+              westBoundingCoordinate:
+                (data.spatialInfo as any).minLongitude ?? null,
+              eastBoundingCoordinate:
+                (data.spatialInfo as any).maxLongitude ?? null,
+              northBoundingCoordinate:
+                (data.spatialInfo as any).maxLatitude ?? null,
+              southBoundingCoordinate:
+                (data.spatialInfo as any).minLatitude ?? null
+            },
+            verticalExtent: data.spatialInfo.verticalExtent ?? null
+          }
         : undefined,
     temporalInfo:
       data.temporalInfo &&
@@ -403,32 +443,27 @@ export default function MultiStepMetadataFormClient({
 
     formValues.locationInfo = dataFromDb.locationInfo
       ? { ...(dataFromDb.locationInfo as DrizzleLocationInfo) }
-      : null
+      : undefined
     formValues.spatialInfo = dataFromDb.spatialInfo
       ? {
           ...(dataFromDb.spatialInfo as DrizzleSpatialInfo),
-          scale:
-            dataFromDb.spatialInfo.scale !== null
-              ? Number(dataFromDb.spatialInfo.scale)
-              : null,
-          minLatitude:
-            dataFromDb.spatialInfo.minLatitude !== null
-              ? Number(dataFromDb.spatialInfo.minLatitude)
-              : null,
-          minLongitude:
-            dataFromDb.spatialInfo.minLongitude !== null
-              ? Number(dataFromDb.spatialInfo.minLongitude)
-              : null,
-          maxLatitude:
-            dataFromDb.spatialInfo.maxLatitude !== null
-              ? Number(dataFromDb.spatialInfo.maxLatitude)
-              : null,
-          maxLongitude:
-            dataFromDb.spatialInfo.maxLongitude !== null
-              ? Number(dataFromDb.spatialInfo.maxLongitude)
-              : null
+          // Map old field names to new ones if they exist
+          resolutionScale:
+            (dataFromDb.spatialInfo as any).scale !== null
+              ? String((dataFromDb.spatialInfo as any).scale)
+              : (dataFromDb.spatialInfo.resolutionScale ?? null),
+          boundingBox: {
+            westBoundingCoordinate:
+              (dataFromDb.spatialInfo as any).minLongitude ?? null,
+            eastBoundingCoordinate:
+              (dataFromDb.spatialInfo as any).maxLongitude ?? null,
+            northBoundingCoordinate:
+              (dataFromDb.spatialInfo as any).maxLatitude ?? null,
+            southBoundingCoordinate:
+              (dataFromDb.spatialInfo as any).minLatitude ?? null
+          }
         }
-      : null
+      : undefined
     formValues.temporalInfo = dataFromDb.temporalInfo
       ? {
           ...(dataFromDb.temporalInfo as DrizzleTemporalInfo),
