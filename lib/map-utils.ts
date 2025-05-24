@@ -151,8 +151,6 @@ export function recordToGeoJSON(
       ]
     },
     properties: {
-      id: record.id,
-      title: record.title,
       ...record
     }
   }

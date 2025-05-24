@@ -1,7 +1,7 @@
 "use client"
 
-import { useSidebarContext } from "@/components/utilities/sidebar-provider"
+import { useSidebar as useSidebarFromUI } from "@/components/ui/sidebar"
 
 export function useSidebar() {
-  return useSidebarContext()
+  return useSidebarFromUI()
 }

@@ -210,7 +210,7 @@ export async function isNodeOfficerForOrg(
         and(
           eq(userOrganizationsTable.userId, userId),
           eq(userOrganizationsTable.organizationId, organizationId),
-          eq(userOrganizationsTable.isNodeOfficer, true)
+          eq(userOrganizationsTable.role, "Node Officer")
         )
       )
       .limit(1)

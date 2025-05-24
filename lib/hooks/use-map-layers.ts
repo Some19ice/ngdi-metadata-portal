@@ -1,12 +1,12 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { Map, AnySourceData, AnyLayer, GeoJSONSource } from "maplibre-gl"
+import { Map, GeoJSONSource } from "maplibre-gl"
 
 // Helper function to determine the source ID
 const getResolvedSourceId = (
   layerId: string, // This is layerConfig.id
-  sourceDefinition?: string | AnySourceData, // This is layerConfig.source
+  sourceDefinition?: string | any, // This is layerConfig.source - using any since MapLibre doesn't export AnySourceData
   explicitSourceId?: string // This is layerConfig.sourceId
 ): string => {
   if (explicitSourceId) {
@@ -29,9 +29,9 @@ const getResolvedSourceId = (
 
 export interface MapLayerConfig {
   id: string
-  source?: string | AnySourceData
+  source?: string | any // Using any since MapLibre doesn't export AnySourceData
   sourceId?: string
-  layer: Omit<AnyLayer, "id" | "source">
+  layer: Omit<any, "id" | "source"> // Using any since MapLibre doesn't export AnyLayer
   beforeId?: string
 }
 
@@ -82,7 +82,7 @@ export function useMapLayers({ map, initialLayers = [] }: UseMapLayersOptions) {
             id,
             source: actualSourceId, // Use the resolved ID for the layer's source property
             ...layer
-          } as AnyLayer,
+          } as any,
           beforeId
         )
       }
@@ -121,7 +121,7 @@ export function useMapLayers({ map, initialLayers = [] }: UseMapLayersOptions) {
             id,
             source: actualSourceId, // Use the resolved ID for the layer's source property
             ...layer
-          } as AnyLayer,
+          } as any,
           beforeId
         )
       }
