@@ -4,7 +4,6 @@ Exports the database schema for the app.
 </ai_context>
 */
 
-// export * from "./auth-schema"
 export * from "./users-schema"
 export * from "./organizations-schema"
 export * from "./metadata-standards-schema"
@@ -54,7 +53,7 @@ import {
   metadataChangeLogsTable
 } from "./metadata-records-schema"
 import { organizationsTable } from "./organizations-schema"
-// Import other tables that have relations if they were modified e.g. usersTable from './users-schema' if creator relation was active
+import { usersTable } from "./users-schema"
 
 // Define relations for metadataRecordsTable
 export const metadataRecordsRelations = relations(
@@ -64,12 +63,11 @@ export const metadataRecordsRelations = relations(
       fields: [metadataRecordsTable.organizationId],
       references: [organizationsTable.id]
     }),
+    creator: one(usersTable, {
+      fields: [metadataRecordsTable.creatorUserId],
+      references: [usersTable.id]
+    }),
     changeLogs: many(metadataChangeLogsTable)
-    // If usersTable is involved for creators:
-    // creator: one(usersTable, {
-    //   fields: [metadataRecordsTable.creatorUserId],
-    //   references: [usersTable.id],
-    // }),
   })
 )
 
@@ -80,21 +78,29 @@ export const metadataChangeLogsRelations = relations(
     metadataRecord: one(metadataRecordsTable, {
       fields: [metadataChangeLogsTable.metadataRecordId],
       references: [metadataRecordsTable.id]
+    }),
+    user: one(usersTable, {
+      fields: [metadataChangeLogsTable.userId],
+      references: [usersTable.id]
     })
-    // If usersTable is involved:
-    // user: one(usersTable, {
-    //   fields: [metadataChangeLogsTable.userId],
-    //   references: [usersTable.id],
-    // }),
   })
 )
 
 // Define relations for organizationsTable
 export const organizationsRelations = relations(
   organizationsTable,
-  ({ many }) => ({
-    metadataRecords: many(metadataRecordsTable)
+  ({ one, many }) => ({
+    metadataRecords: many(metadataRecordsTable),
+    nodeOfficer: one(usersTable, {
+      fields: [organizationsTable.nodeOfficerId],
+      references: [usersTable.id]
+    })
   })
 )
 
-// Add other relations definitions here if they were removed from other schema files
+// Import and export additional relations
+import { userRolesRelations } from "./userRoles-schema"
+import { userOrganizationsRelations } from "./user-organizations-schema"
+
+// Export all relations
+export { userRolesRelations, userOrganizationsRelations }

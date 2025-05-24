@@ -1,5 +1,3 @@
-// "use client" // DIAGNOSTIC: Attempt to fix Next.js compiler misinterpretation
-
 import {
   pgTable,
   text,
@@ -10,6 +8,7 @@ import {
 } from "drizzle-orm/pg-core"
 import { relations } from "drizzle-orm"
 import { organizationsTable } from "./organizations-schema"
+import { usersTable } from "./users-schema"
 
 export const organizationUserRoleEnum = pgEnum("organization_user_role", [
   "Node Officer",
@@ -40,6 +39,10 @@ export const userOrganizationsTable = pgTable(
 export const userOrganizationsRelations = relations(
   userOrganizationsTable,
   ({ one }) => ({
+    user: one(usersTable, {
+      fields: [userOrganizationsTable.userId],
+      references: [usersTable.id]
+    }),
     organization: one(organizationsTable, {
       fields: [userOrganizationsTable.organizationId],
       references: [organizationsTable.id]

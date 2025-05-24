@@ -7,8 +7,7 @@ import {
 } from "drizzle-orm/pg-core"
 import { relations } from "drizzle-orm"
 import { rolesTable } from "./roles-schema"
-// Assuming a profilesTable or similar might exist for user profiles, but userId is just TEXT from Clerk
-// import { profilesTable } from './profiles-schema'; // If you want to link to a local profiles table
+import { usersTable } from "./users-schema"
 
 export const userRolesTable = pgTable(
   "user_roles",
@@ -29,10 +28,10 @@ export const userRolesTable = pgTable(
 )
 
 export const userRolesRelations = relations(userRolesTable, ({ one }) => ({
-  // user: one(profilesTable, { // If using a local profiles table
-  //   fields: [userRolesTable.userId],
-  //   references: [profilesTable.id],
-  // }),
+  user: one(usersTable, {
+    fields: [userRolesTable.userId],
+    references: [usersTable.id]
+  }),
   role: one(rolesTable, {
     fields: [userRolesTable.roleId],
     references: [rolesTable.id]

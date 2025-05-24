@@ -26,12 +26,15 @@ import {
   profilesTable,
   metadataRecordsRelations,
   organizationsRelations,
-  metadataChangeLogsRelations
+  metadataChangeLogsRelations,
+  userRolesRelations,
+  userOrganizationsRelations
 } from "@/db/schema"
 
 config({ path: ".env.local" })
 
 const schema = {
+  users: usersTable,
   organizations: organizationsTable,
   roles: rolesTable,
   permissions: permissionsTable,
@@ -44,12 +47,13 @@ const schema = {
   auditLogs: auditLogsTable,
   notifications: notificationsTable,
   systemSettings: systemSettingsTable,
-  users: usersTable,
   metadataStandards: metadataStandardsTable,
   profiles: profilesTable,
   metadataRecordsRelations: metadataRecordsRelations,
   organizationsRelations: organizationsRelations,
-  metadataChangeLogsRelations: metadataChangeLogsRelations
+  metadataChangeLogsRelations: metadataChangeLogsRelations,
+  userRolesRelations: userRolesRelations,
+  userOrganizationsRelations: userOrganizationsRelations
 }
 
 const client = postgres(process.env.DATABASE_URL!)

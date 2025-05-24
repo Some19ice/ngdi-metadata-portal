@@ -321,7 +321,7 @@ export const metadataRecordsTable = pgTable("metadata_records", {
   spatialInfo: jsonb("spatial_info").$type<SpatialInfo>(),
 
   // Temporal Information (from PRD 5.3)
-  productionDate: text("production_date"), // Changed to text for ISO string compatibility
+  productionDate: date("production_date"), // Use proper date type
   temporalInfo: jsonb("temporal_info").$type<TemporalInfo>(),
   updateFrequency: text("update_frequency"),
   plannedAvailableDateTime: timestamp("planned_available_date_time"),
@@ -378,8 +378,8 @@ export const metadataRecordsTable = pgTable("metadata_records", {
   metadataLinkage: text("metadata_linkage"),
 
   // System Specific / Other Internal Fields (from PRD 5.9)
-  publicationDate: text("publication_date"), // Changed to text for ISO string compatibility
-  lastRevisionDate: text("last_revision_date"), // Added missing field
+  publicationDate: date("publication_date"), // Use proper date type
+  lastRevisionDate: date("last_revision_date"), // Use proper date type
   internalNotes: text("internal_notes"),
   legacyId: text("legacy_id"),
   fundamentalDatasetsInfo: jsonb(
@@ -411,9 +411,7 @@ export const metadataChangeLogsTable = pgTable("metadata_change_logs", {
   metadataRecordId: uuid("metadata_record_id")
     .references(() => metadataRecordsTable.id, { onDelete: "cascade" })
     .notNull(),
-  userId: text("user_id")
-    // .references(() => usersTable.id, { onDelete: "set null" })
-    .notNull(),
+  userId: text("user_id").notNull(),
   actionType: metadataLogActionTypeEnum("action_type").notNull(),
   changedFields: jsonb("changed_fields"),
   oldStatus: text("old_status"),
