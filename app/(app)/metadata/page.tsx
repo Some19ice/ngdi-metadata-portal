@@ -7,7 +7,7 @@ import { auth } from "@clerk/nextjs/server"
 import { redirect } from "next/navigation"
 
 export default async function MetadataPage() {
-  const { userId } = auth()
+  const { userId } = await auth()
 
   if (!userId) {
     // This should ideally be handled by middleware, but as a fallback:

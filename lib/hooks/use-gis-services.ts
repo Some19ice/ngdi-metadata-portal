@@ -117,7 +117,7 @@ export function useGISServices({ map }: UseGISServicesOptions) {
             layer.id === serviceId
               ? {
                   ...layer,
-                  name: name || result.service.name || "GIS Service",
+                  name: name || result.service?.name || "GIS Service",
                   serviceType: result.serviceType,
                   serviceInfo: result.service,
                   isLoading: false
@@ -126,7 +126,7 @@ export function useGISServices({ map }: UseGISServicesOptions) {
           )
         )
 
-        toast.success(`Added service: ${result.service.name || "GIS Service"}`)
+        toast.success(`Added service: ${result.service?.name || "GIS Service"}`)
         return true
       } catch (error) {
         console.error("Error adding GIS service:", error)

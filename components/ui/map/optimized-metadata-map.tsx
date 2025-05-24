@@ -57,39 +57,26 @@ export default function OptimizedMetadataMap({
     []
   )
 
-  // Process records into marker data with performance optimization
+  // Prepare marker data for clustering
   const markerData = useMemo(() => {
-    const startTime = performance.now()
-
-    const markers: MarkerData[] = records
-      .filter(record => hasValidSpatialBounds(record))
+    return records
+      .filter(hasValidSpatialBounds)
       .map(record => {
         const center = getRecordCenter(record)
+        if (!center) return null
+
+        const [lng, lat] = center
         return {
           id: record.id,
-          position: [center.lng, center.lat] as [number, number],
-          data: record,
-          popupContent: (
-            <div className="p-2 max-w-xs">
-              <h4 className="font-semibold text-sm mb-1">{record.title}</h4>
-              <p className="text-xs text-gray-600 mb-2">{record.description}</p>
-              <div className="text-xs">
-                <div>Type: {record.datasetType}</div>
-                <div>Framework: {record.frameworkType}</div>
-              </div>
-            </div>
-          )
+          position: [lng, lat] as [number, number],
+          data: record
         }
       })
-
-    const processingTime = performance.now() - startTime
-    if (processingTime > 100) {
-      console.warn(
-        `Marker processing took ${processingTime.toFixed(2)}ms for ${records.length} records`
-      )
-    }
-
-    return markers
+      .filter(Boolean) as Array<{
+      id: string
+      position: [number, number]
+      data: MetadataRecord
+    }>
   }, [records])
 
   // Determine optimal settings based on performance mode and data size
@@ -132,45 +119,36 @@ export default function OptimizedMetadataMap({
     showBoundingBoxes
   ])
 
-  // Calculate initial viewport
+  // Calculate initial viewport based on records
   const initialViewport = useMemo(() => {
-    if (markerData.length === 0) {
+    const bounds = calculateBoundsForRecords(records)
+
+    if (bounds) {
+      const center = bounds.getCenter().toArray()
       return {
-        center: [8.6775, 9.0778] as [number, number], // Nigeria center
-        zoom: 6
+        center: center as [number, number],
+        zoom: 5,
+        bounds: {
+          west: bounds.getWest(),
+          east: bounds.getEast(),
+          south: bounds.getSouth(),
+          north: bounds.getNorth()
+        }
       }
     }
 
-    const bounds = calculateBoundsForRecords(
-      records.filter(r => hasValidSpatialBounds(r))
-    )
-    if (bounds) {
-      const center = [
-        (bounds.west + bounds.east) / 2,
-        (bounds.south + bounds.north) / 2
-      ] as [number, number]
-
-      // Calculate appropriate zoom level based on bounds size
-      const latDiff = bounds.north - bounds.south
-      const lngDiff = bounds.east - bounds.west
-      const maxDiff = Math.max(latDiff, lngDiff)
-
-      let zoom = 10
-      if (maxDiff > 10) zoom = 4
-      else if (maxDiff > 5) zoom = 5
-      else if (maxDiff > 2) zoom = 6
-      else if (maxDiff > 1) zoom = 7
-      else if (maxDiff > 0.5) zoom = 8
-      else if (maxDiff > 0.1) zoom = 9
-
-      return { center, zoom }
-    }
-
+    // Default to Nigeria if no records with bounds
     return {
       center: [8.6775, 9.0778] as [number, number],
-      zoom: 6
+      zoom: 5,
+      bounds: {
+        north: 14.0,
+        south: 4.0,
+        east: 14.0,
+        west: 3.0
+      }
     }
-  }, [markerData, records])
+  }, [records])
 
   // Handle style change
   const handleStyleChange = useCallback((styleId: string) => {

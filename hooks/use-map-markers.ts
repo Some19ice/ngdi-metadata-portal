@@ -95,9 +95,35 @@ export function useMapMarkers({ map, markers = [] }: UseMapMarkersOptions) {
       if (existingMarkerInstance) {
         // Update LngLat if different
         const currentMapLngLat = existingMarkerInstance.getLngLat()
+
+        // Normalize lngLat to get lng/lat values
+        let targetLng: number, targetLat: number
+        if (Array.isArray(lngLat)) {
+          ;[targetLng, targetLat] = lngLat
+        } else if (
+          typeof lngLat === "object" &&
+          "lng" in lngLat &&
+          "lat" in lngLat
+        ) {
+          targetLng = lngLat.lng
+          targetLat = lngLat.lat
+        } else if (
+          typeof lngLat === "object" &&
+          "lon" in lngLat &&
+          "lat" in lngLat
+        ) {
+          targetLng = (lngLat as any).lon
+          targetLat = lngLat.lat
+        } else {
+          // Fallback - let MapLibre handle the conversion
+          existingMarkerInstance.setLngLat(lngLat)
+          targetLng = currentMapLngLat.lng
+          targetLat = currentMapLngLat.lat
+        }
+
         if (
-          currentMapLngLat.lng !== lngLat[0] ||
-          currentMapLngLat.lat !== lngLat[1]
+          currentMapLngLat.lng !== targetLng ||
+          currentMapLngLat.lat !== targetLat
         ) {
           existingMarkerInstance.setLngLat(lngLat)
         }

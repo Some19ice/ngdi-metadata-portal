@@ -62,8 +62,16 @@ export default function MetadataMapDemoClient({
 
   // Get available MapTiler styles for display
   const availableMapTilerStyles = useMemo(() => {
+    const styleDescriptions: Record<string, string> = {
+      satellite: "High-resolution satellite imagery with labels and roads",
+      "streets-v2": "Modern street map with detailed road networks and labels",
+      terrain:
+        "Topographic map showing elevation, contours, and terrain features"
+    }
+
     return MAPTILER_STYLES.map(style => ({
       ...style,
+      description: styleDescriptions[style.id] || `${style.name} map style`,
       url: apiKey ? style.url.replace("${apiKey}", apiKey) : "",
       isAvailable: !!apiKey
     }))
@@ -316,7 +324,10 @@ export default function MetadataMapDemoClient({
                       <div className="h-48 w-full">
                         {style.isAvailable ? (
                           <StylePreview
+                            styleId={style.id}
+                            styleName={style.name}
                             styleUrl={style.url}
+                            isAvailable={style.isAvailable}
                             className="h-full w-full"
                           />
                         ) : (

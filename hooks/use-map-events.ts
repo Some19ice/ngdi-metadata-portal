@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef } from "react"
-import { Map, MapMouseEvent, MapTouchEvent, EventData } from "maplibre-gl"
+import { Map, MapMouseEvent, MapTouchEvent } from "maplibre-gl"
 
 type MapEventType =
   | "click"
@@ -60,10 +60,10 @@ type EventHandler<T extends MapEventType> = T extends
   | "mouseover"
   | "mouseout"
   | "contextmenu"
-  ? (e: MapMouseEvent & EventData) => void
+  ? (e: MapMouseEvent) => void
   : T extends "touchstart" | "touchend" | "touchcancel"
-    ? (e: MapTouchEvent & EventData) => void
-    : (e: EventData) => void
+    ? (e: MapTouchEvent) => void
+    : (e: any) => void
 
 interface MapEventHandlers {
   [key: string]: EventHandler<any>

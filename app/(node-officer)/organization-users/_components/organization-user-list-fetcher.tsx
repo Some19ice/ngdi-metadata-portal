@@ -28,7 +28,7 @@ export default async function OrganizationUserListFetcher({
   }
 
   // Ensure data is an array, default to empty if undefined/null
-  const users: OrganizationUser[] = usersState.data || []
+  const users: OrganizationUser[] = usersState.data?.users || []
 
   return <OrganizationUserListClient initialUsers={users} orgId={orgId} />
 }

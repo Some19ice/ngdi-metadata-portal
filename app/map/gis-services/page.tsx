@@ -50,7 +50,12 @@ export default function GISServicesDemo() {
         isValid: result.isValid,
         serviceType: result.serviceType,
         serviceName: result.service?.name,
-        serviceDescription: result.service?.description,
+        serviceDescription:
+          "description" in (result.service || {})
+            ? (result.service as any).description
+            : "abstract" in (result.service || {})
+              ? (result.service as any).abstract
+              : undefined,
         error: result.error
       })
 

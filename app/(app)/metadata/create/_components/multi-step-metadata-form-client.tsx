@@ -214,7 +214,10 @@ function preparePayload(
   data: MetadataFormValues,
   currentUserId?: string | null,
   existingRecordId?: string | null
-): Omit<InsertMetadataRecord, "id" | "createdAt" | "updatedAt" | "status"> {
+): Omit<
+  InsertMetadataRecord,
+  "id" | "createdAt" | "updatedAt" | "status" | "creatorUserId"
+> {
   const formatDateString = (
     date: Date | string | null | undefined
   ): string | null => {
@@ -285,10 +288,7 @@ function preparePayload(
             coordinateSystem: data.spatialInfo.coordinateSystem ?? null,
             projection: data.spatialInfo.projection ?? null,
             datum: data.spatialInfo.datum ?? null,
-            resolutionScale:
-              (data.spatialInfo as any).scale !== null
-                ? String((data.spatialInfo as any).scale)
-                : (data.spatialInfo.resolutionScale ?? null),
+            resolutionScale: data.spatialInfo.resolutionScale ?? null,
             geometricObjectType: data.spatialInfo.geometricObjectType ?? null,
             numFeaturesOrLayers: data.spatialInfo.numFeaturesOrLayers ?? null,
             format: data.spatialInfo.format ?? null,
@@ -306,17 +306,28 @@ function preparePayload(
               data.spatialInfo.vectorSpatialRepresentation ?? null,
             rasterSpatialRepresentation:
               data.spatialInfo.rasterSpatialRepresentation ?? null,
-            boundingBox: {
-              westBoundingCoordinate:
-                (data.spatialInfo as any).minLongitude ?? null,
-              eastBoundingCoordinate:
-                (data.spatialInfo as any).maxLongitude ?? null,
-              northBoundingCoordinate:
-                (data.spatialInfo as any).maxLatitude ?? null,
-              southBoundingCoordinate:
-                (data.spatialInfo as any).minLatitude ?? null
-            },
-            verticalExtent: data.spatialInfo.verticalExtent ?? null
+            boundingBox: data.spatialInfo.boundingBox ?? null,
+            verticalExtent: data.spatialInfo.verticalExtent ?? null,
+
+            // Additional fields used in the client component (for backward compatibility)
+            scale: (data.spatialInfo as any).scale ?? null,
+            resolution: (data.spatialInfo as any).resolution ?? null,
+            minLatitude:
+              data.spatialInfo.boundingBox?.southBoundingCoordinate ??
+              (data.spatialInfo as any).minLatitude ??
+              null,
+            maxLatitude:
+              data.spatialInfo.boundingBox?.northBoundingCoordinate ??
+              (data.spatialInfo as any).maxLatitude ??
+              null,
+            minLongitude:
+              data.spatialInfo.boundingBox?.westBoundingCoordinate ??
+              (data.spatialInfo as any).minLongitude ??
+              null,
+            maxLongitude:
+              data.spatialInfo.boundingBox?.eastBoundingCoordinate ??
+              (data.spatialInfo as any).maxLongitude ??
+              null
           }
         : undefined,
     temporalInfo:
@@ -387,7 +398,6 @@ function preparePayload(
         : undefined,
 
     // Required fields for database
-    creatorUserId: currentUserId || "",
     metadataStandard: "NGDI Standard v1.0",
     metadataStandardVersion: "1.0"
   }
@@ -446,22 +456,52 @@ export default function MultiStepMetadataFormClient({
       : undefined
     formValues.spatialInfo = dataFromDb.spatialInfo
       ? {
-          ...(dataFromDb.spatialInfo as DrizzleSpatialInfo),
-          // Map old field names to new ones if they exist
-          resolutionScale:
-            (dataFromDb.spatialInfo as any).scale !== null
-              ? String((dataFromDb.spatialInfo as any).scale)
-              : (dataFromDb.spatialInfo.resolutionScale ?? null),
-          boundingBox: {
-            westBoundingCoordinate:
-              (dataFromDb.spatialInfo as any).minLongitude ?? null,
-            eastBoundingCoordinate:
-              (dataFromDb.spatialInfo as any).maxLongitude ?? null,
-            northBoundingCoordinate:
-              (dataFromDb.spatialInfo as any).maxLatitude ?? null,
-            southBoundingCoordinate:
-              (dataFromDb.spatialInfo as any).minLatitude ?? null
-          }
+          // Core spatial info fields from database
+          coordinateSystem: dataFromDb.spatialInfo.coordinateSystem ?? null,
+          projection: dataFromDb.spatialInfo.projection ?? null,
+          datum: dataFromDb.spatialInfo.datum ?? null,
+          resolutionScale: dataFromDb.spatialInfo.resolutionScale ?? null,
+          geometricObjectType:
+            dataFromDb.spatialInfo.geometricObjectType ?? null,
+          numFeaturesOrLayers:
+            dataFromDb.spatialInfo.numFeaturesOrLayers ?? null,
+          format: dataFromDb.spatialInfo.format ?? null,
+          distributionFormat: dataFromDb.spatialInfo.distributionFormat ?? null,
+          spatialRepresentationType: dataFromDb.spatialInfo
+            .spatialRepresentationType as
+            | "Vector"
+            | "Raster"
+            | "Text Table"
+            | "TIN"
+            | "Stereo Model"
+            | "Video"
+            | null,
+          vectorSpatialRepresentation:
+            dataFromDb.spatialInfo.vectorSpatialRepresentation ?? null,
+          rasterSpatialRepresentation:
+            dataFromDb.spatialInfo.rasterSpatialRepresentation ?? null,
+          boundingBox: dataFromDb.spatialInfo.boundingBox ?? null,
+          verticalExtent: dataFromDb.spatialInfo.verticalExtent ?? null,
+
+          // Additional fields used in the client component (for backward compatibility)
+          scale: (dataFromDb.spatialInfo as any).scale ?? null,
+          resolution: (dataFromDb.spatialInfo as any).resolution ?? null,
+          minLatitude:
+            dataFromDb.spatialInfo.boundingBox?.southBoundingCoordinate ??
+            (dataFromDb.spatialInfo as any).minLatitude ??
+            null,
+          maxLatitude:
+            dataFromDb.spatialInfo.boundingBox?.northBoundingCoordinate ??
+            (dataFromDb.spatialInfo as any).maxLatitude ??
+            null,
+          minLongitude:
+            dataFromDb.spatialInfo.boundingBox?.westBoundingCoordinate ??
+            (dataFromDb.spatialInfo as any).minLongitude ??
+            null,
+          maxLongitude:
+            dataFromDb.spatialInfo.boundingBox?.eastBoundingCoordinate ??
+            (dataFromDb.spatialInfo as any).maxLongitude ??
+            null
         }
       : undefined
     formValues.temporalInfo = dataFromDb.temporalInfo
@@ -474,7 +514,7 @@ export default function MultiStepMetadataFormClient({
             ? new Date(dataFromDb.temporalInfo.dateTo)
             : null
         }
-      : null
+      : undefined
     formValues.technicalDetailsInfo = dataFromDb.technicalDetailsInfo
       ? {
           ...(dataFromDb.technicalDetailsInfo as DrizzleTechnicalDetailsInfo),
@@ -487,10 +527,10 @@ export default function MultiStepMetadataFormClient({
               ? Number(dataFromDb.technicalDetailsInfo.numFeaturesOrLayers)
               : null
         }
-      : null
+      : undefined
     formValues.constraintsInfo = dataFromDb.constraintsInfo
       ? { ...(dataFromDb.constraintsInfo as DrizzleConstraintsInfo) }
-      : null
+      : undefined
     formValues.dataQualityInfo = dataFromDb.dataQualityInfo
       ? {
           ...(dataFromDb.dataQualityInfo as DrizzleDataQualityInfo),
@@ -521,7 +561,7 @@ export default function MultiStepMetadataFormClient({
               }
             : null
         }
-      : null
+      : undefined
     formValues.processingInfo = dataFromDb.processingInfo
       ? {
           ...(dataFromDb.processingInfo as DrizzleProcessingInfo),
@@ -545,10 +585,10 @@ export default function MultiStepMetadataFormClient({
               }
             : null
         }
-      : null
+      : undefined
     formValues.distributionInfo = dataFromDb.distributionInfo
       ? { ...(dataFromDb.distributionInfo as DrizzleDistributionInfo) }
-      : null
+      : undefined
     formValues.metadataReferenceInfo = dataFromDb.metadataReferenceInfo
       ? {
           ...(dataFromDb.metadataReferenceInfo as DrizzleMetadataReferenceInfo),
@@ -561,12 +601,12 @@ export default function MultiStepMetadataFormClient({
             ? new Date(dataFromDb.metadataReferenceInfo.metadataReviewDate)
             : null
         }
-      : null
+      : undefined
     formValues.fundamentalDatasetsInfo = dataFromDb.fundamentalDatasetsInfo
       ? {
           ...(dataFromDb.fundamentalDatasetsInfo as DrizzleFundamentalDatasetsInfo)
         }
-      : null
+      : undefined
     formValues.additionalInfo = dataFromDb.additionalInfo
       ? { ...(dataFromDb.additionalInfo as any) }
       : null
@@ -630,19 +670,29 @@ export default function MultiStepMetadataFormClient({
       dataFromDb.spatialReferenceSystem ??
       null
     formValues.spatialResolution =
-      dataFromDb.spatialInfo?.resolution ?? dataFromDb.spatialResolution ?? null
+      dataFromDb.spatialInfo?.resolutionScale ??
+      dataFromDb.spatialResolution ??
+      null
     formValues.geographicDescription =
       (dataFromDb.locationInfo as any)?.geographicDescription ??
       dataFromDb.geographicDescription ??
       null
     formValues.boundingBoxNorth =
-      dataFromDb.spatialInfo?.maxLatitude ?? dataFromDb.boundingBoxNorth ?? null
+      dataFromDb.spatialInfo?.boundingBox?.northBoundingCoordinate ??
+      dataFromDb.boundingBoxNorth ??
+      null
     formValues.boundingBoxSouth =
-      dataFromDb.spatialInfo?.minLatitude ?? dataFromDb.boundingBoxSouth ?? null
+      dataFromDb.spatialInfo?.boundingBox?.southBoundingCoordinate ??
+      dataFromDb.boundingBoxSouth ??
+      null
     formValues.boundingBoxEast =
-      dataFromDb.spatialInfo?.maxLongitude ?? dataFromDb.boundingBoxEast ?? null
+      dataFromDb.spatialInfo?.boundingBox?.eastBoundingCoordinate ??
+      dataFromDb.boundingBoxEast ??
+      null
     formValues.boundingBoxWest =
-      dataFromDb.spatialInfo?.minLongitude ?? dataFromDb.boundingBoxWest ?? null
+      dataFromDb.spatialInfo?.boundingBox?.westBoundingCoordinate ??
+      dataFromDb.boundingBoxWest ??
+      null
     formValues.geometry = dataFromDb.geometry
       ? JSON.stringify(dataFromDb.geometry)
       : null
@@ -828,13 +878,7 @@ export default function MultiStepMetadataFormClient({
         toast.error(`Failed to update metadata: ${result.message}`)
       }
     } else {
-      const result = await createMetadataRecordAction({
-        ...payload,
-        creatorUserId: currentUserId,
-        status: isDraft
-          ? metadataStatusEnum.enumValues[1]
-          : metadataStatusEnum.enumValues[0]
-      })
+      const result = await createMetadataRecordAction(payload)
       if (result.isSuccess && result.data) {
         toast.success(
           isDraft
@@ -848,17 +892,28 @@ export default function MultiStepMetadataFormClient({
     }
   }
 
-  const onSubmit = (data: MetadataFormValues) => {
-    startTransition(() => {
-      processAndSubmitData(data, false).finally(() => {})
+  const onSubmit = async (data: MetadataFormValues): Promise<void> => {
+    return new Promise<void>(resolve => {
+      startTransition(async () => {
+        try {
+          await processAndSubmitData(data, false)
+        } finally {
+          resolve()
+        }
+      })
     })
   }
 
-  const onSaveDraft = (data: MetadataFormValues) => {
-    setIsSavingDraft(true)
-    startTransition(() => {
-      processAndSubmitData(data, true).finally(() => {
-        setIsSavingDraft(false)
+  const onSaveDraft = async (data: MetadataFormValues): Promise<void> => {
+    return new Promise<void>(resolve => {
+      setIsSavingDraft(true)
+      startTransition(async () => {
+        try {
+          await processAndSubmitData(data, true)
+        } finally {
+          setIsSavingDraft(false)
+          resolve()
+        }
       })
     })
   }

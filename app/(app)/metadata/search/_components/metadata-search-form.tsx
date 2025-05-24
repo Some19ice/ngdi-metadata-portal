@@ -372,10 +372,18 @@ export default function MetadataSearchForm({
                             form.watch("bbox_east") &&
                             form.watch("bbox_west")
                               ? {
-                                  north: parseFloat(form.watch("bbox_north")),
-                                  south: parseFloat(form.watch("bbox_south")),
-                                  east: parseFloat(form.watch("bbox_east")),
-                                  west: parseFloat(form.watch("bbox_west"))
+                                  north: parseFloat(
+                                    form.watch("bbox_north") || "0"
+                                  ),
+                                  south: parseFloat(
+                                    form.watch("bbox_south") || "0"
+                                  ),
+                                  east: parseFloat(
+                                    form.watch("bbox_east") || "0"
+                                  ),
+                                  west: parseFloat(
+                                    form.watch("bbox_west") || "0"
+                                  )
                                 }
                               : undefined
                           }

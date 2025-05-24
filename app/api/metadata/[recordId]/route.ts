@@ -37,7 +37,7 @@ export async function GET(
         publicationDate: metadataRecordsTable.publicationDate,
         lastRevisionDate: metadataRecordsTable.lastRevisionDate,
         thumbnailUrl: metadataRecordsTable.thumbnailUrl,
-        cloudCoverPercentage: metadataRecordsTable.cloudCoverPercentage,
+        cloudCover: metadataRecordsTable.cloudCover,
         locationInfo: metadataRecordsTable.locationInfo,
         temporalInfo: metadataRecordsTable.temporalInfo,
         fundamentalDatasetsInfo: metadataRecordsTable.fundamentalDatasetsInfo,
@@ -50,16 +50,15 @@ export async function GET(
         metadataReferenceInfo: metadataRecordsTable.metadataReferenceInfo,
         additionalInfo: metadataRecordsTable.additionalInfo,
         organizationId: metadataRecordsTable.organizationId,
-        userId: metadataRecordsTable.userId,
+        creatorUserId: metadataRecordsTable.creatorUserId,
         createdAt: metadataRecordsTable.createdAt,
         updatedAt: metadataRecordsTable.updatedAt,
         organization: {
           id: organizationsTable.id,
           name: organizationsTable.name,
-          type: organizationsTable.type,
           description: organizationsTable.description,
-          contactEmail: organizationsTable.contactEmail,
-          website: organizationsTable.website
+          primaryContactEmail: organizationsTable.primaryContactEmail,
+          websiteUrl: organizationsTable.websiteUrl
         }
       })
       .from(metadataRecordsTable)
@@ -82,7 +81,7 @@ export async function GET(
     // Check if record is published or user has access
     if (metadataRecord.status !== "Published") {
       const { userId } = await auth()
-      if (!userId || metadataRecord.userId !== userId) {
+      if (!userId || metadataRecord.creatorUserId !== userId) {
         return NextResponse.json({ error: "Access denied" }, { status: 403 })
       }
     }

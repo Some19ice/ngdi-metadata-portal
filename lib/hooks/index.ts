@@ -8,10 +8,10 @@
 
 // Re-export hooks from the hooks directory
 // This allows components to import from @/hooks
-export * from "@/hooks/use-map-instance"
-export * from "@/hooks/use-map-styles"
-export * from "@/hooks/use-map-controls"
-export * from "@/hooks/use-map-markers"
-export * from "@/hooks/use-map-viewport"
-export * from "@/hooks/use-map-events"
-export * from "@/hooks/use-mobile"
+export * from "../../hooks/use-map-instance"
+export * from "../../hooks/use-map-styles"
+export * from "../../hooks/use-map-controls"
+export * from "../../hooks/use-map-markers"
+export * from "../../hooks/use-map-viewport"
+export * from "../../hooks/use-map-events"
+export * from "../../hooks/use-mobile"

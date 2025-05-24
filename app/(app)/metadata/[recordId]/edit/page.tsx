@@ -241,8 +241,8 @@ export default async function EditMetadataPage({ params }: any) {
       </div>
       <Suspense fallback={<EditFormSkeleton />}>
         <MultiStepMetadataFormLoader
-          availableOrganizations={availableOrganizations}
-          existingRecord={formValues}
+          existingRecordId={recordId}
+          initialData={record}
         />
       </Suspense>
     </div>

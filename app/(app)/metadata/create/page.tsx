@@ -63,9 +63,7 @@ export default async function CreateMetadataPage() {
         </p>
       </div>
       <Suspense fallback={<CreateFormSkeleton />}>
-        <MultiStepMetadataFormLoader
-          availableOrganizations={availableOrganizations}
-        />
+        <MultiStepMetadataFormLoader />
       </Suspense>
     </div>
   )

@@ -130,8 +130,12 @@ export default function OptimizedMarkerCluster({
   onMarkerClick,
   onClusterClick
 }: OptimizedMarkerClusterProps) {
-  const markersRef = useRef<Map<string, Marker>>(new Map())
-  const clustersRef = useRef<Map<string, Marker>>(new Map())
+  const markersRef = useRef<globalThis.Map<string, Marker>>(
+    new globalThis.Map()
+  )
+  const clustersRef = useRef<globalThis.Map<string, Marker>>(
+    new globalThis.Map()
+  )
   const currentZoom = useRef<number>(1)
 
   // Memoize clustered data based on zoom level
@@ -210,7 +214,9 @@ export default function OptimizedMarkerCluster({
     }
 
     map.on("zoomend", handleZoomEnd)
-    return () => map.off("zoomend", handleZoomEnd)
+    return () => {
+      map.off("zoomend", handleZoomEnd)
+    }
   }, [map, updateMarkers])
 
   // Cleanup on unmount

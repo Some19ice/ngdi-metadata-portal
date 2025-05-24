@@ -1,21 +1,20 @@
 "use server"
 
-import { SelectOrganization } from "@/db/schema"
+import { SelectOrganization, SelectMetadataRecord } from "@/db/schema"
 import { auth } from "@clerk/nextjs/server"
 import { redirect } from "next/navigation"
 import { hasPermission } from "@/lib/rbac"
-import { MetadataRecordFormValues } from "@/lib/validators/metadata-validator"
+import { MetadataFormValues } from "@/lib/validators/metadata-validator"
 import MultiStepMetadataFormClient from "./multi-step-metadata-form-client"
 
 interface MultiStepMetadataFormLoaderProps {
-  availableOrganizations: SelectOrganization[]
-  existingRecord?: MetadataRecordFormValues & { id?: string }
-  // We could also add additional server-fetched data like metadata standards, etc.
+  existingRecordId?: string | null
+  initialData?: Partial<SelectMetadataRecord> | null
 }
 
 export default async function MultiStepMetadataFormLoader({
-  availableOrganizations,
-  existingRecord
+  existingRecordId,
+  initialData
 }: MultiStepMetadataFormLoaderProps) {
   // Check permissions
   const { userId } = await auth()
@@ -35,8 +34,9 @@ export default async function MultiStepMetadataFormLoader({
 
   return (
     <MultiStepMetadataFormClient
-      availableOrganizations={availableOrganizations}
-      existingRecord={existingRecord}
+      currentUserId={userId}
+      existingRecordId={existingRecordId}
+      initialData={initialData}
     />
   )
 }

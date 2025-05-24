@@ -135,7 +135,7 @@ export function createMapLibreSource(service: GISServiceInfo): any {
         return {
           type: "raster",
           tiles: [
-            `${service.url}?SERVICE=WMS&VERSION=${service.version || "1.3.0"}&REQUEST=GetMap&BBOX={bbox-epsg-3857}&CRS=EPSG:3857&WIDTH=256&HEIGHT=256&LAYERS=${service.layers?.[0]?.name || ""}&STYLES=&FORMAT=image/png&TRANSPARENT=TRUE`
+            `${service.url}?SERVICE=WMS&VERSION=${"version" in service ? service.version || "1.3.0" : "1.3.0"}&REQUEST=GetMap&BBOX={bbox-epsg-3857}&CRS=EPSG:3857&WIDTH=256&HEIGHT=256&LAYERS=${("layers" in service && service.layers?.[0]?.name) || ""}&STYLES=&FORMAT=image/png&TRANSPARENT=TRUE`
           ],
           tileSize: 256
         }
@@ -143,7 +143,7 @@ export function createMapLibreSource(service: GISServiceInfo): any {
       case "WFS":
         return {
           type: "geojson",
-          data: `${service.url}?SERVICE=WFS&VERSION=${service.version || "2.0.0"}&REQUEST=GetFeature&TYPENAMES=${service.layers?.[0]?.name || ""}&OUTPUTFORMAT=application/json`
+          data: `${service.url}?SERVICE=WFS&VERSION=${"version" in service ? service.version || "2.0.0" : "2.0.0"}&REQUEST=GetFeature&TYPENAMES=${("layers" in service && service.layers?.[0]?.name) || ""}&OUTPUTFORMAT=application/json`
         }
 
       default:
