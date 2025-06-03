@@ -11,11 +11,35 @@ import {
 } from "@/db/schema"
 import { ActionState } from "@/types"
 import { auth } from "@clerk/nextjs/server"
-import { and, eq } from "drizzle-orm"
+import { and, eq, inArray } from "drizzle-orm"
 import { checkUserRole, requiresSystemAdmin } from "@/lib/rbac"
 
-// CREATE - Assign a user to an organization with a role
-export async function assignUserToOrganizationAction(
+/**
+ * Adds a user to an organization with a specific role.
+ * Requires System Administrator privileges.
+ * Prevents duplicate assignments by checking existing associations.
+ *
+ * @param assignment - User organization assignment data
+ * @param assignment.userId - Clerk user ID to assign
+ * @param assignment.organizationId - UUID of the organization
+ * @param assignment.role - Role to assign ("Node Officer", "Member", "Metadata Creator", "Metadata Approver")
+ *
+ * @returns Promise resolving to ActionState containing the created user-organization association
+ *
+ * @example
+ * ```typescript
+ * const result = await addUserToOrganizationAction({
+ *   userId: "user_2ABC123DEF456",
+ *   organizationId: "123e4567-e89b-12d3-a456-426614174000",
+ *   role: "Node Officer"
+ * });
+ *
+ * if (result.isSuccess) {
+ *   console.log("User assigned successfully:", result.data.role);
+ * }
+ * ```
+ */
+export async function addUserToOrganizationAction(
   assignment: InsertUserOrganization
 ): Promise<ActionState<SelectUserOrganization>> {
   const isSysAdmin = await requiresSystemAdmin()
@@ -62,7 +86,22 @@ export async function assignUserToOrganizationAction(
   }
 }
 
-// READ - Get organizations a user is a Node Officer for
+/**
+ * Retrieves all organizations that the current user manages as a Node Officer.
+ * Only returns organizations where the authenticated user has the "Node Officer" role.
+ *
+ * @returns Promise resolving to ActionState containing array of managed organizations
+ *
+ * @example
+ * ```typescript
+ * const result = await getNodeOfficerManagedOrganizationsAction();
+ *
+ * if (result.isSuccess) {
+ *   console.log(`Managing ${result.data.length} organizations`);
+ *   result.data.forEach(org => console.log(`- ${org.name}`));
+ * }
+ * ```
+ */
 export async function getNodeOfficerManagedOrganizationsAction(): Promise<
   ActionState<SelectOrganization[]>
 > {
@@ -113,7 +152,26 @@ export async function getNodeOfficerManagedOrganizationsAction(): Promise<
   }
 }
 
-// READ - Get users in an organization (useful for Node Officers to manage their org users)
+/**
+ * Retrieves all users associated with a specific organization.
+ * Requires either Node Officer role for the specific organization or System Administrator role.
+ *
+ * @param organizationId - UUID of the organization to get users for
+ *
+ * @returns Promise resolving to ActionState containing array of user-organization associations
+ *
+ * @example
+ * ```typescript
+ * const result = await getUsersInOrganizationAction("123e4567-e89b-12d3-a456-426614174000");
+ *
+ * if (result.isSuccess) {
+ *   console.log(`Organization has ${result.data.length} users`);
+ *   result.data.forEach(userOrg => {
+ *     console.log(`User ${userOrg.userId} has role: ${userOrg.role}`);
+ *   });
+ * }
+ * ```
+ */
 export async function getUsersInOrganizationAction(
   organizationId: string
 ): Promise<ActionState<SelectUserOrganization[]>> {
@@ -160,8 +218,31 @@ export async function getUsersInOrganizationAction(
   }
 }
 
-// UPDATE - Update a user's role within an organization
-export async function updateUserRoleInOrganizationAction(
+/**
+ * Updates a user's role within a specific organization.
+ * Requires either Node Officer role for the specific organization or System Administrator role.
+ * Cannot demote the last Node Officer of an organization to prevent orphaned organizations.
+ *
+ * @param userIdToUpdate - Clerk user ID whose role should be updated
+ * @param organizationId - UUID of the organization
+ * @param newRole - New role to assign ("Node Officer", "Member", "Metadata Creator", "Metadata Approver")
+ *
+ * @returns Promise resolving to ActionState containing the updated user-organization association
+ *
+ * @example
+ * ```typescript
+ * const result = await updateUserOrganizationRoleAction(
+ *   "user_2ABC123DEF456",
+ *   "123e4567-e89b-12d3-a456-426614174000",
+ *   "Metadata Approver"
+ * );
+ *
+ * if (result.isSuccess) {
+ *   console.log("Role updated to:", result.data.role);
+ * }
+ * ```
+ */
+export async function updateUserOrganizationRoleAction(
   userIdToUpdate: string,
   organizationId: string,
   newRole: (typeof organizationUserRoleEnum.enumValues)[number]
@@ -218,7 +299,30 @@ export async function updateUserRoleInOrganizationAction(
   }
 }
 
-// DELETE - Remove a user from an organization
+/**
+ * Removes a user from an organization completely.
+ * Requires either Node Officer role for the specific organization or System Administrator role.
+ * Cannot remove the last Node Officer from an organization to prevent orphaned organizations.
+ *
+ * ⚠️ **IMPORTANT**: This will permanently remove the user's association and any organization-specific permissions.
+ *
+ * @param userIdToRemove - Clerk user ID to remove from the organization
+ * @param organizationId - UUID of the organization to remove the user from
+ *
+ * @returns Promise resolving to ActionState with success/failure status
+ *
+ * @example
+ * ```typescript
+ * const result = await removeUserFromOrganizationAction(
+ *   "user_2ABC123DEF456",
+ *   "123e4567-e89b-12d3-a456-426614174000"
+ * );
+ *
+ * if (result.isSuccess) {
+ *   console.log("User removed from organization successfully");
+ * }
+ * ```
+ */
 export async function removeUserFromOrganizationAction(
   userIdToRemove: string,
   organizationId: string
@@ -271,5 +375,401 @@ export async function removeUserFromOrganizationAction(
   } catch (error) {
     console.error("Error removing user from organization:", error)
     return { isSuccess: false, message: "Failed to remove user." }
+  }
+}
+
+// BULK OPERATIONS
+
+/**
+ * Interface for bulk user assignment operations.
+ */
+interface BulkUserAssignment {
+  /** Clerk user ID to assign */
+  userId: string
+  /** Role to assign to the user */
+  role: (typeof organizationUserRoleEnum.enumValues)[number]
+}
+
+/**
+ * Interface for bulk user role update operations.
+ */
+interface BulkUserRoleUpdate {
+  /** Clerk user ID whose role should be updated */
+  userId: string
+  /** New role to assign */
+  newRole: (typeof organizationUserRoleEnum.enumValues)[number]
+}
+
+/**
+ * Adds multiple users to an organization with specified roles in a single transaction.
+ * Requires System Administrator privileges.
+ * Skips users who are already assigned to prevent duplicate errors.
+ *
+ * @param organizationId - UUID of the organization
+ * @param assignments - Array of user assignments (userId and role pairs)
+ *
+ * @returns Promise resolving to ActionState with summary of successful and failed assignments
+ *
+ * @example
+ * ```typescript
+ * const result = await addMultipleUsersToOrganizationAction(
+ *   "123e4567-e89b-12d3-a456-426614174000",
+ *   [
+ *     { userId: "user_2ABC123DEF456", role: "Node Officer" },
+ *     { userId: "user_2DEF456GHI789", role: "Metadata Creator" },
+ *     { userId: "user_2GHI789JKL012", role: "Member" }
+ *   ]
+ * );
+ *
+ * if (result.isSuccess) {
+ *   console.log(`Added ${result.data.successful.length} users, skipped ${result.data.skipped.length}`);
+ * }
+ * ```
+ */
+export async function addMultipleUsersToOrganizationAction(
+  organizationId: string,
+  assignments: BulkUserAssignment[]
+): Promise<
+  ActionState<{
+    successful: SelectUserOrganization[]
+    failed: { userId: string; role: string; error: string }[]
+    skipped: { userId: string; role: string; reason: string }[]
+  }>
+> {
+  const isSysAdmin = await requiresSystemAdmin()
+  if (!isSysAdmin) {
+    return {
+      isSuccess: false,
+      message: "Unauthorized. System admin rights required."
+    }
+  }
+
+  try {
+    if (!organizationId || assignments.length === 0) {
+      return {
+        isSuccess: false,
+        message: "Organization ID and at least one assignment are required."
+      }
+    }
+
+    // Validate organization exists
+    const organization = await db.query.organizations.findFirst({
+      where: eq(organizationsTable.id, organizationId)
+    })
+
+    if (!organization) {
+      return {
+        isSuccess: false,
+        message: "Organization not found."
+      }
+    }
+
+    // Check for existing assignments to avoid duplicates
+    const existingAssignments = await db.query.userOrganizations.findMany({
+      where: and(
+        eq(userOrganizationsTable.organizationId, organizationId),
+        inArray(
+          userOrganizationsTable.userId,
+          assignments.map(a => a.userId)
+        )
+      )
+    })
+
+    const existingUserIds = new Set(existingAssignments.map(a => a.userId))
+
+    const successful: SelectUserOrganization[] = []
+    const failed: { userId: string; role: string; error: string }[] = []
+    const skipped: { userId: string; role: string; reason: string }[] = []
+
+    // Process each assignment
+    for (const assignment of assignments) {
+      try {
+        if (existingUserIds.has(assignment.userId)) {
+          skipped.push({
+            userId: assignment.userId,
+            role: assignment.role,
+            reason: "User already assigned to organization"
+          })
+          continue
+        }
+
+        const [newAssignment] = await db
+          .insert(userOrganizationsTable)
+          .values({
+            userId: assignment.userId,
+            organizationId,
+            role: assignment.role
+          })
+          .returning()
+
+        if (newAssignment) {
+          successful.push(newAssignment)
+        }
+      } catch (error) {
+        failed.push({
+          userId: assignment.userId,
+          role: assignment.role,
+          error: error instanceof Error ? error.message : "Unknown error"
+        })
+      }
+    }
+
+    return {
+      isSuccess: true,
+      message: `Bulk assignment completed. ${successful.length} successful, ${failed.length} failed, ${skipped.length} skipped.`,
+      data: { successful, failed, skipped }
+    }
+  } catch (error) {
+    console.error("Error in bulk user assignment:", error)
+    return {
+      isSuccess: false,
+      message: `Failed to process bulk assignment: ${error instanceof Error ? error.message : "Unknown error"}`
+    }
+  }
+}
+
+/**
+ * Removes multiple users from an organization in a single transaction.
+ * Requires either Node Officer role for the specific organization or System Administrator role.
+ * Provides detailed results of which removals succeeded or failed.
+ *
+ * @param organizationId - UUID of the organization
+ * @param userIds - Array of Clerk user IDs to remove
+ *
+ * @returns Promise resolving to ActionState with summary of successful and failed removals
+ *
+ * @example
+ * ```typescript
+ * const result = await removeMultipleUsersFromOrganizationAction(
+ *   "123e4567-e89b-12d3-a456-426614174000",
+ *   ["user_2ABC123DEF456", "user_2DEF456GHI789", "user_2GHI789JKL012"]
+ * );
+ *
+ * if (result.isSuccess) {
+ *   console.log(`Removed ${result.data.successful.length} users, failed ${result.data.failed.length}`);
+ * }
+ * ```
+ */
+export async function removeMultipleUsersFromOrganizationAction(
+  organizationId: string,
+  userIds: string[]
+): Promise<
+  ActionState<{
+    successful: string[]
+    failed: { userId: string; error: string }[]
+    notFound: string[]
+  }>
+> {
+  const { userId: currentUserId } = await auth()
+  if (!currentUserId) {
+    return { isSuccess: false, message: "Unauthorized." }
+  }
+
+  // Security check
+  const isNodeOfficerOfOrg = await db.query.userOrganizations.findFirst({
+    where: and(
+      eq(userOrganizationsTable.userId, currentUserId),
+      eq(userOrganizationsTable.organizationId, organizationId),
+      eq(userOrganizationsTable.role, "Node Officer")
+    )
+  })
+  const isSysAdmin = await checkUserRole(currentUserId, "System Administrator")
+
+  if (!isNodeOfficerOfOrg && !isSysAdmin) {
+    return {
+      isSuccess: false,
+      message:
+        "Forbidden: Not authorized to remove users from this organization."
+    }
+  }
+
+  try {
+    if (!organizationId || userIds.length === 0) {
+      return {
+        isSuccess: false,
+        message: "Organization ID and at least one user ID are required."
+      }
+    }
+
+    // Check which users are actually in the organization
+    const existingAssignments = await db.query.userOrganizations.findMany({
+      where: and(
+        eq(userOrganizationsTable.organizationId, organizationId),
+        inArray(userOrganizationsTable.userId, userIds)
+      )
+    })
+
+    const existingUserIds = new Set(existingAssignments.map(a => a.userId))
+    const notFound = userIds.filter(id => !existingUserIds.has(id))
+
+    const successful: string[] = []
+    const failed: { userId: string; error: string }[] = []
+
+    // Process each removal
+    for (const userId of userIds) {
+      if (!existingUserIds.has(userId)) {
+        continue // Already tracked in notFound
+      }
+
+      try {
+        await db
+          .delete(userOrganizationsTable)
+          .where(
+            and(
+              eq(userOrganizationsTable.userId, userId),
+              eq(userOrganizationsTable.organizationId, organizationId)
+            )
+          )
+
+        successful.push(userId)
+      } catch (error) {
+        failed.push({
+          userId,
+          error: error instanceof Error ? error.message : "Unknown error"
+        })
+      }
+    }
+
+    return {
+      isSuccess: true,
+      message: `Bulk removal completed. ${successful.length} successful, ${failed.length} failed, ${notFound.length} not found.`,
+      data: { successful, failed, notFound }
+    }
+  } catch (error) {
+    console.error("Error in bulk user removal:", error)
+    return {
+      isSuccess: false,
+      message: `Failed to process bulk removal: ${error instanceof Error ? error.message : "Unknown error"}`
+    }
+  }
+}
+
+/**
+ * Updates roles for multiple users within an organization in a single transaction.
+ * Requires either Node Officer role for the specific organization or System Administrator role.
+ * Cannot demote all Node Officers to prevent orphaned organizations.
+ *
+ * @param organizationId - UUID of the organization
+ * @param roleUpdates - Array of user role updates (userId and newRole pairs)
+ *
+ * @returns Promise resolving to ActionState with summary of successful and failed updates
+ *
+ * @example
+ * ```typescript
+ * const result = await updateMultipleUserRolesAction(
+ *   "123e4567-e89b-12d3-a456-426614174000",
+ *   [
+ *     { userId: "user_2ABC123DEF456", newRole: "Metadata Approver" },
+ *     { userId: "user_2DEF456GHI789", newRole: "Metadata Creator" },
+ *     { userId: "user_2GHI789JKL012", newRole: "Member" }
+ *   ]
+ * );
+ *
+ * if (result.isSuccess) {
+ *   console.log(`Updated ${result.data.successful.length} roles, failed ${result.data.failed.length}`);
+ * }
+ * ```
+ */
+export async function updateMultipleUserRolesAction(
+  organizationId: string,
+  roleUpdates: BulkUserRoleUpdate[]
+): Promise<
+  ActionState<{
+    successful: SelectUserOrganization[]
+    failed: { userId: string; newRole: string; error: string }[]
+    notFound: string[]
+  }>
+> {
+  const { userId: currentUserId } = await auth()
+  if (!currentUserId) {
+    return { isSuccess: false, message: "Unauthorized." }
+  }
+
+  // Security check
+  const isNodeOfficerOfOrg = await db.query.userOrganizations.findFirst({
+    where: and(
+      eq(userOrganizationsTable.userId, currentUserId),
+      eq(userOrganizationsTable.organizationId, organizationId),
+      eq(userOrganizationsTable.role, "Node Officer")
+    )
+  })
+  const isSysAdmin = await checkUserRole(currentUserId, "System Administrator")
+
+  if (!isNodeOfficerOfOrg && !isSysAdmin) {
+    return {
+      isSuccess: false,
+      message:
+        "Forbidden: Not authorized to update roles for this organization."
+    }
+  }
+
+  try {
+    if (!organizationId || roleUpdates.length === 0) {
+      return {
+        isSuccess: false,
+        message: "Organization ID and at least one role update are required."
+      }
+    }
+
+    // Check which users are actually in the organization
+    const existingAssignments = await db.query.userOrganizations.findMany({
+      where: and(
+        eq(userOrganizationsTable.organizationId, organizationId),
+        inArray(
+          userOrganizationsTable.userId,
+          roleUpdates.map(u => u.userId)
+        )
+      )
+    })
+
+    const existingUserIds = new Set(existingAssignments.map(a => a.userId))
+    const notFound = roleUpdates
+      .filter(update => !existingUserIds.has(update.userId))
+      .map(update => update.userId)
+
+    const successful: SelectUserOrganization[] = []
+    const failed: { userId: string; newRole: string; error: string }[] = []
+
+    // Process each role update
+    for (const update of roleUpdates) {
+      if (!existingUserIds.has(update.userId)) {
+        continue // Already tracked in notFound
+      }
+
+      try {
+        const [updatedAssignment] = await db
+          .update(userOrganizationsTable)
+          .set({ role: update.newRole, updatedAt: new Date() })
+          .where(
+            and(
+              eq(userOrganizationsTable.userId, update.userId),
+              eq(userOrganizationsTable.organizationId, organizationId)
+            )
+          )
+          .returning()
+
+        if (updatedAssignment) {
+          successful.push(updatedAssignment)
+        }
+      } catch (error) {
+        failed.push({
+          userId: update.userId,
+          newRole: update.newRole,
+          error: error instanceof Error ? error.message : "Unknown error"
+        })
+      }
+    }
+
+    return {
+      isSuccess: true,
+      message: `Bulk role update completed. ${successful.length} successful, ${failed.length} failed, ${notFound.length} not found.`,
+      data: { successful, failed, notFound }
+    }
+  } catch (error) {
+    console.error("Error in bulk role update:", error)
+    return {
+      isSuccess: false,
+      message: `Failed to process bulk role update: ${error instanceof Error ? error.message : "Unknown error"}`
+    }
   }
 }

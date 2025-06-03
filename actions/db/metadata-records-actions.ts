@@ -33,6 +33,8 @@ import {
   asc
 } from "drizzle-orm"
 import { createAuditLogAction } from "@/actions/audit-log-actions"
+// Import caching utilities
+import { metadataCache, CacheKeys, CacheInvalidation } from "@/lib/cache"
 
 // Helper function to log metadata changes
 async function logMetadataChange(
@@ -139,6 +141,12 @@ export async function createMetadataRecordAction(
       .insert(metadataRecordsTable)
       .values(recordToInsert as InsertMetadataRecord)
       .returning()
+
+    // Invalidate relevant caches
+    CacheInvalidation.metadata.invalidateByOrganization(
+      newRecord.organizationId || ""
+    )
+    CacheInvalidation.metadata.invalidateByUser(newRecord.creatorUserId)
 
     return {
       isSuccess: true,
@@ -494,6 +502,15 @@ export async function updateMetadataRecordAction(params: {
       details: { updatedFields: data }
     })
 
+    // Invalidate relevant caches
+    CacheInvalidation.metadata.invalidateMetadataRecord(updatedRecord.id)
+    if (updatedRecord.organizationId) {
+      CacheInvalidation.metadata.invalidateByOrganization(
+        updatedRecord.organizationId
+      )
+    }
+    CacheInvalidation.metadata.invalidateByUser(updatedRecord.creatorUserId)
+
     return {
       isSuccess: true,
       message: "Metadata record updated successfully.",
@@ -624,6 +641,15 @@ export async function updateMetadataRecordStatusAction(
     })
     // --- End Audit Log ---
 
+    // Invalidate relevant caches
+    CacheInvalidation.metadata.invalidateMetadataRecord(updatedRecord.id)
+    if (updatedRecord.organizationId) {
+      CacheInvalidation.metadata.invalidateByOrganization(
+        updatedRecord.organizationId
+      )
+    }
+    CacheInvalidation.metadata.invalidateByUser(updatedRecord.creatorUserId)
+
     return {
       isSuccess: true,
       message: "Metadata record status updated successfully.",
@@ -682,6 +708,15 @@ export async function deleteMetadataRecordAction(
     await db
       .delete(metadataRecordsTable)
       .where(eq(metadataRecordsTable.id, recordId))
+
+    // Invalidate relevant caches
+    CacheInvalidation.metadata.invalidateMetadataRecord(recordId)
+    if (existingRecord.organizationId) {
+      CacheInvalidation.metadata.invalidateByOrganization(
+        existingRecord.organizationId
+      )
+    }
+    CacheInvalidation.metadata.invalidateByUser(existingRecord.creatorUserId)
 
     // --- Audit Log ---
     await createAuditLogAction({
@@ -1098,6 +1133,19 @@ export async function getOrganizationsAction(): Promise<
 export async function getMetadataRecordsWithSpatialBoundsAction(): Promise<
   ActionState<SelectMetadataRecord[]>
 > {
+  // Check cache first
+  const cacheKey = CacheKeys.metadata.spatialBounds()
+  const cachedData = metadataCache.get(cacheKey)
+
+  if (cachedData) {
+    return {
+      isSuccess: true,
+      message:
+        "Metadata records with spatial bounds retrieved successfully (cached).",
+      data: cachedData
+    }
+  }
+
   try {
     // Fetch published metadata records that have spatial bounds
     const records = await db.query.metadataRecords.findMany({
@@ -1119,6 +1167,9 @@ export async function getMetadataRecordsWithSpatialBoundsAction(): Promise<
         organization: true
       }
     })
+
+    // Cache the results for 5 minutes (spatial bounds don't change frequently)
+    metadataCache.set(cacheKey, records, 5 * 60 * 1000)
 
     return {
       isSuccess: true,

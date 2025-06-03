@@ -509,6 +509,23 @@ Global styles for the app.
   transform: translateY(0);
 }
 
+/* Cluster marker styles */
+.cluster-marker {
+  z-index: 10;
+}
+
+.individual-marker {
+  z-index: 5;
+}
+
+.cluster-marker:hover .animate-pulse {
+  animation-duration: 0.5s;
+}
+
+.individual-marker:hover .animate-ping {
+  animation-duration: 0.8s;
+}
+
 /* Enhanced Scrollbar Styles */
 ::-webkit-scrollbar {
   width: 8px;
