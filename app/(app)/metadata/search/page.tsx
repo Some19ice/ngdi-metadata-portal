@@ -2,7 +2,7 @@
 
 import { Suspense } from "react"
 import MetadataSearchForm from "./_components/metadata-search-form"
-import MetadataSearchResultsFetcher from "./_components/metadata-search-results-fetcher"
+import IntegratedSearchFetcher from "./_components/integrated-search-fetcher"
 import MetadataSearchSkeleton from "./_components/metadata-search-skeleton"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
@@ -86,7 +86,7 @@ export default async function MetadataSearchPage({
         datasetType ||
         useSpatialSearch) && (
         <Suspense key={suspenseKey} fallback={<MetadataSearchSkeleton />}>
-          <MetadataSearchResultsFetcher
+          <IntegratedSearchFetcher
             query={query}
             startDate={startDate}
             endDate={endDate}

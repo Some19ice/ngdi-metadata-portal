@@ -428,6 +428,16 @@ export async function createOrganizationAction(
       return { isSuccess: false, message: "Failed to create organization." }
     }
 
+    // Invalidate relevant caches after successful creation
+    organizationCache.delete(CacheKeys.organization.count())
+    // Invalidate all list caches by clearing variations
+    const stats = organizationCache.getStats()
+    stats.keys
+      .filter(
+        key => key.startsWith("org:list:") || key.startsWith("org:admin:")
+      )
+      .forEach(key => organizationCache.delete(key))
+
     // Create audit log entry
     const auditLogData: CreateAuditLogInput = {
       actionCategory: "OrganizationManagement",

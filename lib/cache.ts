@@ -16,6 +16,8 @@ class InMemoryCache<T> {
    * Get a value from cache
    * @param key - Cache key
    * @returns Cached value or undefined if not found or expired
+   * @note This method returns undefined for both cache misses and cached undefined values.
+   *       Use has() to distinguish between these cases.
    */
   get(key: string): T | undefined {
     const entry = this.cache.get(key)
@@ -275,8 +277,11 @@ export const CacheInvalidation = {
 }
 
 // Periodic cleanup (runs every 10 minutes)
-if (typeof global !== "undefined") {
-  setInterval(
+// Use global singleton to prevent multiple intervals during hot-reload
+declare const globalThis: typeof global & { __cacheCleanupId?: NodeJS.Timer }
+
+if (!globalThis.__cacheCleanupId) {
+  globalThis.__cacheCleanupId = setInterval(
     () => {
       organizationCache.cleanup()
       userOrganizationCache.cleanup()
@@ -287,7 +292,10 @@ if (typeof global !== "undefined") {
   )
 }
 
-// Helper function to create cache-enabled functions
+/**
+ * Helper function to create cache-enabled functions
+ * @note Uses has() to check cache existence to properly handle cached undefined values
+ */
 export function withCache<TArgs extends any[], TReturn>(
   cache: InMemoryCache<TReturn>,
   keyGenerator: (...args: TArgs) => string,
@@ -300,9 +308,9 @@ export function withCache<TArgs extends any[], TReturn>(
       const cacheKey = keyGenerator(...args)
 
       // Try to get from cache first
-      const cached = cache.get(cacheKey)
-      if (cached !== undefined) {
-        return cached
+      // Use has() to distinguish between cache miss and cached undefined values
+      if (cache.has(cacheKey)) {
+        return cache.get(cacheKey)!
       }
 
       // Execute original function

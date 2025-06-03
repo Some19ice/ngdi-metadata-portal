@@ -41,15 +41,18 @@ export function useMapClustering({
   const [currentZoom, setCurrentZoom] = useState<number>(5)
   const [currentBounds, setCurrentBounds] = useState<number[] | null>(null)
 
-  // Default clustering options
-  const clusterOptions: ClusterOptions = {
-    radius: 50,
-    maxZoom: 16,
-    minZoom: 0,
-    extent: 512,
-    nodeSize: 64,
-    ...options
-  }
+  // Default clustering options (memoised to keep a stable reference)
+  const clusterOptions: ClusterOptions = useMemo(
+    () => ({
+      radius: 50,
+      maxZoom: 16,
+      minZoom: 0,
+      extent: 512,
+      nodeSize: 64,
+      ...options
+    }),
+    [options]
+  )
 
   // Initialize Supercluster instance
   const supercluster = useMemo(() => {
@@ -70,17 +73,22 @@ export function useMapClustering({
         // Calculate center point from bounding box
         const bbox = record.spatialInfo!.boundingBox!
         const centerLng =
-          (parseFloat(bbox.eastBoundingCoordinate as string) +
-            parseFloat(bbox.westBoundingCoordinate as string)) /
+          (Number(bbox.eastBoundingCoordinate) +
+            Number(bbox.westBoundingCoordinate)) /
           2
         const centerLat =
-          (parseFloat(bbox.northBoundingCoordinate as string) +
-            parseFloat(bbox.southBoundingCoordinate as string)) /
+          (Number(bbox.northBoundingCoordinate) +
+            Number(bbox.southBoundingCoordinate)) /
           2
+
+        // Skip invalid records with non-numeric coordinates
+        if (Number.isNaN(centerLng) || Number.isNaN(centerLat)) {
+          return null // skip invalid record
+        }
 
         return {
           type: "Feature" as const,
-          id: record.id.hashCode(), // Convert string ID to number
+          id: stringHashCode(record.id), // Convert string ID to number
           properties: {
             cluster: false,
             record
@@ -89,8 +97,9 @@ export function useMapClustering({
             type: "Point" as const,
             coordinates: [centerLng, centerLat]
           }
-        }
+        } as ClusterFeature
       })
+      .filter((point): point is ClusterFeature => point !== null) // Filter out null points
 
     const cluster = new Supercluster(clusterOptions)
     cluster.load(points)
@@ -194,21 +203,11 @@ export function useMapClustering({
 }
 
 // Helper function to convert string to hash code (for Supercluster ID requirement)
-declare global {
-  interface String {
-    hashCode(): number
+export const stringHashCode = (str: string): number => {
+  let hash = 0
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash << 5) - hash + str.charCodeAt(i)
+    hash |= 0 // Convert to 32bit integer
   }
-}
-
-if (typeof String.prototype.hashCode === "undefined") {
-  String.prototype.hashCode = function () {
-    let hash = 0
-    if (this.length === 0) return hash
-    for (let i = 0; i < this.length; i++) {
-      const char = this.charCodeAt(i)
-      hash = (hash << 5) - hash + char
-      hash = hash & hash // Convert to 32bit integer
-    }
-    return Math.abs(hash)
-  }
+  return Math.abs(hash)
 }

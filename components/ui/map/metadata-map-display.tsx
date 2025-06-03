@@ -29,13 +29,15 @@ interface MetadataMapDisplayProps {
   className?: string
   onRecordClick?: (record: MetadataRecord) => void
   showBoundingBoxes?: boolean
+  onMapLoad?: (map: Map) => void
 }
 
 export default function MetadataMapDisplay({
   records,
   className = "h-[500px] w-full",
   onRecordClick,
-  showBoundingBoxes = true
+  showBoundingBoxes = true,
+  onMapLoad
 }: MetadataMapDisplayProps) {
   const [mapInstance, setMapInstance] = useState<Map | null>(null)
   const [activeStyleId, setActiveStyleId] = useState<string>("streets")
@@ -81,10 +83,14 @@ export default function MetadataMapDisplay({
   )
 
   // Handle map load
-  const handleMapLoad = useCallback((map: Map) => {
-    setMapInstance(map)
-    setIsMapLoaded(true)
-  }, [])
+  const handleMapLoad = useCallback(
+    (map: Map) => {
+      setMapInstance(map)
+      setIsMapLoaded(true)
+      onMapLoad?.(map)
+    },
+    [onMapLoad]
+  )
 
   // Set up map layers
   const { addLayer, removeLayer, updateLayerSource, toggleLayerVisibility } =
@@ -93,17 +99,23 @@ export default function MetadataMapDisplay({
       initialLayers: []
     })
 
-  // Set up map clustering
-  const { clusters, expandCluster, getClusterLeaves } = useMapClustering({
-    records,
-    map: mapInstance,
-    options: {
+  // Memoize clustering options to prevent unnecessary re-renders
+  const clusteringOpts = useMemo(
+    () => ({
       radius: 50,
       maxZoom: 16,
       minZoom: 0,
       extent: 512,
       nodeSize: 64
-    }
+    }),
+    []
+  )
+
+  // Set up map clustering
+  const { clusters, expandCluster, getClusterLeaves } = useMapClustering({
+    records,
+    map: mapInstance,
+    options: clusteringOpts
   })
 
   // Prepare marker data for the useMapMarkers hook based on clustering state

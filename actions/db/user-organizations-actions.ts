@@ -10,9 +10,117 @@ import {
   organizationUserRoleEnum
 } from "@/db/schema"
 import { ActionState } from "@/types"
-import { auth } from "@clerk/nextjs/server"
+import { auth, clerkClient } from "@clerk/nextjs/server"
 import { and, eq, inArray } from "drizzle-orm"
 import { checkUserRole, requiresSystemAdmin } from "@/lib/rbac"
+
+/**
+ * Business rule: Prevents removal of the last Node Officer from an organization
+ * Imported from organizations-actions.ts to maintain consistent validation
+ */
+async function validateNodeOfficerRemoval(
+  organizationId: string,
+  userIdToRemove: string
+): Promise<{ isValid: boolean; error?: string }> {
+  const nodeOfficers = await db.query.userOrganizations.findMany({
+    where: and(
+      eq(userOrganizationsTable.organizationId, organizationId),
+      eq(userOrganizationsTable.role, "Node Officer")
+    )
+  })
+
+  // If there's only one Node Officer and it's the one being removed, prevent it
+  if (nodeOfficers.length === 1 && nodeOfficers[0].userId === userIdToRemove) {
+    return {
+      isValid: false,
+      error:
+        "Cannot remove the last Node Officer from an organization. Assign another Node Officer first."
+    }
+  }
+
+  return { isValid: true }
+}
+
+/**
+ * Business rule: Prevents demoting the last Node Officer from an organization
+ * Similar to validateNodeOfficerRemoval but for role changes
+ */
+async function validateNodeOfficerDemotion(
+  organizationId: string,
+  userIdToUpdate: string,
+  newRole: string
+): Promise<{ isValid: boolean; error?: string }> {
+  // Only check if we're demoting FROM Node Officer to something else
+  const currentAssignment = await db.query.userOrganizations.findFirst({
+    where: and(
+      eq(userOrganizationsTable.userId, userIdToUpdate),
+      eq(userOrganizationsTable.organizationId, organizationId)
+    )
+  })
+
+  // If current role is not Node Officer, no validation needed
+  if (!currentAssignment || currentAssignment.role !== "Node Officer") {
+    return { isValid: true }
+  }
+
+  // If new role is still Node Officer, no validation needed
+  if (newRole === "Node Officer") {
+    return { isValid: true }
+  }
+
+  // We are demoting a Node Officer - check if they're the last one
+  const nodeOfficers = await db.query.userOrganizations.findMany({
+    where: and(
+      eq(userOrganizationsTable.organizationId, organizationId),
+      eq(userOrganizationsTable.role, "Node Officer")
+    )
+  })
+
+  // If there's only one Node Officer and it's the one being demoted, prevent it
+  if (nodeOfficers.length === 1 && nodeOfficers[0].userId === userIdToUpdate) {
+    return {
+      isValid: false,
+      error:
+        "Cannot demote the last Node Officer from an organization. Assign another Node Officer first."
+    }
+  }
+
+  return { isValid: true }
+}
+
+/**
+ * Validates that a Clerk user exists and is active before database operations
+ * Prevents silent failures from typos in user IDs
+ */
+async function validateClerkUser(
+  userId: string
+): Promise<{ isValid: boolean; error?: string }> {
+  try {
+    const clerkUser = await (await clerkClient()).users.getUser(userId)
+    if (!clerkUser) {
+      return {
+        isValid: false,
+        error: "User not found in authentication system"
+      }
+    }
+
+    // Check if user is banned/inactive
+    if (clerkUser.banned) {
+      return {
+        isValid: false,
+        error: "User is banned and cannot be assigned to organizations"
+      }
+    }
+
+    return { isValid: true }
+  } catch (error) {
+    console.error("Error validating Clerk user:", error)
+    return {
+      isValid: false,
+      error: "Failed to validate user in authentication system"
+    }
+  }
+}
 
 /**
  * Adds a user to an organization with a specific role.
@@ -51,12 +159,22 @@ export async function addUserToOrganizationAction(
   }
 
   try {
+    // Validate that the Clerk user exists and is active
+    const userValidation = await validateClerkUser(assignment.userId)
+    if (!userValidation.isValid) {
+      return {
+        isSuccess: false,
+        message: userValidation.error!
+      }
+    }
+
     // Check if the assignment already exists to prevent duplicates
     const existingAssignment = await db.query.userOrganizations.findFirst({
       where: and(
         eq(userOrganizationsTable.userId, assignment.userId),
-        eq(userOrganizationsTable.organizationId, assignment.organizationId),
-        eq(userOrganizationsTable.role, assignment.role) // Consider if role should be part of uniqueness
+        eq(userOrganizationsTable.organizationId, assignment.organizationId)
+        // Leave role out – a user may only appear once per organisation.
+        // If you intend multi-role support, add a dedicated junction table instead.
       )
     })
 
@@ -270,6 +388,19 @@ export async function updateUserOrganizationRoleAction(
     }
   }
 
+  // Validate Node Officer demotion to prevent orphaned organizations
+  const demotionValidation = await validateNodeOfficerDemotion(
+    organizationId,
+    userIdToUpdate,
+    newRole
+  )
+  if (!demotionValidation.isValid) {
+    return {
+      isSuccess: false,
+      message: demotionValidation.error!
+    }
+  }
+
   try {
     const [updatedAssignment] = await db
       .update(userOrganizationsTable)
@@ -350,9 +481,17 @@ export async function removeUserFromOrganizationAction(
     }
   }
 
-  // Prevent Node Officer from removing themselves if they are the *only* Node Officer?
-  // This is complex business logic. For now, allow removal.
-  // A check could be: if userIdToRemove === currentUserId && role === 'Node Officer', count other Node Officers.
+  // Validate Node Officer removal to prevent orphaned organizations
+  const removalValidation = await validateNodeOfficerRemoval(
+    organizationId,
+    userIdToRemove
+  )
+  if (!removalValidation.isValid) {
+    return {
+      isSuccess: false,
+      message: removalValidation.error!
+    }
+  }
 
   try {
     const result = await db
@@ -464,6 +603,43 @@ export async function addMultipleUsersToOrganizationAction(
       }
     }
 
+    // Validate all Clerk users exist and are active before processing
+    const userValidationResults = await Promise.allSettled(
+      assignments.map(async assignment => {
+        const validation = await validateClerkUser(assignment.userId)
+        return { userId: assignment.userId, validation }
+      })
+    )
+
+    const invalidUsers: { userId: string; role: string; error: string }[] = []
+
+    for (let i = 0; i < userValidationResults.length; i++) {
+      const result = userValidationResults[i]
+      const assignment = assignments[i]
+
+      if (result.status === "rejected") {
+        invalidUsers.push({
+          userId: assignment.userId,
+          role: assignment.role,
+          error: "Failed to validate user"
+        })
+      } else if (!result.value.validation.isValid) {
+        invalidUsers.push({
+          userId: assignment.userId,
+          role: assignment.role,
+          error: result.value.validation.error!
+        })
+      }
+    }
+
+    // If any users are invalid, fail the entire operation to maintain consistency
+    if (invalidUsers.length > 0) {
+      return {
+        isSuccess: false,
+        message: `Invalid users found: ${invalidUsers.map(u => `${u.userId} (${u.error})`).join(", ")}`
+      }
+    }
+
     // Check for existing assignments to avoid duplicates
     const existingAssignments = await db.query.userOrganizations.findMany({
       where: and(
@@ -481,38 +657,41 @@ export async function addMultipleUsersToOrganizationAction(
     const failed: { userId: string; role: string; error: string }[] = []
     const skipped: { userId: string; role: string; reason: string }[] = []
 
-    // Process each assignment
-    for (const assignment of assignments) {
-      try {
-        if (existingUserIds.has(assignment.userId)) {
-          skipped.push({
+    await db.transaction(async tx => {
+      // Process each assignment
+      for (const assignment of assignments) {
+        try {
+          // Check if user is already assigned
+          if (existingUserIds.has(assignment.userId)) {
+            skipped.push({
+              userId: assignment.userId,
+              role: assignment.role,
+              reason: "User already assigned to organization"
+            })
+            continue
+          }
+
+          const [newAssignment] = await tx
+            .insert(userOrganizationsTable)
+            .values({
+              userId: assignment.userId,
+              organizationId,
+              role: assignment.role
+            })
+            .returning()
+
+          if (newAssignment) {
+            successful.push(newAssignment)
+          }
+        } catch (error) {
+          failed.push({
             userId: assignment.userId,
             role: assignment.role,
-            reason: "User already assigned to organization"
+            error: error instanceof Error ? error.message : "Unknown error"
           })
-          continue
         }
-
-        const [newAssignment] = await db
-          .insert(userOrganizationsTable)
-          .values({
-            userId: assignment.userId,
-            organizationId,
-            role: assignment.role
-          })
-          .returning()
-
-        if (newAssignment) {
-          successful.push(newAssignment)
-        }
-      } catch (error) {
-        failed.push({
-          userId: assignment.userId,
-          role: assignment.role,
-          error: error instanceof Error ? error.message : "Unknown error"
-        })
       }
-    }
+    })
 
     return {
       isSuccess: true,
@@ -601,6 +780,33 @@ export async function removeMultipleUsersFromOrganizationAction(
 
     const existingUserIds = new Set(existingAssignments.map(a => a.userId))
     const notFound = userIds.filter(id => !existingUserIds.has(id))
+
+    // Check if any of the users being removed are Node Officers
+    const nodeOfficersBeingRemoved = existingAssignments.filter(
+      assignment => assignment.role === "Node Officer"
+    )
+
+    // If Node Officers are being removed, check if this would leave the organization without any
+    if (nodeOfficersBeingRemoved.length > 0) {
+      const allNodeOfficers = await db.query.userOrganizations.findMany({
+        where: and(
+          eq(userOrganizationsTable.organizationId, organizationId),
+          eq(userOrganizationsTable.role, "Node Officer")
+        )
+      })
+
+      const nodeOfficersAfterRemoval = allNodeOfficers.filter(
+        officer => !userIds.includes(officer.userId)
+      )
+
+      if (nodeOfficersAfterRemoval.length === 0) {
+        return {
+          isSuccess: false,
+          message:
+            "Cannot remove all Node Officers from an organization. At least one Node Officer must remain."
+        }
+      }
+    }
 
     const successful: string[] = []
     const failed: { userId: string; error: string }[] = []
@@ -726,6 +932,56 @@ export async function updateMultipleUserRolesAction(
     const notFound = roleUpdates
       .filter(update => !existingUserIds.has(update.userId))
       .map(update => update.userId)
+
+    // Check if any Node Officers are being demoted and if this would leave the organization without any
+    const nodeOfficersBeingDemoted = roleUpdates.filter(update => {
+      const currentAssignment = existingAssignments.find(
+        a => a.userId === update.userId
+      )
+      return (
+        currentAssignment?.role === "Node Officer" &&
+        update.newRole !== "Node Officer"
+      )
+    })
+
+    if (nodeOfficersBeingDemoted.length > 0) {
+      const allNodeOfficers = await db.query.userOrganizations.findMany({
+        where: and(
+          eq(userOrganizationsTable.organizationId, organizationId),
+          eq(userOrganizationsTable.role, "Node Officer")
+        )
+      })
+
+      // Calculate how many Node Officers will remain after the updates
+      const nodeOfficersAfterUpdates = allNodeOfficers.filter(officer => {
+        const update = roleUpdates.find(u => u.userId === officer.userId)
+        // If there's an update for this officer, check if they remain a Node Officer
+        // If no update, they keep their current role
+        return update ? update.newRole === "Node Officer" : true
+      })
+
+      // Also add users who are being promoted TO Node Officer
+      const usersPromotedToNodeOfficer = roleUpdates.filter(update => {
+        const currentAssignment = existingAssignments.find(
+          a => a.userId === update.userId
+        )
+        return (
+          currentAssignment?.role !== "Node Officer" &&
+          update.newRole === "Node Officer"
+        )
+      })
+
+      const totalNodeOfficersAfter =
+        nodeOfficersAfterUpdates.length + usersPromotedToNodeOfficer.length
+
+      if (totalNodeOfficersAfter === 0) {
+        return {
+          isSuccess: false,
+          message:
+            "Cannot demote all Node Officers from an organization. At least one Node Officer must remain."
+        }
+      }
+    }
 
     const successful: SelectUserOrganization[] = []
     const failed: { userId: string; newRole: string; error: string }[] = []
