@@ -429,14 +429,23 @@ export async function createOrganizationAction(
     }
 
     // Invalidate relevant caches after successful creation
-    organizationCache.delete(CacheKeys.organization.count())
-    // Invalidate all list caches by clearing variations
-    const stats = organizationCache.getStats()
-    stats.keys
-      .filter(
-        key => key.startsWith("org:list:") || key.startsWith("org:admin:")
+    // Wrap cache invalidation in try/catch to prevent cache failures from blocking success response
+    try {
+      organizationCache.delete(CacheKeys.organization.count())
+      // Invalidate all list caches by clearing variations
+      const stats = organizationCache.getStats()
+      stats.keys
+        .filter(
+          key => key.startsWith("org:list:") || key.startsWith("org:admin:")
+        )
+        .forEach(key => organizationCache.delete(key))
+    } catch (cacheError) {
+      console.error(
+        "Cache invalidation failed after organization creation:",
+        cacheError
       )
-      .forEach(key => organizationCache.delete(key))
+      // Continue execution - cache failures should not affect the success response
+    }
 
     // Create audit log entry
     const auditLogData: CreateAuditLogInput = {

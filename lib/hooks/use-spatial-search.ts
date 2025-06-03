@@ -1,6 +1,5 @@
 import { useState, useCallback, useEffect } from "react"
-import { Map, LngLatBounds } from "maplibre-gl"
-import mapboxgl from "maplibre-gl"
+import mapboxgl, { Map, LngLatBounds, MapMouseEvent } from "maplibre-gl"
 
 interface SpatialSearchOptions {
   map: Map | null
@@ -171,7 +170,7 @@ export function useSpatialSearch({
   useEffect(() => {
     if (!map || !isDrawingEnabled) return
 
-    const handleMouseDown = (e: mapboxgl.MapMouseEvent) => {
+    const handleMouseDown = (e: MapMouseEvent) => {
       if (!isDrawingEnabled) return
 
       setIsDrawing(true)
@@ -181,7 +180,7 @@ export function useSpatialSearch({
       map.dragPan.disable()
     }
 
-    const handleMouseMove = (e: mapboxgl.MapMouseEvent) => {
+    const handleMouseMove = (e: MapMouseEvent) => {
       if (!isDrawing || !drawingStartPoint) return
 
       const currentPoint = { lng: e.lngLat.lng, lat: e.lngLat.lat }
@@ -201,7 +200,7 @@ export function useSpatialSearch({
       addSpatialSearchLayer(newBounds)
     }
 
-    const handleMouseUp = (e: mapboxgl.MapMouseEvent) => {
+    const handleMouseUp = (e: MapMouseEvent) => {
       if (!isDrawing || !drawingStartPoint) return
 
       const currentPoint = { lng: e.lngLat.lng, lat: e.lngLat.lat }
@@ -264,10 +263,10 @@ export function useSpatialSearch({
 
   // Clean up on unmount or when drawing is disabled
   useEffect(() => {
-    if (!isDrawingEnabled) {
+    if (!isDrawingEnabled && !drawingBounds) {
       clearSpatialLayers()
     }
-  }, [isDrawingEnabled, clearSpatialLayers])
+  }, [isDrawingEnabled, drawingBounds, clearSpatialLayers])
 
   return {
     isDrawingEnabled,

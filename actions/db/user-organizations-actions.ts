@@ -96,7 +96,8 @@ async function validateClerkUser(
   userId: string
 ): Promise<{ isValid: boolean; error?: string }> {
   try {
-    const clerkUser = await (await clerkClient()).users.getUser(userId)
+    const client = await clerkClient()
+    const clerkUser = await client.users.getUser(userId)
     if (!clerkUser) {
       return {
         isValid: false,
@@ -658,12 +659,18 @@ export async function addMultipleUsersToOrganizationAction(
     const skipped: { userId: string; role: string; reason: string }[] = []
 
     await db.transaction(async tx => {
+      // Create local arrays to collect results within the transaction
+      const localSuccessful: SelectUserOrganization[] = []
+      const localFailed: { userId: string; role: string; error: string }[] = []
+      const localSkipped: { userId: string; role: string; reason: string }[] =
+        []
+
       // Process each assignment
       for (const assignment of assignments) {
         try {
           // Check if user is already assigned
           if (existingUserIds.has(assignment.userId)) {
-            skipped.push({
+            localSkipped.push({
               userId: assignment.userId,
               role: assignment.role,
               reason: "User already assigned to organization"
@@ -681,16 +688,21 @@ export async function addMultipleUsersToOrganizationAction(
             .returning()
 
           if (newAssignment) {
-            successful.push(newAssignment)
+            localSuccessful.push(newAssignment)
           }
         } catch (error) {
-          failed.push({
+          localFailed.push({
             userId: assignment.userId,
             role: assignment.role,
             error: error instanceof Error ? error.message : "Unknown error"
           })
         }
       }
+
+      // After transaction completes successfully, merge local arrays into outer scope
+      successful.push(...localSuccessful)
+      failed.push(...localFailed)
+      skipped.push(...localSkipped)
     })
 
     return {

@@ -1,6 +1,3 @@
-#!/usr/bin/env sh
-. "$(dirname -- "$0")/_/husky.sh"
-
 # This hook validates commit messages to ensure they follow a standard format
 # You can customize this to enforce your team's commit message conventions
 

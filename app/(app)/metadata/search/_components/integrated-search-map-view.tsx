@@ -1,6 +1,7 @@
-"use client"
-
 import { useState, useEffect, useCallback, useMemo } from "react"
+import type mapboxgl from "mapbox-gl"   // or the concrete map type you rely on
+...
+const [mapInstance, setMapInstance] = useState<mapboxgl.Map | null>(null)
 import { useRouter, useSearchParams } from "next/navigation"
 import dynamic from "next/dynamic"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -189,10 +190,10 @@ export default function IntegratedSearchMapView({
   const handleToggleSpatialSearch = useCallback(() => {
     if (spatialSearchEnabled) {
       setSpatialSearchEnabled(false)
-      spatialSearch.disableDrawing()
+      spatialSearch?.disableDrawing()
     } else {
       setSpatialSearchEnabled(true)
-      spatialSearch.enableDrawing()
+      spatialSearch?.enableDrawing()
     }
   }, [spatialSearchEnabled, spatialSearch])
 
