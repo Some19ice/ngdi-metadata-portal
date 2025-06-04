@@ -81,9 +81,10 @@ export default async function RootLayout({
 
             <TailwindIndicator />
 
-            <StagewiseToolbar />
-
             <Toaster />
+
+            {/* Stagewise Toolbar - Development Only */}
+            <StagewiseToolbar />
           </Providers>
         </body>
       </html>

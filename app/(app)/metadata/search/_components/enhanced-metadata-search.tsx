@@ -22,19 +22,6 @@ import {
   CollapsibleTrigger
 } from "@/components/ui/collapsible"
 import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList
-} from "@/components/ui/command"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger
-} from "@/components/ui/popover"
-import {
   Search,
   Filter,
   ChevronDown,
@@ -42,21 +29,13 @@ import {
   X,
   Calendar,
   Map,
-  Building,
-  Tag,
   Grid3X3,
   List,
-  MapIcon
+  MapIcon,
+  Loader2
 } from "lucide-react"
-import { cn } from "@/lib/utils"
-
-interface SearchFacets {
-  dataTypes: { value: string; count: number }[]
-  organizations: { value: string; count: number }[]
-  topicCategories: { value: string; count: number }[]
-  frameworkTypes: { value: string; count: number }[]
-  years: { value: string; count: number }[]
-}
+import { getSearchFacets, SearchFacets } from "./enhanced-search-facets"
+import EnhancedMetadataSearchResults from "./enhanced-metadata-search-results"
 
 interface SearchFilters {
   query: string
@@ -68,20 +47,8 @@ interface SearchFilters {
     start: string | null
     end: string | null
   }
-  spatialBounds: {
-    north: number | null
-    south: number | null
-    east: number | null
-    west: number | null
-  } | null
   sortBy: "relevance" | "date" | "title" | "updated"
   sortOrder: "asc" | "desc"
-}
-
-interface Suggestion {
-  text: string
-  type: "query" | "organization" | "category"
-  count?: number
 }
 
 const defaultFilters: SearchFilters = {
@@ -91,51 +58,9 @@ const defaultFilters: SearchFilters = {
   topicCategories: [],
   frameworkTypes: [],
   temporalRange: { start: null, end: null },
-  spatialBounds: null,
   sortBy: "relevance",
   sortOrder: "desc"
 }
-
-// Mock data - in real implementation, this would come from API
-const mockFacets: SearchFacets = {
-  dataTypes: [
-    { value: "Vector", count: 45 },
-    { value: "Raster", count: 32 },
-    { value: "Table", count: 18 },
-    { value: "Point Cloud", count: 12 }
-  ],
-  organizations: [
-    { value: "Department of Geography", count: 28 },
-    { value: "Transport Authority", count: 22 },
-    { value: "Census Bureau", count: 19 },
-    { value: "Environmental Agency", count: 16 }
-  ],
-  topicCategories: [
-    { value: "Environment", count: 34 },
-    { value: "Transportation", count: 26 },
-    { value: "Planning/Cadastre", count: 21 },
-    { value: "Boundaries", count: 18 }
-  ],
-  frameworkTypes: [
-    { value: "Fundamental", count: 42 },
-    { value: "Framework", count: 31 },
-    { value: "Thematic", count: 24 }
-  ],
-  years: [
-    { value: "2023", count: 45 },
-    { value: "2022", count: 38 },
-    { value: "2021", count: 32 },
-    { value: "2020", count: 28 }
-  ]
-}
-
-const mockSuggestions: Suggestion[] = [
-  { text: "land cover", type: "query", count: 12 },
-  { text: "transportation network", type: "query", count: 8 },
-  { text: "population density", type: "query", count: 6 },
-  { text: "Lagos State", type: "organization", count: 15 },
-  { text: "Environmental data", type: "category", count: 34 }
-]
 
 export default function EnhancedMetadataSearch() {
   const router = useRouter()
@@ -144,14 +69,16 @@ export default function EnhancedMetadataSearch() {
   const [filters, setFilters] = useState<SearchFilters>(defaultFilters)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [viewMode, setViewMode] = useState<"grid" | "list" | "map">("grid")
-  const [suggestions, setSuggestions] = useState<Suggestion[]>([])
-  const [showSuggestions, setShowSuggestions] = useState(false)
   const [facetsOpen, setFacetsOpen] = useState({
     dataTypes: true,
     organizations: false,
     topicCategories: false,
     frameworkTypes: false
   })
+
+  // State for real data
+  const [facets, setFacets] = useState<SearchFacets | null>(null)
+  const [isLoadingFacets, setIsLoadingFacets] = useState(true)
 
   // Initialize filters from URL params
   useEffect(() => {
@@ -169,25 +96,27 @@ export default function EnhancedMetadataSearch() {
         start: params.get("startDate"),
         end: params.get("endDate")
       },
-      spatialBounds: null, // TODO: Parse spatial bounds from params
       sortBy: (params.get("sortBy") as any) || "relevance",
       sortOrder: (params.get("sortOrder") as any) || "desc"
     })
   }, [searchParams])
 
-  // Update suggestions based on query
+  // Load initial facets when component mounts
   useEffect(() => {
-    if (filters.query.length > 2) {
-      // In real implementation, this would be an API call
-      const filtered = mockSuggestions.filter(s =>
-        s.text.toLowerCase().includes(filters.query.toLowerCase())
-      )
-      setSuggestions(filtered)
-      setShowSuggestions(true)
-    } else {
-      setShowSuggestions(false)
+    loadFacets()
+  }, [])
+
+  const loadFacets = async () => {
+    setIsLoadingFacets(true)
+    try {
+      const facetsData = await getSearchFacets()
+      setFacets(facetsData)
+    } catch (error) {
+      console.error("Error loading facets:", error)
+    } finally {
+      setIsLoadingFacets(false)
     }
-  }, [filters.query])
+  }
 
   const updateFilters = (updates: Partial<SearchFilters>) => {
     const newFilters = { ...filters, ...updates }
@@ -242,8 +171,7 @@ export default function EnhancedMetadataSearch() {
       filters.topicCategories.length +
       filters.frameworkTypes.length +
       (filters.temporalRange.start ? 1 : 0) +
-      (filters.temporalRange.end ? 1 : 0) +
-      (filters.spatialBounds ? 1 : 0)
+      (filters.temporalRange.end ? 1 : 0)
     )
   }, [filters])
 
@@ -276,221 +204,200 @@ export default function EnhancedMetadataSearch() {
           </Button>
         </CollapsibleTrigger>
         <CollapsibleContent className="space-y-2">
-          {items.map(item => (
-            <div key={item.value} className="flex items-center space-x-2">
-              <Checkbox
-                id={`${category}-${item.value}`}
-                checked={filters[category].includes(item.value)}
-                onCheckedChange={() => toggleFilter(category, item.value)}
-              />
-              <Label
-                htmlFor={`${category}-${item.value}`}
-                className="text-sm flex-1 cursor-pointer flex justify-between"
-              >
-                <span>{item.value}</span>
-                <span className="text-muted-foreground">({item.count})</span>
-              </Label>
-            </div>
-          ))}
+          {items?.length > 0 ? (
+            items.map(item => (
+              <div key={item.value} className="flex items-center space-x-2">
+                <Checkbox
+                  id={`${category}-${item.value}`}
+                  checked={filters[category].includes(item.value)}
+                  onCheckedChange={() => toggleFilter(category, item.value)}
+                />
+                <Label
+                  htmlFor={`${category}-${item.value}`}
+                  className="flex-1 text-sm cursor-pointer"
+                >
+                  {item.value}
+                </Label>
+                <Badge variant="outline" className="text-xs">
+                  {item.count}
+                </Badge>
+              </div>
+            ))
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              No options available
+            </p>
+          )}
         </CollapsibleContent>
       </Collapsible>
     </div>
   )
 
+  // Search suggestions (simplified - you could make this more sophisticated)
+  const suggestions = useMemo(() => {
+    if (!filters.query || filters.query.length < 2) return []
+
+    const allKeywords = [
+      ...(facets?.organizations.map(org => org.value) || []),
+      ...(facets?.dataTypes.map(dt => dt.value) || []),
+      ...(facets?.frameworkTypes.map(ft => ft.value) || []),
+      ...(facets?.topicCategories.map(tc => tc.value) || [])
+    ]
+
+    return allKeywords
+      .filter(item => item.toLowerCase().includes(filters.query.toLowerCase()))
+      .slice(0, 5)
+  }, [filters.query, facets])
+
+  if (isLoadingFacets) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="flex items-center space-x-2">
+            <Loader2 className="h-6 w-6 animate-spin" />
+            <span>Loading search interface...</span>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="space-y-6">
-      {/* Search Header */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Search className="h-5 w-5" />
-            Enhanced Metadata Search
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Main Search Input */}
-          <div className="relative">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search for datasets, keywords, or locations..."
-                value={filters.query}
-                onChange={e => updateFilters({ query: e.target.value })}
-                className="pl-10 pr-4"
-                onFocus={() =>
-                  filters.query.length > 2 && setShowSuggestions(true)
-                }
-                onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-              />
-            </div>
-
-            {/* Search Suggestions */}
-            {showSuggestions && suggestions.length > 0 && (
-              <Card className="absolute top-full mt-1 w-full z-50 shadow-lg">
-                <CardContent className="p-2">
-                  <Command>
-                    <CommandList>
-                      <CommandGroup>
-                        {suggestions.map((suggestion, index) => (
-                          <CommandItem
-                            key={index}
-                            onSelect={() => {
-                              updateFilters({ query: suggestion.text })
-                              setShowSuggestions(false)
-                            }}
-                            className="cursor-pointer"
-                          >
-                            <div className="flex justify-between w-full">
-                              <span>{suggestion.text}</span>
-                              <div className="flex items-center gap-2">
-                                {suggestion.type === "organization" && (
-                                  <Building className="h-3 w-3" />
-                                )}
-                                {suggestion.type === "category" && (
-                                  <Tag className="h-3 w-3" />
-                                )}
-                                {suggestion.count && (
-                                  <span className="text-xs text-muted-foreground">
-                                    {suggestion.count}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-
-          {/* Quick Filters & Controls */}
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowAdvanced(!showAdvanced)}
-              className="gap-2"
-            >
-              <Filter className="h-4 w-4" />
-              Advanced Filters
-              {activeFilterCount > 0 && (
-                <Badge variant="secondary" className="ml-1">
-                  {activeFilterCount}
-                </Badge>
-              )}
-            </Button>
-
-            {activeFilterCount > 0 && (
-              <Button variant="outline" size="sm" onClick={clearFilters}>
-                <X className="h-4 w-4 mr-1" />
-                Clear All
-              </Button>
-            )}
-
-            <div className="ml-auto flex items-center gap-2">
-              <Select
-                value={filters.sortBy}
-                onValueChange={(value: any) => updateFilters({ sortBy: value })}
-              >
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="relevance">Relevance</SelectItem>
-                  <SelectItem value="date">Date</SelectItem>
-                  <SelectItem value="title">Title</SelectItem>
-                  <SelectItem value="updated">Last Updated</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <div className="flex border rounded-md">
-                <Button
-                  variant={viewMode === "grid" ? "default" : "ghost"}
-                  size="sm"
-                  onClick={() => setViewMode("grid")}
-                  className="rounded-r-none"
-                >
-                  <Grid3X3 className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant={viewMode === "list" ? "default" : "ghost"}
-                  size="sm"
-                  onClick={() => setViewMode("list")}
-                  className="rounded-none"
-                >
-                  <List className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant={viewMode === "map" ? "default" : "ghost"}
-                  size="sm"
-                  onClick={() => setViewMode("map")}
-                  className="rounded-l-none"
-                >
-                  <MapIcon className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          </div>
-
-          {/* Active Filters Display */}
-          {activeFilterCount > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {filters.dataTypes.map(type => (
-                <Badge key={type} variant="secondary" className="gap-1">
-                  {type}
-                  <X
-                    className="h-3 w-3 cursor-pointer"
-                    onClick={() => toggleFilter("dataTypes", type)}
-                  />
-                </Badge>
-              ))}
-              {filters.organizations.map(org => (
-                <Badge key={org} variant="secondary" className="gap-1">
-                  {org}
-                  <X
-                    className="h-3 w-3 cursor-pointer"
-                    onClick={() => toggleFilter("organizations", org)}
-                  />
-                </Badge>
-              ))}
-              {filters.topicCategories.map(cat => (
-                <Badge key={cat} variant="secondary" className="gap-1">
-                  {cat}
-                  <X
-                    className="h-3 w-3 cursor-pointer"
-                    onClick={() => toggleFilter("topicCategories", cat)}
-                  />
-                </Badge>
-              ))}
-              {filters.frameworkTypes.map(type => (
-                <Badge key={type} variant="secondary" className="gap-1">
-                  {type}
-                  <X
-                    className="h-3 w-3 cursor-pointer"
-                    onClick={() => toggleFilter("frameworkTypes", type)}
-                  />
-                </Badge>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Advanced Filters Panel */}
-      {showAdvanced && (
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Faceted Filters */}
-          <Card className="lg:col-span-1">
+    <div className="container mx-auto px-4 py-8">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* Search and Filters Sidebar */}
+        <div className="lg:col-span-1 space-y-6">
+          {/* Main Search */}
+          <Card>
             <CardHeader>
-              <CardTitle className="text-base">Filter By</CardTitle>
+              <CardTitle className="flex items-center space-x-2">
+                <Search className="h-5 w-5" />
+                <span>Search</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="relative">
+                <Input
+                  placeholder="Search datasets..."
+                  value={filters.query}
+                  onChange={e => updateFilters({ query: e.target.value })}
+                  className="pr-10"
+                />
+                <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              </div>
+
+              {/* Search suggestions */}
+              {suggestions.length > 0 && (
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">
+                    Suggestions:
+                  </Label>
+                  <div className="flex flex-wrap gap-1">
+                    {suggestions.map(suggestion => (
+                      <Button
+                        key={suggestion}
+                        variant="outline"
+                        size="sm"
+                        className="h-6 text-xs"
+                        onClick={() => updateFilters({ query: suggestion })}
+                      >
+                        {suggestion}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Advanced Toggle */}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowAdvanced(!showAdvanced)}
+                className="w-full justify-between"
+              >
+                <span>Advanced Search</span>
+                {showAdvanced ? (
+                  <ChevronUp className="h-4 w-4" />
+                ) : (
+                  <ChevronDown className="h-4 w-4" />
+                )}
+              </Button>
+
+              {/* Advanced Search Options */}
+              {showAdvanced && (
+                <div className="space-y-4 pt-4 border-t">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Label htmlFor="start-date" className="text-xs">
+                        Start Date
+                      </Label>
+                      <Input
+                        id="start-date"
+                        type="date"
+                        value={filters.temporalRange.start || ""}
+                        onChange={e =>
+                          updateFilters({
+                            temporalRange: {
+                              ...filters.temporalRange,
+                              start: e.target.value
+                            }
+                          })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="end-date" className="text-xs">
+                        End Date
+                      </Label>
+                      <Input
+                        id="end-date"
+                        type="date"
+                        value={filters.temporalRange.end || ""}
+                        onChange={e =>
+                          updateFilters({
+                            temporalRange: {
+                              ...filters.temporalRange,
+                              end: e.target.value
+                            }
+                          })
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Filters */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Filter className="h-5 w-5" />
+                  <span>Filters</span>
+                  {activeFilterCount > 0 && (
+                    <Badge variant="secondary" className="text-xs">
+                      {activeFilterCount}
+                    </Badge>
+                  )}
+                </div>
+                {activeFilterCount > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearFilters}
+                    className="h-auto p-1"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <FacetSection
                 title="Data Types"
-                items={mockFacets.dataTypes}
+                items={facets?.dataTypes || []}
                 category="dataTypes"
                 isOpen={facetsOpen.dataTypes}
                 onToggle={() =>
@@ -505,7 +412,7 @@ export default function EnhancedMetadataSearch() {
 
               <FacetSection
                 title="Organizations"
-                items={mockFacets.organizations}
+                items={facets?.organizations || []}
                 category="organizations"
                 isOpen={facetsOpen.organizations}
                 onToggle={() =>
@@ -520,7 +427,7 @@ export default function EnhancedMetadataSearch() {
 
               <FacetSection
                 title="Topic Categories"
-                items={mockFacets.topicCategories}
+                items={facets?.topicCategories || []}
                 category="topicCategories"
                 isOpen={facetsOpen.topicCategories}
                 onToggle={() =>
@@ -535,7 +442,7 @@ export default function EnhancedMetadataSearch() {
 
               <FacetSection
                 title="Framework Types"
-                items={mockFacets.frameworkTypes}
+                items={facets?.frameworkTypes || []}
                 category="frameworkTypes"
                 isOpen={facetsOpen.frameworkTypes}
                 onToggle={() =>
@@ -545,74 +452,87 @@ export default function EnhancedMetadataSearch() {
                   }))
                 }
               />
+            </CardContent>
+          </Card>
+        </div>
 
-              <Separator />
-
-              {/* Temporal Range */}
-              <div className="space-y-2">
-                <Label className="text-sm font-medium flex items-center gap-2">
-                  <Calendar className="h-4 w-4" />
-                  Temporal Range
-                </Label>
-                <div className="grid grid-cols-2 gap-2">
-                  <Input
-                    type="date"
-                    placeholder="Start date"
-                    value={filters.temporalRange.start || ""}
-                    onChange={e =>
-                      updateFilters({
-                        temporalRange: {
-                          ...filters.temporalRange,
-                          start: e.target.value
-                        }
-                      })
-                    }
-                  />
-                  <Input
-                    type="date"
-                    placeholder="End date"
-                    value={filters.temporalRange.end || ""}
-                    onChange={e =>
-                      updateFilters({
-                        temporalRange: {
-                          ...filters.temporalRange,
-                          end: e.target.value
-                        }
-                      })
-                    }
-                  />
+        {/* Results Area */}
+        <div className="lg:col-span-3 space-y-6">
+          {/* View Controls */}
+          <Card>
+            <CardContent className="py-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-4">
+                  <Label className="text-sm font-medium">View:</Label>
+                  <div className="flex items-center space-x-1">
+                    <Button
+                      variant={viewMode === "grid" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setViewMode("grid")}
+                    >
+                      <Grid3X3 className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant={viewMode === "list" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setViewMode("list")}
+                    >
+                      <List className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant={viewMode === "map" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setViewMode("map")}
+                    >
+                      <MapIcon className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
-              </div>
 
-              <Separator />
-
-              {/* Spatial Filter */}
-              <div className="space-y-2">
-                <Label className="text-sm font-medium flex items-center gap-2">
-                  <Map className="h-4 w-4" />
-                  Spatial Filter
-                </Label>
-                <Button variant="outline" size="sm" className="w-full">
-                  Draw on Map
-                </Button>
+                <div className="flex items-center space-x-2">
+                  <Label className="text-sm">Sort by:</Label>
+                  <Select
+                    value={filters.sortBy}
+                    onValueChange={value =>
+                      updateFilters({ sortBy: value as any })
+                    }
+                  >
+                    <SelectTrigger className="w-32">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="relevance">Relevance</SelectItem>
+                      <SelectItem value="date">Date</SelectItem>
+                      <SelectItem value="title">Title</SelectItem>
+                      <SelectItem value="updated">Updated</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={filters.sortOrder}
+                    onValueChange={value =>
+                      updateFilters({ sortOrder: value as any })
+                    }
+                  >
+                    <SelectTrigger className="w-20">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="desc">Desc</SelectItem>
+                      <SelectItem value="asc">Asc</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Search Results Area */}
-          <div className="lg:col-span-3">
-            <Card>
-              <CardContent className="p-6">
-                <div className="text-center text-muted-foreground">
-                  Search results will appear here...
-                  <br />
-                  <small>Current view mode: {viewMode}</small>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+          {/* Search Results */}
+          <EnhancedMetadataSearchResults
+            filters={filters}
+            viewMode={viewMode}
+          />
         </div>
-      )}
+      </div>
     </div>
   )
-}
+} 

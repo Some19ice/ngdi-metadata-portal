@@ -269,6 +269,7 @@ export default function EnhancedMetadataMapDisplay({
           onMapLoad={handleMapLoad}
           onStyleChange={handleStyleChangeFromMapView}
           onStyleChangeHandler={handleStyleChangeHandlerRef}
+          showControls={false}
         />
 
         <LayerControlPanel

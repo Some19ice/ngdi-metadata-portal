@@ -160,6 +160,7 @@ export default function TerrainMapDisplay({
           onMapLoad={handleMapLoad}
           onStyleChange={handleStyleChangeFromMapView}
           onStyleChangeHandler={handleStyleChangeHandlerRef}
+          showControls={false}
         />
         <LayerControlPanel
           availableStyles={terrainStyles}

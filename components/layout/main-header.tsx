@@ -3,13 +3,7 @@
 import GlobalSearchBar from "@/components/search/global-search-bar"
 import NavigationLinks from "./navigation-links"
 import { ThemeSwitcher } from "@/components/utilities/theme-switcher"
-import {
-  SignedIn,
-  SignedOut,
-  SignInButton,
-  SignUpButton,
-  UserButton
-} from "@clerk/nextjs"
+import { AuthStateHandler } from "@/components/auth"
 import { Button } from "@/components/ui/button"
 import { Menu, X } from "lucide-react"
 import { useEffect, useState } from "react"
@@ -68,21 +62,7 @@ export default function MainHeader() {
           <div className="flex items-center justify-end space-x-2 md:flex-1 md:justify-end">
             <GlobalSearchBar />
             <ThemeSwitcher />
-
-            <SignedOut>
-              <SignInButton>
-                <Button variant="outline" size="sm">
-                  Login
-                </Button>
-              </SignInButton>
-              <SignUpButton>
-                <Button size="sm">Sign Up</Button>
-              </SignUpButton>
-            </SignedOut>
-
-            <SignedIn>
-              <UserButton afterSignOutUrl="/" />
-            </SignedIn>
+            <AuthStateHandler />
 
             <div className="md:hidden">
               {/* Hamburger menu toggle */}

@@ -4,12 +4,13 @@ import {
   searchMetadataRecordsAction,
   MetadataRecordWithOrganization
 } from "@/actions/db/metadata-records-actions"
+import MetadataSearchResultsList from "./metadata-search-results-list"
 import IntegratedSearchMapView from "./integrated-search-map-view"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Terminal } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
-interface IntegratedSearchFetcherProps {
+interface UnifiedSearchFetcherProps {
   query: string
   startDate?: string
   endDate?: string
@@ -24,9 +25,10 @@ interface IntegratedSearchFetcherProps {
   sortOrder: "asc" | "desc"
   page: number
   pageSize: number
+  viewMode?: "list" | "map"
 }
 
-export default async function IntegratedSearchFetcher({
+export default async function UnifiedSearchFetcher({
   query,
   startDate,
   endDate,
@@ -40,8 +42,9 @@ export default async function IntegratedSearchFetcher({
   sortBy,
   sortOrder,
   page,
-  pageSize
-}: IntegratedSearchFetcherProps) {
+  pageSize,
+  viewMode = "list"
+}: UnifiedSearchFetcherProps) {
   const shouldFetch =
     query.trim() !== "" ||
     startDate ||
@@ -118,30 +121,36 @@ export default async function IntegratedSearchFetcher({
     )
   }
 
-  // Prepare search parameters for the integrated view
-  const searchParams = {
-    query,
-    temporalExtentStartDate: startDate,
-    temporalExtentEndDate: endDate,
-    frameworkType,
-    datasetType,
-    useSpatialSearch,
-    bbox_north,
-    bbox_south,
-    bbox_east,
-    bbox_west,
-    sortBy,
-    sortOrder
+  const commonProps = {
+    initialResults: searchResults?.records || [],
+    totalRecords: searchResults?.totalRecords || 0,
+    totalPages: searchResults?.totalPages || 0,
+    currentPage: searchResults?.currentPage || 1,
+    pageSize: searchResults?.pageSize || pageSize
   }
 
-  return (
-    <IntegratedSearchMapView
-      initialResults={searchResults?.records || []}
-      totalRecords={searchResults?.totalRecords || 0}
-      totalPages={searchResults?.totalPages || 0}
-      currentPage={searchResults?.currentPage || 1}
-      pageSize={searchResults?.pageSize || pageSize}
-      searchParams={searchParams}
-    />
-  )
+  // Render based on view mode
+  if (viewMode === "map") {
+    const searchParams = {
+      query,
+      temporalExtentStartDate: startDate,
+      temporalExtentEndDate: endDate,
+      frameworkType,
+      datasetType,
+      useSpatialSearch,
+      bbox_north,
+      bbox_south,
+      bbox_east,
+      bbox_west,
+      sortBy,
+      sortOrder
+    }
+
+    return (
+      <IntegratedSearchMapView {...commonProps} searchParams={searchParams} />
+    )
+  }
+
+  // Default to list view
+  return <MetadataSearchResultsList {...commonProps} query={query} />
 }

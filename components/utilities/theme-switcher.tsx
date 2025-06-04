@@ -11,6 +11,7 @@ import { Moon, Sun } from "lucide-react"
 import { useTheme } from "next-themes"
 import { HTMLAttributes, ReactNode, useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
 
 interface ThemeSwitcherProps extends HTMLAttributes<HTMLDivElement> {
   children?: ReactNode
@@ -35,7 +36,11 @@ export const ThemeSwitcher = ({
   }
 
   if (!mounted) {
-    return <div className={cn("size-6 p-1", props.className)} />
+    return (
+      <div className={cn("size-6 p-1", props.className)}>
+        <Skeleton className="w-full h-full rounded" />
+      </div>
+    )
   }
 
   const isDark = theme === "dark"

@@ -2,9 +2,11 @@
 
 import { Suspense } from "react"
 import MetadataSearchForm from "./_components/metadata-search-form"
-import IntegratedSearchFetcher from "./_components/integrated-search-fetcher"
+import UnifiedSearchFetcher from "./_components/unified-search-fetcher"
 import MetadataSearchSkeleton from "./_components/metadata-search-skeleton"
+import EnhancedMetadataSearch from "./_components/enhanced-metadata-search"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 interface SearchParams {
   query?: string
@@ -58,52 +60,66 @@ export default async function MetadataSearchPage({
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Search Metadata Records</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <MetadataSearchForm
-            initialQuery={query}
-            initialStartDate={startDate}
-            initialEndDate={endDate}
-            initialFrameworkType={frameworkType}
-            initialDatasetType={datasetType}
-            initialUseSpatialSearch={useSpatialSearch}
-            initialBboxNorth={bbox_north}
-            initialBboxSouth={bbox_south}
-            initialBboxEast={bbox_east}
-            initialBboxWest={bbox_west}
-          />
-        </CardContent>
-      </Card>
+      <Tabs defaultValue="enhanced" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="enhanced">Enhanced Search</TabsTrigger>
+          <TabsTrigger value="basic">Basic Search</TabsTrigger>
+        </TabsList>
 
-      {/* Conditionally render results section only if any search parameter is active */}
-      {(query ||
-        startDate ||
-        endDate ||
-        frameworkType ||
-        datasetType ||
-        useSpatialSearch) && (
-        <Suspense key={suspenseKey} fallback={<MetadataSearchSkeleton />}>
-          <IntegratedSearchFetcher
-            query={query}
-            startDate={startDate}
-            endDate={endDate}
-            frameworkType={frameworkType}
-            datasetType={datasetType}
-            useSpatialSearch={useSpatialSearch}
-            bbox_north={bbox_north}
-            bbox_south={bbox_south}
-            bbox_east={bbox_east}
-            bbox_west={bbox_west}
-            sortBy={sortBy}
-            sortOrder={parsedSortOrder}
-            page={currentPage}
-            pageSize={DEFAULT_PAGE_SIZE}
-          />
-        </Suspense>
-      )}
+        <TabsContent value="enhanced" className="space-y-6">
+          <EnhancedMetadataSearch />
+        </TabsContent>
+
+        <TabsContent value="basic" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Search Metadata Records</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <MetadataSearchForm
+                initialQuery={query}
+                initialStartDate={startDate}
+                initialEndDate={endDate}
+                initialFrameworkType={frameworkType}
+                initialDatasetType={datasetType}
+                initialUseSpatialSearch={useSpatialSearch}
+                initialBboxNorth={bbox_north}
+                initialBboxSouth={bbox_south}
+                initialBboxEast={bbox_east}
+                initialBboxWest={bbox_west}
+              />
+            </CardContent>
+          </Card>
+
+          {/* Conditionally render results section only if any search parameter is active */}
+          {(query ||
+            startDate ||
+            endDate ||
+            frameworkType ||
+            datasetType ||
+            useSpatialSearch) && (
+            <Suspense key={suspenseKey} fallback={<MetadataSearchSkeleton />}>
+              <UnifiedSearchFetcher
+                query={query}
+                startDate={startDate}
+                endDate={endDate}
+                frameworkType={frameworkType}
+                datasetType={datasetType}
+                useSpatialSearch={useSpatialSearch}
+                bbox_north={bbox_north}
+                bbox_south={bbox_south}
+                bbox_east={bbox_east}
+                bbox_west={bbox_west}
+                sortBy={sortBy}
+                sortOrder={parsedSortOrder}
+                page={currentPage}
+                pageSize={DEFAULT_PAGE_SIZE}
+                viewMode="map"
+              />
+            </Suspense>
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

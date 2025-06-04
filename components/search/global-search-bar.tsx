@@ -3,17 +3,27 @@
 import { Input } from "@/components/ui/input"
 import { SearchIcon } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { Skeleton } from "@/components/ui/skeleton"
 
 export default function GlobalSearchBar() {
   const [searchTerm, setSearchTerm] = useState("")
+  const [mounted, setMounted] = useState(false)
   const router = useRouter()
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (searchTerm.trim()) {
       router.push(`/search?q=${encodeURIComponent(searchTerm.trim())}`)
     }
+  }
+
+  if (!mounted) {
+    return <Skeleton className="h-10 w-64 lg:w-96" />
   }
 
   return (

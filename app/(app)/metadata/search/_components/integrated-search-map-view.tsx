@@ -1,9 +1,9 @@
+"use client"
+
 import { useState, useEffect, useCallback, useMemo } from "react"
-import type mapboxgl from "mapbox-gl"   // or the concrete map type you rely on
-...
-const [mapInstance, setMapInstance] = useState<mapboxgl.Map | null>(null)
 import { useRouter, useSearchParams } from "next/navigation"
 import dynamic from "next/dynamic"
+// ... rest of imports ...
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -25,7 +25,6 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { MetadataRecord } from "@/lib/map-utils"
-import { useSpatialSearch } from "@/lib/hooks/use-spatial-search"
 import {
   MetadataRecordWithOrganization,
   PaginatedMetadataRecords
@@ -113,12 +112,8 @@ export default function IntegratedSearchMapView({
     [urlSearchParams, router]
   )
 
-  // Set up spatial search
-  const spatialSearch = useSpatialSearch({
-    map: mapInstance,
-    onBoundsChange: handleSpatialBoundsChange,
-    enabled: spatialSearchEnabled
-  })
+  // Note: Spatial search functionality temporarily disabled due to mapbox-gl dependency issue
+  const spatialSearch = null
 
   // Convert metadata records to map format
   const mapRecords: MetadataRecord[] = useMemo(() => {
@@ -186,16 +181,11 @@ export default function IntegratedSearchMapView({
     [router]
   )
 
-  // Handle spatial search toggle
+  // Handle spatial search toggle - temporarily disabled
   const handleToggleSpatialSearch = useCallback(() => {
-    if (spatialSearchEnabled) {
-      setSpatialSearchEnabled(false)
-      spatialSearch?.disableDrawing()
-    } else {
-      setSpatialSearchEnabled(true)
-      spatialSearch?.enableDrawing()
-    }
-  }, [spatialSearchEnabled, spatialSearch])
+    // Spatial search functionality temporarily disabled
+    console.log("Spatial search is temporarily disabled")
+  }, [])
 
   // Handle map instance change
   const handleMapInstanceChange = useCallback((map: any) => {
@@ -261,23 +251,15 @@ export default function IntegratedSearchMapView({
                 </Button>
               </div>
 
-              {/* Spatial Search Toggle */}
+              {/* Spatial Search Toggle - Temporarily Disabled */}
               <Button
-                variant={spatialSearchEnabled ? "default" : "outline"}
+                variant="outline"
                 size="sm"
                 onClick={handleToggleSpatialSearch}
-                title={
-                  spatialSearchEnabled
-                    ? "Disable Area Selection"
-                    : "Draw Search Area"
-                }
-                disabled={!mapInstance}
+                title="Spatial search temporarily disabled"
+                disabled={true}
               >
-                {spatialSearchEnabled ? (
-                  <MousePointer className="h-4 w-4" />
-                ) : (
-                  <Square className="h-4 w-4" />
-                )}
+                <Square className="h-4 w-4" />
               </Button>
 
               {/* Search Panel Toggle */}
@@ -335,17 +317,17 @@ export default function IntegratedSearchMapView({
               </div>
             )}
 
-            {/* Spatial Search Drawing Instructions */}
-            {spatialSearchEnabled && (
-              <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-md">
-                <div className="flex items-center gap-2 text-green-700">
+            {/* Spatial Search Drawing Instructions - Temporarily Disabled */}
+            {false && (
+              <div className="mt-4 p-3 bg-gray-50 border border-gray-200 rounded-md">
+                <div className="flex items-center gap-2 text-gray-700">
                   <Square className="h-4 w-4" />
                   <span className="text-sm font-medium">
-                    Draw Search Area Mode
+                    Spatial Search Temporarily Disabled
                   </span>
                 </div>
-                <p className="text-xs text-green-600 mt-1">
-                  Click and drag on the map to draw a search area
+                <p className="text-xs text-gray-600 mt-1">
+                  This feature will be available in a future update
                 </p>
               </div>
             )}

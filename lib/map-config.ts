@@ -98,6 +98,9 @@ export function getAvailableMapStyles(
   const { isValid, apiKey } = validateMapTilerApiKey()
   const styles: MapStyle[] = []
 
+  // Always include the default free style first
+  styles.push(DEFAULT_FREE_STYLE)
+
   // Add MapTiler styles with API key if valid, or use fallback styles if not
   if (isValid && apiKey) {
     const maptilerStyles = MAPTILER_STYLES.map(style => ({

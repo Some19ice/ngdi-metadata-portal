@@ -40,7 +40,6 @@ export default function MetadataMapDisplay({
   onMapLoad
 }: MetadataMapDisplayProps) {
   const [mapInstance, setMapInstance] = useState<Map | null>(null)
-  const [activeStyleId, setActiveStyleId] = useState<string>("streets")
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null)
   const [isMapLoaded, setIsMapLoaded] = useState(false)
   const [enableClustering, setEnableClustering] = useState<boolean>(true)
@@ -54,6 +53,14 @@ export default function MetadataMapDisplay({
     () => getAvailableMapStyles(),
     []
   )
+
+  // Initialize with the first available style or fallback to "streets"
+  const initialStyleId = useMemo(
+    () => availableBaseStyles[0]?.id || "streets",
+    [availableBaseStyles]
+  )
+
+  const [activeStyleId, setActiveStyleId] = useState<string>(initialStyleId)
 
   // Handle style change from LayerControlPanel - forward to MapView's internal handler
   const handleStyleChange = useCallback(
@@ -236,37 +243,49 @@ export default function MetadataMapDisplay({
           }
         })
 
-        // Add outline layer
-        addLayer({
-          id: "metadata-bounds-outline",
-          source: "metadata-bounds",
-          layer: {
-            type: "line",
-            paint: {
-              "line-color": "#2563eb",
-              "line-width": 2
-            }
+        // Add outline layer only after the fill layer is added
+        setTimeout(() => {
+          if (mapInstance.getLayer("metadata-bounds")) {
+            addLayer({
+              id: "metadata-bounds-outline",
+              source: "metadata-bounds",
+              layer: {
+                type: "line",
+                paint: {
+                  "line-color": "#2563eb",
+                  "line-width": 2
+                }
+              }
+            })
           }
-        })
+        }, 100)
       }
 
       // Apply filters based on selected record
       if (selectedRecordId) {
         // Add a conditional filter to highlight the selected record
-        mapInstance.setFilter("metadata-bounds", [
-          "==",
-          ["get", "id"],
-          selectedRecordId
-        ])
-        mapInstance.setFilter("metadata-bounds-outline", [
-          "==",
-          ["get", "id"],
-          selectedRecordId
-        ])
+        if (mapInstance.getLayer("metadata-bounds")) {
+          mapInstance.setFilter("metadata-bounds", [
+            "==",
+            ["get", "id"],
+            selectedRecordId
+          ])
+        }
+        if (mapInstance.getLayer("metadata-bounds-outline")) {
+          mapInstance.setFilter("metadata-bounds-outline", [
+            "==",
+            ["get", "id"],
+            selectedRecordId
+          ])
+        }
       } else {
         // Reset filter to show all records
-        mapInstance.setFilter("metadata-bounds", null)
-        mapInstance.setFilter("metadata-bounds-outline", null)
+        if (mapInstance.getLayer("metadata-bounds")) {
+          mapInstance.setFilter("metadata-bounds", null)
+        }
+        if (mapInstance.getLayer("metadata-bounds-outline")) {
+          mapInstance.setFilter("metadata-bounds-outline", null)
+        }
       }
     } catch (err) {
       // Use our centralized error logging
@@ -531,12 +550,13 @@ export default function MetadataMapDisplay({
             center: [8.6775, 9.0778], // Nigeria
             zoom: 5
           }}
-          initialStyleId={activeStyleId}
+          initialStyleId={initialStyleId}
           availableBaseStyles={availableBaseStyles}
           className="h-full w-full rounded-md"
           onMapLoad={handleMapLoad}
           onStyleChange={handleStyleChangeFromMapView}
           onStyleChangeHandler={handleStyleChangeHandlerRef}
+          showControls={false}
         />
         <LayerControlPanel
           availableStyles={availableBaseStyles}
