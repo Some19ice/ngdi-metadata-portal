@@ -589,3 +589,268 @@ Global styles for the app.
     scroll-behavior: auto !important;
   }
 }
+
+/* Map Security - Safe Marker Styles */
+.safe-marker {
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  position: relative;
+}
+
+.safe-marker:hover {
+  transform: scale(1.1);
+}
+
+.safe-marker:focus {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+/* Individual Markers */
+.safe-individual-marker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.safe-individual-marker .marker-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.safe-individual-marker.marker-primary .marker-dot {
+  background-color: hsl(var(--primary));
+}
+
+.safe-individual-marker.marker-secondary .marker-dot {
+  background-color: hsl(var(--secondary));
+}
+
+.safe-individual-marker.marker-selected .marker-dot {
+  background-color: #f59e0b;
+  border-color: #fbbf24;
+  animation: pulse 2s infinite;
+}
+
+.safe-individual-marker .marker-label {
+  background: white;
+  border: 1px solid hsl(var(--border));
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 500;
+  color: hsl(var(--foreground));
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  white-space: nowrap;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Cluster Markers */
+.safe-cluster-marker {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.safe-cluster-marker .cluster-circle {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  color: white;
+  font-weight: bold;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  border: 2px solid white;
+}
+
+.safe-cluster-marker.cluster-marker-small .cluster-circle {
+  width: 32px;
+  height: 32px;
+  font-size: 12px;
+}
+
+.safe-cluster-marker.cluster-marker-medium .cluster-circle {
+  width: 40px;
+  height: 40px;
+  font-size: 14px;
+}
+
+.safe-cluster-marker.cluster-marker-large .cluster-circle {
+  width: 48px;
+  height: 48px;
+  font-size: 16px;
+}
+
+.safe-cluster-marker .cluster-count {
+  position: relative;
+  z-index: 2;
+}
+
+.safe-cluster-marker .cluster-pulse {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 50%;
+  background: rgba(59, 130, 246, 0.3);
+  animation: cluster-pulse 2s infinite;
+}
+
+.safe-cluster-marker.expanded .cluster-circle {
+  background: linear-gradient(135deg, #10b981, #047857);
+}
+
+/* Search Result Markers */
+.safe-search-marker {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.safe-search-marker .search-marker-circle {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: white;
+  font-weight: bold;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid white;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+/* Popup Content */
+.safe-popup-content {
+  padding: 8px;
+  max-width: 250px;
+}
+
+.safe-popup-content .popup-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 4px 0;
+  color: hsl(var(--foreground));
+}
+
+.safe-popup-content .popup-description {
+  font-size: 12px;
+  margin: 0 0 4px 0;
+  color: hsl(var(--muted-foreground));
+  line-height: 1.4;
+}
+
+.safe-popup-content .popup-coordinates {
+  font-size: 10px;
+  color: hsl(var(--muted-foreground));
+  font-family: monospace;
+  background: hsl(var(--muted));
+  padding: 2px 4px;
+  border-radius: 2px;
+  margin-top: 4px;
+}
+
+/* Animations */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes cluster-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+}
+
+/* Accessibility improvements */
+@media (prefers-reduced-motion: reduce) {
+  .safe-marker {
+    transition: none;
+  }
+  
+  .safe-marker:hover {
+    transform: none;
+  }
+  
+  .safe-individual-marker.marker-selected .marker-dot {
+    animation: none;
+  }
+  
+  .safe-cluster-marker .cluster-pulse {
+    animation: none;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .safe-individual-marker .marker-dot {
+    border-width: 3px;
+  }
+  
+  .safe-cluster-marker .cluster-circle {
+    border-width: 3px;
+  }
+  
+  .safe-search-marker .search-marker-circle {
+    border-width: 3px;
+  }
+}
+
+/* Touch device improvements */
+@media (hover: none) and (pointer: coarse) {
+  .safe-marker {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  
+  .safe-individual-marker .marker-dot {
+    width: 16px;
+    height: 16px;
+  }
+  
+  .safe-cluster-marker.cluster-marker-small .cluster-circle {
+    width: 44px;
+    height: 44px;
+    font-size: 14px;
+  }
+  
+  .safe-cluster-marker.cluster-marker-medium .cluster-circle {
+    width: 52px;
+    height: 52px;
+    font-size: 16px;
+  }
+  
+  .safe-cluster-marker.cluster-marker-large .cluster-circle {
+    width: 60px;
+    height: 60px;
+    font-size: 18px;
+  }
+  
+  .safe-search-marker .search-marker-circle {
+    width: 36px;
+    height: 36px;
+    font-size: 14px;
+  }
+}

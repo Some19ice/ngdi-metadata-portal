@@ -11,7 +11,7 @@ import {
 import "leaflet/dist/leaflet.css"
 import L, { LatLngExpression, LatLngBoundsExpression } from "leaflet"
 import { useEffect, useRef } from "react"
-import MapErrorBoundary from "./map/map-error-boundary"
+import { MapErrorBoundary } from "./map/map-error-boundary"
 import { useLeafletMapKey } from "@/hooks"
 
 // Fix for default marker icon issue with webpack

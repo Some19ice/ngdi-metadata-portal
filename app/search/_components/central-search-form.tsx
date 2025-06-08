@@ -2,7 +2,7 @@
 
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { SearchIcon } from "lucide-react"
+import { SearchIcon, MapPin, FileText, Newspaper, BookOpen } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
 import {
@@ -25,7 +25,7 @@ import * as z from "zod"
 
 const searchFormSchema = z.object({
   q: z.string().min(1, "Please enter a search term"),
-  type: z.string().default("metadata")
+  type: z.string().default("auto")
 })
 
 type SearchFormValues = z.infer<typeof searchFormSchema>
@@ -37,7 +37,7 @@ interface CentralSearchFormProps {
 
 export default function CentralSearchForm({
   initialQuery = "",
-  initialType = "metadata"
+  initialType = "auto"
 }: CentralSearchFormProps) {
   const router = useRouter()
 
@@ -56,6 +56,36 @@ export default function CentralSearchForm({
     router.push(`/search?${params.toString()}`)
   }
 
+  const getSearchTypeIcon = (type: string) => {
+    switch (type) {
+      case "location":
+        return <MapPin className="h-4 w-4" />
+      case "metadata":
+        return <FileText className="h-4 w-4" />
+      case "news":
+        return <Newspaper className="h-4 w-4" />
+      case "docs":
+        return <BookOpen className="h-4 w-4" />
+      default:
+        return <SearchIcon className="h-4 w-4" />
+    }
+  }
+
+  const getSearchTypePlaceholder = (type: string) => {
+    switch (type) {
+      case "location":
+        return "Search for cities, states, regions..."
+      case "metadata":
+        return "Search datasets, maps, services..."
+      case "news":
+        return "Search news and announcements..."
+      case "docs":
+        return "Search documentation and guides..."
+      default:
+        return "Search locations, datasets, and more..."
+    }
+  }
+
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -69,7 +99,7 @@ export default function CentralSearchForm({
                   <div className="relative">
                     <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                     <Input
-                      placeholder="Search term..."
+                      placeholder={getSearchTypePlaceholder(form.watch("type"))}
                       {...field}
                       className="pl-10"
                     />
@@ -90,12 +120,42 @@ export default function CentralSearchForm({
                     defaultValue={field.value}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Search in..." />
+                      <div className="flex items-center gap-2">
+                        {getSearchTypeIcon(field.value)}
+                        <SelectValue placeholder="Search in..." />
+                      </div>
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="metadata">Metadata</SelectItem>
-                      <SelectItem value="news">News</SelectItem>
-                      <SelectItem value="docs">Documentation</SelectItem>
+                      <SelectItem value="auto">
+                        <div className="flex items-center gap-2">
+                          <SearchIcon className="h-4 w-4" />
+                          <span>Smart Search</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="location">
+                        <div className="flex items-center gap-2">
+                          <MapPin className="h-4 w-4" />
+                          <span>Locations</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="metadata">
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-4 w-4" />
+                          <span>Datasets</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="news">
+                        <div className="flex items-center gap-2">
+                          <Newspaper className="h-4 w-4" />
+                          <span>News</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="docs">
+                        <div className="flex items-center gap-2">
+                          <BookOpen className="h-4 w-4" />
+                          <span>Documentation</span>
+                        </div>
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                 </FormControl>
@@ -104,8 +164,34 @@ export default function CentralSearchForm({
           />
 
           <Button type="submit" className="w-full md:w-auto">
+            <SearchIcon className="h-4 w-4 mr-2" />
             Search
           </Button>
+        </div>
+
+        {/* Search Type Description */}
+        <div className="text-sm text-muted-foreground">
+          {form.watch("type") === "auto" && (
+            <p>
+              Intelligent search that automatically detects whether you're
+              searching for locations, datasets, or other content.
+            </p>
+          )}
+          {form.watch("type") === "location" && (
+            <p>
+              Find Nigerian cities, states, regions, coordinates, and other
+              geographic locations.
+            </p>
+          )}
+          {form.watch("type") === "metadata" && (
+            <p>Search geospatial datasets, maps, and data services.</p>
+          )}
+          {form.watch("type") === "news" && (
+            <p>Find news articles and announcements from the NGDI portal.</p>
+          )}
+          {form.watch("type") === "docs" && (
+            <p>Search documentation, guides, and help articles.</p>
+          )}
         </div>
       </form>
     </Form>

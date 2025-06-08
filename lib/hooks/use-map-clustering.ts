@@ -1,213 +1,307 @@
-import { useMemo, useCallback, useEffect, useState } from "react"
+import { useEffect, useRef, useState, useCallback } from "react"
+import { Map as MaplibreMap, Marker, Popup } from "maplibre-gl"
 import Supercluster from "supercluster"
-import { Map } from "maplibre-gl"
 import { MetadataRecord } from "@/lib/map-utils"
+import {
+  createSafeClusterMarker,
+  createSafeIndividualMarker,
+  createSafePopupContent,
+  MapEventManager
+} from "@/lib/map-security"
 
+interface ClusterProperties {
+  cluster: boolean
+  cluster_id: number
+  point_count: number
+  point_count_abbreviated: string
+}
+
+// Export the ClusterFeature type for use in other components
 export interface ClusterFeature {
   type: "Feature"
-  id: number
-  properties: {
-    cluster: boolean
-    cluster_id?: number
-    point_count?: number
-    point_count_abbreviated?: string
-    record?: MetadataRecord
-  }
+  properties: ClusterProperties | MetadataRecord
   geometry: {
     type: "Point"
     coordinates: [number, number]
   }
 }
 
-export interface ClusterOptions {
-  radius?: number
-  maxZoom?: number
-  minZoom?: number
-  extent?: number
-  nodeSize?: number
-}
-
-interface UseMapClusteringProps {
+interface UseMapClusteringOptions {
+  map: MaplibreMap | null
   records: MetadataRecord[]
-  map: Map | null
-  options?: ClusterOptions
+  onRecordClick?: (record: MetadataRecord) => void
+  clusterRadius?: number
+  minZoom?: number
+  maxZoom?: number
 }
 
 export function useMapClustering({
-  records,
   map,
-  options = {}
-}: UseMapClusteringProps) {
-  const [currentZoom, setCurrentZoom] = useState<number>(5)
-  const [currentBounds, setCurrentBounds] = useState<number[] | null>(null)
+  records,
+  onRecordClick,
+  clusterRadius = 50,
+  minZoom = 0,
+  maxZoom = 16
+}: UseMapClusteringOptions) {
+  const [clusters, setClusters] = useState<any[]>([])
+  const superclusterRef = useRef<Supercluster | null>(null)
+  const markersRef = useRef<Map<string, Marker>>(new Map())
+  const eventManagerRef = useRef<MapEventManager>(new MapEventManager())
 
-  // Default clustering options (memoised to keep a stable reference)
-  const clusterOptions: ClusterOptions = useMemo(
-    () => ({
-      radius: 50,
-      maxZoom: 16,
-      minZoom: 0,
-      extent: 512,
-      nodeSize: 64,
-      ...options
-    }),
-    [options]
-  )
+  // Initialize Supercluster
+  useEffect(() => {
+    if (!records || records.length === 0) return
 
-  // Initialize Supercluster instance
-  const supercluster = useMemo(() => {
-    if (!records || records.length === 0) return null
-
-    // Convert MetadataRecord to GeoJSON points for Supercluster
-    const points: ClusterFeature[] = records
+    // Create GeoJSON features from records
+    const features = records
       .filter(record => {
-        // Ensure record has valid spatial bounds
-        return (
-          record.spatialInfo?.boundingBox?.northBoundingCoordinate &&
-          record.spatialInfo?.boundingBox?.southBoundingCoordinate &&
-          record.spatialInfo?.boundingBox?.eastBoundingCoordinate &&
-          record.spatialInfo?.boundingBox?.westBoundingCoordinate
-        )
+        const center = getRecordCenter(record)
+        return center !== null
       })
       .map(record => {
-        // Calculate center point from bounding box
-        const bbox = record.spatialInfo!.boundingBox!
-        const centerLng =
-          (Number(bbox.eastBoundingCoordinate) +
-            Number(bbox.westBoundingCoordinate)) /
-          2
-        const centerLat =
-          (Number(bbox.northBoundingCoordinate) +
-            Number(bbox.southBoundingCoordinate)) /
-          2
-
-        // Skip invalid records with non-numeric coordinates
-        if (Number.isNaN(centerLng) || Number.isNaN(centerLat)) {
-          return null // skip invalid record
-        }
-
+        const center = getRecordCenter(record)!
         return {
           type: "Feature" as const,
-          id: stringHashCode(record.id), // Convert string ID to number
-          properties: {
-            cluster: false,
-            record
-          },
+          properties: record,
           geometry: {
             type: "Point" as const,
-            coordinates: [centerLng, centerLat]
+            coordinates: center
           }
-        } as ClusterFeature
+        }
       })
-      .filter((point): point is ClusterFeature => point !== null) // Filter out null points
 
-    const cluster = new Supercluster(clusterOptions)
-    cluster.load(points)
-    return cluster
-  }, [records, clusterOptions])
+    // Initialize Supercluster
+    superclusterRef.current = new Supercluster({
+      radius: clusterRadius,
+      maxZoom,
+      minZoom
+    })
 
-  // Get clusters for current map view
-  const clusters = useMemo(() => {
-    if (!supercluster || !currentBounds || currentZoom < 0) return []
+    superclusterRef.current.load(features)
+  }, [records, clusterRadius, minZoom, maxZoom])
 
-    try {
-      // Convert bounds array to proper BBox format [west, south, east, north]
-      const bbox = currentBounds as [number, number, number, number]
-      return supercluster.getClusters(bbox, Math.floor(currentZoom))
-    } catch (error) {
-      console.warn("Error getting clusters:", error)
-      return []
-    }
-  }, [supercluster, currentBounds, currentZoom])
+  // Update clusters when map moves
+  const updateClusters = useCallback(() => {
+    if (!map || !superclusterRef.current) return
 
-  // Update map view state when map changes
-  useEffect(() => {
-    if (!map) return
+    const bounds = map.getBounds()
+    const zoom = Math.floor(map.getZoom())
 
-    const updateMapState = () => {
-      const zoom = map.getZoom()
-      const bounds = map.getBounds()
-
-      setCurrentZoom(zoom)
-      setCurrentBounds([
+    const clusters = superclusterRef.current.getClusters(
+      [
         bounds.getWest(),
         bounds.getSouth(),
         bounds.getEast(),
         bounds.getNorth()
-      ])
-    }
+      ],
+      zoom
+    )
 
-    // Initial state
-    updateMapState()
-
-    // Listen for map changes
-    map.on("zoom", updateMapState)
-    map.on("move", updateMapState)
-    map.on("moveend", updateMapState)
-    map.on("zoomend", updateMapState)
-
-    return () => {
-      map.off("zoom", updateMapState)
-      map.off("move", updateMapState)
-      map.off("moveend", updateMapState)
-      map.off("zoomend", updateMapState)
-    }
+    setClusters(clusters)
   }, [map])
 
-  // Expand cluster to show individual points
+  // Set up map event listeners
+  useEffect(() => {
+    if (!map) return
+
+    const handleMapMove = () => updateClusters()
+
+    map.on("move", handleMapMove)
+    map.on("zoom", handleMapMove)
+    map.on("load", handleMapMove)
+
+    // Initial update
+    updateClusters()
+
+    return () => {
+      map.off("move", handleMapMove)
+      map.off("zoom", handleMapMove)
+      map.off("load", handleMapMove)
+    }
+  }, [map, updateClusters])
+
+  // Render markers
+  useEffect(() => {
+    if (!map || !clusters) return
+
+    // Clear existing markers
+    if (markersRef.current) {
+      markersRef.current.forEach((marker: Marker) => {
+        eventManagerRef.current.removeMarkerHandler(marker)
+        marker.remove()
+      })
+    }
+    markersRef.current = new Map()
+
+    // Add new markers
+    clusters.forEach(cluster => {
+      const [lng, lat] = cluster.geometry.coordinates
+      const properties = cluster.properties as
+        | ClusterProperties
+        | MetadataRecord
+
+      let markerElement: HTMLElement
+      let markerId: string
+
+      if ("cluster" in properties && properties.cluster) {
+        // Cluster marker
+        markerId = `cluster-${properties.cluster_id}`
+        markerElement = createSafeClusterMarker({
+          count: properties.point_count,
+          className: "map-cluster-marker"
+        })
+
+        // Add click handler to zoom into cluster
+        eventManagerRef.current.addElementListener(
+          markerElement,
+          "click",
+          () => {
+            if (superclusterRef.current) {
+              const expansionZoom =
+                superclusterRef.current.getClusterExpansionZoom(
+                  properties.cluster_id
+                )
+              map.flyTo({
+                center: [lng, lat],
+                zoom: expansionZoom,
+                duration: 500
+              })
+            }
+          }
+        )
+      } else {
+        // Individual marker
+        const record = properties as MetadataRecord
+        markerId = `record-${record.id}`
+        markerElement = createSafeIndividualMarker(record, {
+          className: "map-record-marker"
+        })
+
+        // Add popup on hover
+        const popupContent = createSafePopupContent({
+          title: record.title,
+          description: record.description || undefined,
+          metadata: {
+            "Data Type": record.dataType,
+            Organization: record.organization?.name,
+            Status: record.status
+          }
+        })
+
+        const popup = new Popup({
+          offset: 25,
+          closeButton: false,
+          className: "map-record-popup"
+        }).setDOMContent(popupContent)
+
+        eventManagerRef.current.addElementListener(
+          markerElement,
+          "mouseenter",
+          () => popup.setLngLat([lng, lat]).addTo(map)
+        )
+
+        eventManagerRef.current.addElementListener(
+          markerElement,
+          "mouseleave",
+          () => popup.remove()
+        )
+
+        // Add click handler
+        if (onRecordClick) {
+          eventManagerRef.current.addElementListener(
+            markerElement,
+            "click",
+            () => onRecordClick(record)
+          )
+        }
+      }
+
+      // Create and add marker
+      const marker = new Marker({
+        element: markerElement
+      })
+        .setLngLat([lng, lat])
+        .addTo(map)
+
+      markersRef.current.set(markerId, marker)
+    })
+  }, [map, clusters, onRecordClick])
+
+  // Cleanup
+  useEffect(() => {
+    return () => {
+      if (markersRef.current) {
+        markersRef.current.forEach((marker: Marker) => {
+          eventManagerRef.current.removeMarkerHandler(marker)
+          marker.remove()
+        })
+      }
+      eventManagerRef.current.cleanup()
+    }
+  }, [])
+
+  // Function to expand a cluster by zooming in
   const expandCluster = useCallback(
     (clusterId: number) => {
-      if (!supercluster || !map) return
+      if (!map || !superclusterRef.current) return
 
-      try {
-        const expansionZoom = supercluster.getClusterExpansionZoom(clusterId)
-        const leaves = supercluster.getLeaves(clusterId, 1)
-        const clusterCenter = leaves[0]?.geometry.coordinates
+      const expansionZoom =
+        superclusterRef.current.getClusterExpansionZoom(clusterId)
+      const cluster = clusters.find(
+        c =>
+          "cluster" in c.properties &&
+          c.properties.cluster &&
+          c.properties.cluster_id === clusterId
+      )
 
-        if (clusterCenter && expansionZoom) {
-          map.flyTo({
-            center: clusterCenter as [number, number],
-            zoom: expansionZoom,
-            duration: 1000
-          })
-        }
-      } catch (error) {
-        console.warn("Error expanding cluster:", error)
+      if (cluster) {
+        map.flyTo({
+          center: cluster.geometry.coordinates,
+          zoom: expansionZoom,
+          duration: 500
+        })
       }
     },
-    [supercluster, map]
+    [map, clusters]
   )
 
-  // Get leaves (individual points) of a cluster
+  // Function to get leaves (individual points) of a cluster
   const getClusterLeaves = useCallback(
-    (clusterId: number, limit: number = 10, offset: number = 0) => {
-      if (!supercluster) return []
+    (clusterId: number, limit: number = 100) => {
+      if (!superclusterRef.current) return []
 
-      try {
-        return supercluster.getLeaves(clusterId, limit, offset)
-      } catch (error) {
-        console.warn("Error getting cluster leaves:", error)
-        return []
-      }
+      return superclusterRef.current.getLeaves(clusterId, limit)
     },
-    [supercluster]
+    []
   )
 
   return {
     clusters,
-    currentZoom,
+    updateClusters,
     expandCluster,
-    getClusterLeaves,
-    supercluster
+    getClusterLeaves
   }
 }
 
-// Helper function to convert string to hash code (for Supercluster ID requirement)
-export const stringHashCode = (str: string): number => {
-  let hash = 0
-  for (let i = 0; i < str.length; i++) {
-    hash = (hash << 5) - hash + str.charCodeAt(i)
-    hash |= 0 // Convert to 32bit integer
+// Helper function to get record center
+function getRecordCenter(record: MetadataRecord): [number, number] | null {
+  if (
+    !record.northBoundLatitude ||
+    !record.southBoundLatitude ||
+    !record.eastBoundLongitude ||
+    !record.westBoundLongitude
+  ) {
+    return null
   }
-  return Math.abs(hash)
+
+  const north = parseFloat(record.northBoundLatitude)
+  const south = parseFloat(record.southBoundLatitude)
+  const east = parseFloat(record.eastBoundLongitude)
+  const west = parseFloat(record.westBoundLongitude)
+
+  if (isNaN(north) || isNaN(south) || isNaN(east) || isNaN(west)) {
+    return null
+  }
+
+  return [(east + west) / 2, (north + south) / 2]
 }

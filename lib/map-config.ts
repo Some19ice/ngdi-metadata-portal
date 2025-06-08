@@ -4,11 +4,84 @@
 
 import { MapStyle } from "@/components/ui/map/map-view"
 
-// Default free style that doesn't require an API key
+// Satellite style object that can be used directly with MapLibre
+export const SATELLITE_STYLE_OBJECT = {
+  version: 8 as const,
+  sources: {
+    "esri-satellite": {
+      type: "raster" as const,
+      tiles: [
+        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+      ],
+      tileSize: 256,
+      attribution:
+        "© Esri, Maxar, Earthstar Geographics, and the GIS User Community"
+    }
+  },
+  layers: [
+    {
+      id: "satellite-tiles",
+      type: "raster" as const,
+      source: "esri-satellite",
+      minzoom: 0,
+      maxzoom: 18
+    }
+  ]
+}
+
+// Streets style object using OpenStreetMap tiles
+export const STREETS_STYLE_OBJECT = {
+  version: 8 as const,
+  sources: {
+    "osm-raster": {
+      type: "raster" as const,
+      tiles: [
+        "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+      ],
+      tileSize: 256,
+      attribution: "© OpenStreetMap contributors"
+    }
+  },
+  layers: [
+    {
+      id: "osm-tiles",
+      type: "raster" as const,
+      source: "osm-raster",
+      minzoom: 0,
+      maxzoom: 19
+    }
+  ]
+}
+
+// Terrain style object using OpenTopoMap
+export const TERRAIN_STYLE_OBJECT = {
+  version: 8 as const,
+  sources: {
+    "topo-raster": {
+      type: "raster" as const,
+      tiles: [
+        "https://tile.opentopomap.org/{z}/{x}/{y}.png"
+      ],
+      tileSize: 256,
+      attribution: "© OpenTopoMap (CC-BY-SA)"
+    }
+  },
+  layers: [
+    {
+      id: "topo-tiles",
+      type: "raster" as const,
+      source: "topo-raster",
+      minzoom: 0,
+      maxzoom: 17
+    }
+  ]
+}
+
+// Default free satellite style using Esri World Imagery
 export const DEFAULT_FREE_STYLE: MapStyle = {
-  id: "streets",
-  name: "Streets",
-  url: "https://demotiles.maplibre.org/style.json"
+  id: "satellite",
+  name: "Satellite",
+  url: SATELLITE_STYLE_OBJECT as any // Use actual satellite imagery
 }
 
 // MapTiler style definitions that require an API key
@@ -30,22 +103,22 @@ export const MAPTILER_STYLES: MapStyle[] = [
   }
 ]
 
-// Fallback style definitions with unique URLs for each style
+// Fallback style definitions using free map services
 export const FALLBACK_STYLES: MapStyle[] = [
   {
     id: "fallback-satellite",
     name: "Satellite",
-    url: "https://demotiles.maplibre.org/style.json" // Base fallback
+    url: SATELLITE_STYLE_OBJECT as any
   },
   {
     id: "fallback-streets",
     name: "Streets",
-    url: "https://api.maptiler.com/maps/openstreetmap/style.json?key=get_your_own_OpIi9ZULNHzrESv6T2vL" // Different fallback
+    url: STREETS_STYLE_OBJECT as any
   },
   {
     id: "fallback-terrain",
     name: "Terrain",
-    url: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json" // Alternative free style
+    url: TERRAIN_STYLE_OBJECT as any
   }
 ]
 
@@ -98,7 +171,7 @@ export function getAvailableMapStyles(
   const { isValid, apiKey } = validateMapTilerApiKey()
   const styles: MapStyle[] = []
 
-  // Always include the default free style first
+  // Always include the default free satellite style first
   styles.push(DEFAULT_FREE_STYLE)
 
   // Add MapTiler styles with API key if valid, or use fallback styles if not
@@ -107,10 +180,21 @@ export function getAvailableMapStyles(
       ...style,
       url: style.url.replace("${apiKey}", apiKey)
     }))
-    styles.push(...maptilerStyles)
+    // Filter out satellite since we already have it as default, add others
+    const otherStyles = maptilerStyles.filter(style => style.id !== "satellite")
+    styles.push(...otherStyles)
   } else {
-    // If API key is invalid, use distinct fallback styles for each type
-    styles.push(...FALLBACK_STYLES)
+    // If API key is invalid, add free alternatives with different style objects
+    styles.push({
+      id: "streets",
+      name: "Streets",
+      url: STREETS_STYLE_OBJECT as any
+    })
+    styles.push({
+      id: "terrain",
+      name: "Terrain",
+      url: TERRAIN_STYLE_OBJECT as any
+    })
   }
 
   // Add any custom styles (though typically base styles are managed here)
@@ -120,8 +204,8 @@ export function getAvailableMapStyles(
   if (styles.length === 0) {
     styles.push({
       id: "ultra-fallback",
-      name: "Basic Map",
-      url: "https://demotiles.maplibre.org/style.json" // Absolute fallback
+      name: "Satellite",
+      url: SATELLITE_STYLE_OBJECT as any // Use satellite as absolute fallback
     })
   }
 
@@ -130,17 +214,37 @@ export function getAvailableMapStyles(
 
 /**
  * Logs map-related errors with consistent formatting
- * @param error The error object
+ * @param error The error object or any value
  * @param context Additional context about where the error occurred
  */
-export function logMapError(error: Error, context: string): void {
-  console.error(`[Map Error] ${context}:`, error)
+export function logMapError(error: any, context: string): void {
+  console.error(`[Map Error] ${context}:`)
+
+  // Log the error with detailed information
+  if (error instanceof Error) {
+    console.error("Error message:", error.message)
+    console.error("Error stack:", error.stack)
+    console.error("Full error object:", error)
+  } else if (error && typeof error === "object") {
+    // For MapLibre errors which might be objects
+    console.error("Error object:", JSON.stringify(error, null, 2))
+    console.error("Error keys:", Object.keys(error))
+    if (error.error) {
+      console.error("Nested error:", error.error)
+    }
+    if (error.message) {
+      console.error("Error message:", error.message)
+    }
+  } else {
+    console.error("Error value:", error)
+    console.error("Error type:", typeof error)
+  }
 
   // Check if it might be an API key issue
   const { isValid } = validateMapTilerApiKey()
-  if (!isValid && error.message.includes("style")) {
+  if (!isValid) {
     console.warn(
-      "[Map Error] This may be related to a missing or invalid MapTiler API key."
+      "[Map Error] Note: MapTiler API key is missing/invalid. This might be related."
     )
   }
 }
@@ -172,8 +276,8 @@ export function getFallbackStyle(requestedStyleId: string): MapStyle {
   return (
     FALLBACK_STYLES[0] || {
       id: "ultra-fallback",
-      name: "Basic Map",
-      url: "https://demotiles.maplibre.org/style.json"
+      name: "Satellite",
+      url: SATELLITE_STYLE_OBJECT as any
     }
   )
 }

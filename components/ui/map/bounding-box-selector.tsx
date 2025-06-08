@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from "react"
 import dynamic from "next/dynamic"
 import { Button } from "@/components/ui/button"
 import { Undo2 } from "lucide-react"
-import MapErrorBoundary from "./map-error-boundary"
+import { MapErrorBoundary } from "./map-error-boundary"
 
 // Define the props for the component
 interface BoundingBoxSelectorProps {

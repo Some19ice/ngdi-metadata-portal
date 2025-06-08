@@ -89,14 +89,15 @@ export default function EnhancedMetadataMapDisplay({
 
         return {
           id: record.id,
-          lngLat: center as [number, number],
-          popupContent: `
-          <div class="p-2">
-            <h3 class="font-medium text-sm">${record.title}</h3>
-            ${record.abstract ? `<p class="text-xs mt-1 text-gray-600">${record.abstract.substring(0, 100)}${record.abstract.length > 100 ? "..." : ""}</p>` : ""}
-            <button class="text-blue-500 hover:text-blue-700 text-xs mt-2" onclick="window.dispatchEvent(new CustomEvent('recordClick', {detail: '${record.id}'}))">View Details</button>
-          </div>
-        `
+          coordinates: center as [number, number],
+          title: record.title,
+          description: record.abstract
+            ? record.abstract.substring(0, 200) +
+              (record.abstract.length > 200 ? "..." : "")
+            : undefined,
+          metadata: {
+            record: record
+          }
         }
       })
       .filter(Boolean) as MarkerData[]
@@ -152,6 +153,34 @@ export default function EnhancedMetadataMapDisplay({
       map: mapInstance,
       initialLayers: []
     })
+
+  // Set up map markers with secure marker creation
+  const { addMarkers, clearAllMarkers, updateMarkerSelection } = useMapMarkers(
+    mapInstance,
+    {
+      onMarkerClick: markerData => {
+        const record = markerData.metadata?.record
+        if (record && onRecordClick) {
+          onRecordClick(record)
+        }
+      },
+      enablePopups: true,
+      enableClustering: enableClustering,
+      clusterRadius: clusterRadius,
+      maxZoom: maxZoom
+    }
+  )
+
+  // Add markers when map loads and data changes
+  useEffect(() => {
+    if (!mapInstance || !isMapLoaded || markerDataArray.length === 0) return
+
+    // Clear existing markers first
+    clearAllMarkers()
+
+    // Add new markers
+    addMarkers(markerDataArray)
+  }, [mapInstance, isMapLoaded, markerDataArray, addMarkers, clearAllMarkers])
 
   // Handle style change from LayerControlPanel - forward to MapView's internal handler
   const handleStyleChange = useCallback(

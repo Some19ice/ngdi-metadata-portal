@@ -8,12 +8,21 @@ interface ClusterMarkerProps {
   onClick?: (cluster: ClusterFeature) => void
 }
 
+// Type guard to check if properties are cluster properties
+function isClusterProperties(properties: any): properties is { cluster: boolean; cluster_id: number; point_count: number; point_count_abbreviated: string } {
+  return properties && typeof properties.cluster === 'boolean' && properties.cluster === true
+}
+
 export default function ClusterMarker({
   cluster,
   onClick
 }: ClusterMarkerProps) {
   // Calculate cluster size class based on point count
   const { sizeClass, size } = useMemo(() => {
+    if (!isClusterProperties(cluster.properties)) {
+      return { sizeClass: "small", size: 30 }
+    }
+
     const pointCount = cluster.properties.point_count || 0
 
     if (pointCount < 10) {
@@ -25,7 +34,7 @@ export default function ClusterMarker({
     } else {
       return { sizeClass: "xlarge", size: 60 }
     }
-  }, [cluster.properties.point_count])
+  }, [cluster.properties])
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -35,12 +44,13 @@ export default function ClusterMarker({
   }
 
   // Individual point marker (not clustered)
-  if (!cluster.properties.cluster) {
+  if (!isClusterProperties(cluster.properties)) {
+    const record = cluster.properties
     return (
       <div
         className="individual-marker cursor-pointer transform -translate-x-1/2 -translate-y-1/2"
         onClick={handleClick}
-        title={cluster.properties.record?.title || "Metadata Record"}
+        title={record.title || "Metadata Record"}
       >
         <div className="relative">
           {/* Marker dot */}
@@ -54,11 +64,12 @@ export default function ClusterMarker({
   }
 
   // Cluster marker
+  const clusterProps = cluster.properties
   return (
     <div
       className="cluster-marker cursor-pointer transform -translate-x-1/2 -translate-y-1/2 hover:scale-110 transition-transform duration-200"
       onClick={handleClick}
-      title={`${cluster.properties.point_count} metadata records (click to expand)`}
+      title={`${clusterProps.point_count} metadata records (click to expand)`}
       style={{ width: size, height: size }}
     >
       <div
@@ -73,8 +84,7 @@ export default function ClusterMarker({
       >
         {/* Count display */}
         <span className="select-none">
-          {cluster.properties.point_count_abbreviated ||
-            cluster.properties.point_count}
+          {clusterProps.point_count_abbreviated || clusterProps.point_count}
         </span>
 
         {/* Optional ripple effect */}

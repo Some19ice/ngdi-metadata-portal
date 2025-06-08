@@ -40,6 +40,10 @@ NEXT_PUBLIC_CLERK_SIGN_UP_URL=/signup
 # Analytics (PostHog)
 NEXT_PUBLIC_POSTHOG_KEY=
 NEXT_PUBLIC_POSTHOG_HOST=
+
+# Map Configuration (MapTiler)
+# Get your free API key from: https://cloud.maptiler.com/account/keys/
+NEXT_PUBLIC_MAPTILER_API_KEY=
 ```
 
 ## Setup

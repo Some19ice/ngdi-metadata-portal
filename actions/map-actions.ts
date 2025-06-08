@@ -1,9 +1,7 @@
 "use server"
 
 import { ActionState, GeocodingResponse, GeocodingFeature } from "@/types"
-
-const MAPTILER_API_KEY = process.env.NEXT_PUBLIC_MAPTILER_API_KEY
-const MAPTILER_GEOCODING_API_URL = "https://api.maptiler.com/geocoding"
+import { getBaseUrl } from "@/lib/utils"
 
 interface GeocodeParams {
   searchText: string
@@ -17,13 +15,6 @@ interface GeocodeParams {
 export async function geocodeLocationAction(
   params: GeocodeParams
 ): Promise<ActionState<GeocodingFeature[]>> {
-  if (!MAPTILER_API_KEY) {
-    return {
-      isSuccess: false,
-      message: "MapTiler API key is not configured."
-    }
-  }
-
   const { searchText, autocomplete = true, limit = 5, ...otherParams } = params
 
   if (!searchText || searchText.trim().length < 2) {
@@ -36,8 +27,9 @@ export async function geocodeLocationAction(
   }
 
   try {
+    // Build query parameters for our proxy
     const queryParams = new URLSearchParams({
-      key: MAPTILER_API_KEY,
+      q: searchText,
       autocomplete: String(autocomplete),
       limit: String(limit)
     })
@@ -52,15 +44,25 @@ export async function geocodeLocationAction(
       }
     })
 
-    const response = await fetch(
-      `${MAPTILER_GEOCODING_API_URL}/${encodeURIComponent(searchText)}.json?${queryParams.toString()}`
-    )
+    // Use the helper to get the base URL
+    const baseUrl = getBaseUrl()
+    const url = `${baseUrl}/api/map/geocode?${queryParams.toString()}`
+
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      // Don't cache server-side requests
+      cache: "no-store"
+    })
 
     if (!response.ok) {
       const errorData = await response.json()
-      console.error("MapTiler Geocoding API Error:", errorData)
+      console.error("Geocoding API Error:", errorData)
       throw new Error(
-        `Failed to fetch geocoding data: ${response.status} ${response.statusText}`
+        errorData.error ||
+          `Failed to fetch geocoding data: ${response.status} ${response.statusText}`
       )
     }
 
@@ -69,7 +71,7 @@ export async function geocodeLocationAction(
     return {
       isSuccess: true,
       message: "Geocoding successful",
-      data: data.features
+      data: data.features || []
     }
   } catch (error) {
     console.error("Error in geocodeLocationAction:", error)

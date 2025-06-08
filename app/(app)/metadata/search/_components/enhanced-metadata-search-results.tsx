@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Loader2, Building, Calendar, FileText } from "lucide-react"
@@ -37,22 +37,19 @@ export default function EnhancedMetadataSearchResults({
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    performSearch()
-  }, [filters])
-
   const shouldSearch = () => {
     return (
       filters.query.trim() !== "" ||
       filters.dataTypes.length > 0 ||
       filters.organizations.length > 0 ||
+      filters.topicCategories.length > 0 ||
       filters.frameworkTypes.length > 0 ||
       filters.temporalRange.start ||
       filters.temporalRange.end
     )
   }
 
-  const performSearch = async () => {
+  const performSearch = useCallback(async () => {
     if (!shouldSearch()) {
       setResults([])
       setTotalCount(0)
@@ -94,7 +91,11 @@ export default function EnhancedMetadataSearchResults({
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [filters])
+
+  useEffect(() => {
+    performSearch()
+  }, [performSearch])
 
   if (isLoading) {
     return (

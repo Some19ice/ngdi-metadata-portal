@@ -1,11 +1,14 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
-import { Search } from "lucide-react"
+import { useState, useEffect, useRef, useCallback } from "react"
+import { Search, Loader2 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { GeocodingFeature } from "@/types"
 import { geocodeLocationAction } from "@/actions/map-actions"
+import { sanitizeSearchInput } from "@/lib/validators/map-validators"
+import { toast } from "sonner"
+import { useDebounce } from "@/lib/hooks/use-debounce"
 
 interface MapSearchInputProps {
   onSearch: (searchTerm: string) => void
@@ -23,6 +26,10 @@ export default function MapSearchInput({
   const [isLoading, setIsLoading] = useState(false)
   const [showSuggestions, setShowSuggestions] = useState(false)
   const searchRef = useRef<HTMLDivElement>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
+
+  // Debounce search term
+  const debouncedSearchTerm = useDebounce(searchTerm, 300)
 
   // Handle clicks outside of the component to close suggestions
   useEffect(() => {
@@ -42,61 +49,103 @@ export default function MapSearchInput({
   }, [])
 
   // Real geocoding function using the action
-  const searchLocations = async (
-    query: string
-  ): Promise<GeocodingFeature[]> => {
-    const result = await geocodeLocationAction({
-      searchText: query,
-      autocomplete: true,
-      limit: 5,
-      country: "NG" // Bias towards Nigeria
-    })
-
-    if (result.isSuccess) {
-      return result.data
-    } else {
-      console.error("Geocoding error:", result.message)
-      return []
-    }
-  }
-
-  const handleInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value
-    setSearchTerm(value)
-
-    if (value.length > 2) {
-      setIsLoading(true)
-      try {
-        const results = await searchLocations(value)
-        setSuggestions(results)
-        setShowSuggestions(true)
-      } catch (error) {
-        console.error("Error fetching suggestions:", error)
-        setSuggestions([])
-      } finally {
-        setIsLoading(false)
+  const searchLocations = useCallback(
+    async (query: string): Promise<GeocodingFeature[]> => {
+      // Cancel previous request if exists
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
       }
+
+      // Create new abort controller
+      abortControllerRef.current = new AbortController()
+
+      try {
+        const result = await geocodeLocationAction({
+          searchText: query,
+          autocomplete: true,
+          limit: 5,
+          country: "NG" // Bias towards Nigeria
+        })
+
+        if (result.isSuccess) {
+          return result.data
+        } else {
+          console.error("Geocoding error:", result.message)
+          if (!abortControllerRef.current.signal.aborted) {
+            toast.error("Search failed. Please try again.")
+          }
+          return []
+        }
+      } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") {
+          // Request was cancelled, ignore
+          return []
+        }
+        throw error
+      }
+    },
+    []
+  )
+
+  // Perform search when debounced term changes
+  useEffect(() => {
+    if (debouncedSearchTerm.length > 2) {
+      setIsLoading(true)
+      searchLocations(debouncedSearchTerm)
+        .then(results => {
+          setSuggestions(results)
+          setShowSuggestions(true)
+        })
+        .catch(error => {
+          console.error("Error fetching suggestions:", error)
+          setSuggestions([])
+        })
+        .finally(() => {
+          setIsLoading(false)
+        })
     } else {
       setSuggestions([])
       setShowSuggestions(false)
     }
+  }, [debouncedSearchTerm, searchLocations])
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value
+    const sanitized = sanitizeSearchInput(value)
+
+    if (value !== sanitized) {
+      toast.warning("Some characters were removed from your search")
+    }
+
+    setSearchTerm(sanitized)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (searchTerm.trim()) {
+    const trimmed = searchTerm.trim()
+
+    if (trimmed.length < 2) {
+      toast.error("Please enter at least 2 characters to search")
+      return
+    }
+
+    if (trimmed) {
       // For manual search, try to get the first result from geocoding
       setIsLoading(true)
       try {
-        const results = await searchLocations(searchTerm)
+        const results = await searchLocations(trimmed)
         if (results.length > 0) {
           onLocationSelect(results[0])
+          toast.success(
+            `Found ${results.length} location${results.length > 1 ? "s" : ""}`
+          )
         } else {
-          onSearch(searchTerm)
+          onSearch(trimmed)
+          toast.info("No exact matches found")
         }
       } catch (error) {
         console.error("Error performing search:", error)
-        onSearch(searchTerm)
+        onSearch(trimmed)
       } finally {
         setIsLoading(false)
       }
@@ -108,6 +157,13 @@ export default function MapSearchInput({
     setSearchTerm(suggestion.place_name)
     onLocationSelect(suggestion)
     setShowSuggestions(false)
+    toast.success(`Selected: ${suggestion.place_name}`)
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Escape") {
+      setShowSuggestions(false)
+    }
   }
 
   return (
@@ -116,32 +172,60 @@ export default function MapSearchInput({
         <div className="relative flex-grow">
           <Input
             type="text"
-            placeholder="Search locations..."
+            placeholder="Search locations in Nigeria..."
             value={searchTerm}
             onChange={handleInputChange}
+            onKeyDown={handleKeyDown}
             className="pr-10"
+            aria-label="Search locations"
+            aria-autocomplete="list"
+            aria-controls="search-suggestions"
+            aria-expanded={showSuggestions}
+            maxLength={200}
           />
           {isLoading && (
             <div className="absolute right-3 top-1/2 -translate-y-1/2">
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-gray-600"></div>
+              <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
             </div>
           )}
         </div>
-        <Button type="submit" className="ml-2" disabled={isLoading}>
+        <Button
+          type="submit"
+          className="ml-2"
+          disabled={isLoading || searchTerm.trim().length < 2}
+          aria-label="Search"
+        >
           <Search className="h-4 w-4" />
         </Button>
       </form>
 
       {showSuggestions && suggestions.length > 0 && (
-        <div className="absolute z-10 mt-1 w-full rounded-md bg-white shadow-lg border">
+        <div
+          id="search-suggestions"
+          className="absolute z-10 mt-1 w-full rounded-md bg-white shadow-lg border"
+          role="listbox"
+        >
           <ul className="max-h-60 overflow-auto py-1 text-sm">
-            {suggestions.map(suggestion => (
+            {suggestions.map((suggestion, index) => (
               <li
                 key={suggestion.id}
-                className="cursor-pointer px-4 py-2 hover:bg-gray-100"
+                className="cursor-pointer px-4 py-2 hover:bg-gray-100 focus:bg-gray-100 focus:outline-none"
                 onClick={() => handleSuggestionClick(suggestion)}
+                onKeyDown={e => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault()
+                    handleSuggestionClick(suggestion)
+                  }
+                }}
+                role="option"
+                aria-selected={false}
+                tabIndex={0}
               >
-                {suggestion.place_name}
+                <div className="font-medium">{suggestion.place_name}</div>
+                <div className="text-xs text-gray-500">
+                  {suggestion.center[1].toFixed(4)},{" "}
+                  {suggestion.center[0].toFixed(4)}
+                </div>
               </li>
             ))}
           </ul>
@@ -151,10 +235,10 @@ export default function MapSearchInput({
       {showSuggestions &&
         suggestions.length === 0 &&
         !isLoading &&
-        searchTerm.length > 2 && (
+        debouncedSearchTerm.length > 2 && (
           <div className="absolute z-10 mt-1 w-full rounded-md bg-white shadow-lg border">
             <div className="px-4 py-2 text-sm text-gray-500">
-              No locations found
+              No locations found for "{debouncedSearchTerm}"
             </div>
           </div>
         )}

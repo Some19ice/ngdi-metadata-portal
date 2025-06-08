@@ -96,8 +96,11 @@ export function useMapInstance({
       map.on("load", () => handleLoad(map))
 
       map.on("error", e => {
+        console.log("MapLibre error event:", e)
+        logMapError(e, "MapLibre Error Event")
+
         const mapError = new Error(
-          `Map error: ${e.error?.message || "Unknown error"}`
+          `Map error: ${e.error?.message || e.message || "Unknown error"}`
         )
         handleError(mapError)
       })

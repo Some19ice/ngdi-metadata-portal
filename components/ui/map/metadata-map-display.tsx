@@ -23,6 +23,11 @@ import {
   calculateBoundsForRecords
 } from "@/lib/map-utils"
 import { getAvailableMapStyles, logMapError } from "@/lib/map-config"
+import {
+  createSafeClusterMarker,
+  createSafeMarkerElement,
+  MapEventManager
+} from "@/lib/map-security"
 
 interface MetadataMapDisplayProps {
   records: MetadataRecord[]
@@ -120,9 +125,12 @@ export default function MetadataMapDisplay({
 
   // Set up map clustering
   const { clusters, expandCluster, getClusterLeaves } = useMapClustering({
-    records,
     map: mapInstance,
-    options: clusteringOpts
+    records,
+    onRecordClick,
+    clusterRadius: clusteringOpts.radius,
+    minZoom: clusteringOpts.minZoom,
+    maxZoom: clusteringOpts.maxZoom
   })
 
   // Prepare marker data for the useMapMarkers hook based on clustering state
@@ -131,39 +139,24 @@ export default function MetadataMapDisplay({
     if (typeof window === "undefined") return []
 
     if (enableClustering && clusters.length > 0) {
-      // Use clustered data
-      return clusters.map(cluster => {
-        const element = document.createElement("div")
-
-        // Use ReactDOM.render to render the ClusterMarker component into the element
-        const clusterId = cluster.properties.cluster_id
-        const isCluster = cluster.properties.cluster
-
-        return {
-          id: isCluster
-            ? `cluster-${clusterId}`
-            : cluster.properties.record?.id || `point-${cluster.id}`,
-          lngLat: cluster.geometry.coordinates as [number, number],
-          options: {
-            element,
-            anchor: "center" as const
-          },
-          popupContent: isCluster
-            ? `<div class="p-2">
-                <h3 class="font-semibold text-sm">Cluster of ${cluster.properties.point_count} records</h3>
-                <p class="text-xs text-gray-500 mt-1">Click to expand</p>
-               </div>`
-            : `<div class="p-2">
-                <h3 class="font-semibold text-sm">${cluster.properties.record?.title || "Metadata Record"}</h3>
-                <p class="text-xs text-gray-500 mt-1">Click marker for details</p>
-               </div>`,
-          popupOptions: {
-            closeButton: true,
-            closeOnClick: false
-          },
-          clusterData: cluster // Store cluster data for rendering
-        }
-      })
+      // Use clustered data - convert to proper MarkerData format
+      return clusters
+        .filter(cluster => {
+          // Only individual points for markers (check if cluster property exists and is false)
+          const properties = cluster.properties as any
+          return !("cluster" in properties) || !properties.cluster
+        })
+        .map(cluster => {
+          const record = cluster.properties as MetadataRecord
+          return {
+            id: record.id || `point-${cluster.geometry.coordinates.join("-")}`,
+            coordinates: cluster.geometry.coordinates as [number, number],
+            title: record.title || "Metadata Record",
+            description: record.description ?? undefined,
+            category: "metadata",
+            metadata: record
+          }
+        })
     } else {
       // Use individual markers (original behavior)
       return records
@@ -172,22 +165,13 @@ export default function MetadataMapDisplay({
           const center = getRecordCenter(record)
           if (!center) return null
 
-          const element = document.createElement("div")
-
           return {
             id: record.id,
-            lngLat: center,
-            options: { element },
-            popupContent: `
-              <div class="p-2">
-                <h3 class="font-semibold text-sm">${record.title}</h3>
-                <p class="text-xs text-gray-500 mt-1">Click marker label for details</p>
-              </div>
-            `,
-            popupOptions: {
-              closeButton: true,
-              closeOnClick: false
-            }
+            coordinates: center,
+            title: record.title,
+            description: record.description ?? undefined,
+            category: "metadata",
+            metadata: record
           }
         })
         .filter(Boolean) as MarkerData[]
@@ -195,10 +179,27 @@ export default function MetadataMapDisplay({
   }, [records, clusters, enableClustering])
 
   // Set up map markers using the declarative hook
-  const { markerInstances } = useMapMarkers({
-    map: mapInstance,
-    markers: markerDataArray // Pass the derived marker data
-  })
+  const { addMarkers, addClusters, clearAllMarkers, markers } = useMapMarkers(
+    mapInstance,
+    {
+      onMarkerClick: markerData => {
+        const record = records.find(r => r.id === markerData.id)
+        if (record) {
+          setSelectedRecordId(markerData.id)
+          onRecordClick?.(record)
+          const bounds = getRecordBounds(record)
+          if (bounds) {
+            fitBounds(bounds, { padding: 200, maxZoom: 15 })
+          }
+        }
+      },
+      onClusterClick: clusterData => {
+        expandCluster(parseInt(clusterData.id.replace("cluster-", "")))
+      },
+      enablePopups: true,
+      enableClustering
+    }
+  )
 
   // Set up map viewport
   const { flyTo, fitBounds } = useMapViewport({
@@ -243,22 +244,18 @@ export default function MetadataMapDisplay({
           }
         })
 
-        // Add outline layer only after the fill layer is added
-        setTimeout(() => {
-          if (mapInstance.getLayer("metadata-bounds")) {
-            addLayer({
-              id: "metadata-bounds-outline",
-              source: "metadata-bounds",
-              layer: {
-                type: "line",
-                paint: {
-                  "line-color": "#2563eb",
-                  "line-width": 2
-                }
-              }
-            })
+        // Add outline layer
+        addLayer({
+          id: "metadata-bounds-outline",
+          source: "metadata-bounds",
+          layer: {
+            type: "line",
+            paint: {
+              "line-color": "#2563eb",
+              "line-width": 2
+            }
           }
-        }, 100)
+        })
       }
 
       // Apply filters based on selected record
@@ -329,168 +326,38 @@ export default function MetadataMapDisplay({
     activeStyleId // Keep activeStyleId in dependency array to re-run when style changes
   ])
 
-  // Old marker useEffect (lines 250-338) is now removed.
-  // useMapMarkers hook above handles marker creation/removal declaratively.
-
-  // Handle marker click - supports both cluster and individual record clicks
-  const handleMarkerClick = useCallback(
-    (markerId: string) => {
-      // Check if this is a cluster marker
-      if (markerId.startsWith("cluster-")) {
-        const clusterId = parseInt(markerId.replace("cluster-", ""))
-        expandCluster(clusterId)
-        return
-      }
-
-      // Handle individual record click
-      const record = records.find(r => r.id === markerId)
-      if (record) {
-        setSelectedRecordId(markerId)
-        if (onRecordClick) {
-          onRecordClick(record)
-        }
-        // Optionally, fly to the record when its marker is clicked
-        const bounds = getRecordBounds(record)
-        if (bounds) {
-          fitBounds(bounds, { padding: 200, maxZoom: 15 })
-        }
-      }
-    },
-    [records, onRecordClick, fitBounds, expandCluster]
-  )
-
-  // New useEffect for styling marker elements and attaching click handlers (supports clustering)
+  // Update markers when data changes
   useEffect(() => {
-    // Only run on client side
-    if (typeof window === "undefined") return
+    if (!mapInstance || !isMapLoaded) return
 
-    if (!mapInstance || !isMapLoaded || !markerInstances) return
+    // Clear existing markers
+    clearAllMarkers()
 
-    markerInstances.forEach((markerInstance, markerId) => {
-      const el = markerInstance.getElement()
-      if (!el) return
+    // Add individual markers
+    addMarkers(markerDataArray)
 
-      // Clear previous content and listeners
-      el.innerHTML = ""
+    // Add clusters if clustering is enabled
+    if (enableClustering && clusters.length > 0) {
+      const clusterMarkers = clusters
+        .filter(cluster => cluster.properties.cluster)
+        .map(cluster => ({
+          id: `cluster-${cluster.properties.cluster_id}`,
+          coordinates: cluster.geometry.coordinates as [number, number],
+          count: cluster.properties.point_count || 0,
+          items: [] // We don't need individual items for display
+        }))
 
-      // Find corresponding marker data for rendering
-      const markerData = markerDataArray.find(m => m.id === markerId)
-      if (!markerData) return
-
-      // Check if this marker has cluster data
-      const clusterData = (markerData as any).clusterData
-
-      if (enableClustering && clusterData) {
-        // Render cluster marker using our ClusterMarker component logic
-        const isCluster = clusterData.properties.cluster
-        const pointCount = clusterData.properties.point_count || 0
-
-        if (isCluster) {
-          // Cluster marker
-          let size = 30
-          let sizeClass = "small"
-          let bgColor = "bg-blue-500"
-          let textSize = "text-xs"
-
-          if (pointCount >= 100) {
-            size = 60
-            sizeClass = "xlarge"
-            bgColor = "bg-blue-800"
-            textSize = "text-lg"
-          } else if (pointCount >= 50) {
-            size = 50
-            sizeClass = "large"
-            bgColor = "bg-blue-700"
-            textSize = "text-base"
-          } else if (pointCount >= 10) {
-            size = 40
-            sizeClass = "medium"
-            bgColor = "bg-blue-600"
-            textSize = "text-sm"
-          }
-
-          el.className =
-            "cluster-marker cursor-pointer transform -translate-x-1/2 -translate-y-1/2 hover:scale-110 transition-transform duration-200"
-          el.style.width = `${size}px`
-          el.style.height = `${size}px`
-          el.title = `${pointCount} metadata records (click to expand)`
-
-          el.innerHTML = `
-            <div class="relative w-full h-full rounded-full border-2 border-white shadow-lg flex items-center justify-center text-white font-bold ${bgColor} ${textSize}">
-              <span class="select-none">${pointCount}</span>
-              <div class="absolute inset-0 rounded-full border-2 border-blue-400 animate-pulse opacity-50"></div>
-            </div>
-          `
-        } else {
-          // Individual point marker in clustering mode
-          el.className =
-            "individual-marker cursor-pointer transform -translate-x-1/2 -translate-y-1/2"
-          el.title = clusterData.properties.record?.title || "Metadata Record"
-
-          el.innerHTML = `
-            <div class="relative">
-              <div class="w-3 h-3 bg-blue-600 border-2 border-white rounded-full shadow-lg hover:scale-110 transition-transform duration-200"></div>
-              <div class="absolute inset-0 w-3 h-3 bg-blue-600 rounded-full animate-ping opacity-75 hover:opacity-100"></div>
-            </div>
-          `
-        }
-      } else {
-        // Individual marker (non-clustering mode)
-        const record = records.find(r => r.id === markerId)
-        if (!record) return
-
-        el.className = "custom-marker" // Base class for common styling
-        if (markerId === selectedRecordId) {
-          el.classList.add("selected")
-        }
-
-        // Create custom marker content (original behavior)
-        const dot = document.createElement("div")
-        dot.className = "marker-dot"
-        el.appendChild(dot)
-
-        const label = document.createElement("div")
-        label.className = "marker-label"
-        label.textContent = record.title
-        el.appendChild(label)
-      }
-
-      // Manage click listener
-      const existingHandler = (el as any)._clickHandler
-      if (existingHandler) {
-        el.removeEventListener("click", existingHandler)
-      }
-
-      const newClickHandler = (e: MouseEvent) => {
-        e.stopPropagation() // Prevent map click when marker is clicked
-        handleMarkerClick(markerId)
-      }
-      el.addEventListener("click", newClickHandler)
-      ;(el as any)._clickHandler = newClickHandler // Store for removal
-    })
-
-    // Cleanup: Remove click listeners when the component unmounts or dependencies change
-    return () => {
-      if (markerInstances) {
-        markerInstances.forEach(markerInstance => {
-          const el = markerInstance.getElement()
-          const handler = (el as any)?._clickHandler
-          if (el && handler) {
-            el.removeEventListener("click", handler)
-            delete (el as any)._clickHandler
-          }
-        })
-      }
+      addClusters(clusterMarkers)
     }
   }, [
     mapInstance,
     isMapLoaded,
-    markerInstances,
-    selectedRecordId,
-    records,
-    handleMarkerClick,
     markerDataArray,
-    enableClustering
+    clusters,
+    enableClustering,
+    addMarkers,
+    addClusters,
+    clearAllMarkers
   ])
 
   // Fit map to bounds of all records when records change
@@ -520,8 +387,7 @@ export default function MetadataMapDisplay({
     }
   }, [mapInstance, isMapLoaded, records, fitBounds])
 
-  // handleMarkerClick is now defined above, within the new marker styling useEffect's scope or as a useCallback before it.
-  // The existing handleMarkerClick (lines 341-350) has been effectively replaced/merged.
+  // Marker click handling is now managed by the useMapMarkers hook via onMarkerClick and onClusterClick callbacks
 
   // Reset view to show all records
   const handleResetView = useCallback(() => {

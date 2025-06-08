@@ -7,24 +7,29 @@ import { notFound, redirect } from "next/navigation"
 import CentralSearchForm from "./_components/central-search-form"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
+import {
+  MapPin,
+  FileText,
+  AlertCircle,
+  ExternalLink,
+  Search
+} from "lucide-react"
+import { geocodeLocationAction } from "@/actions/map-actions"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
 
 interface SearchParams {
   q?: string
   type?: string
   page?: string
-  // Include all possible metadata search params
-  query?: string
-  temporalExtentStartDate?: string
-  temporalExtentEndDate?: string
-  frameworkType?: string
-  datasetType?: string
-  useSpatialSearch?: string
-  bbox_north?: string
-  bbox_south?: string
-  bbox_east?: string
-  bbox_west?: string
-  sortBy?: string
-  sortOrder?: string
+  error?: string
+  // Include all possible metadata search params for consistency
+  organization?: string
+  dataType?: string
+  topicCategory?: string
+  startDate?: string
+  endDate?: string
+  bbox?: string
 }
 
 interface SearchPageProps {
@@ -36,152 +41,357 @@ export default async function SearchPage({
 }: SearchPageProps) {
   const searchParams = await searchParamsPromise
 
-  // Support both 'q' (from global search) and 'query' (from metadata search)
-  const query = searchParams?.q || searchParams?.query || ""
-  const type = searchParams?.type || "metadata" // Default to metadata if not specified
-  const page = searchParams?.page || "1"
+  const query = searchParams?.q
+  const searchType = searchParams?.type || "auto"
+  const error = searchParams?.error
+  const currentPage = parseInt(searchParams?.page || "1", 10)
 
-  // Check if this is a direct metadata search with detailed params
-  if (
-    type === "metadata" &&
-    (searchParams?.temporalExtentStartDate ||
-      searchParams?.temporalExtentEndDate ||
-      searchParams?.frameworkType ||
-      searchParams?.datasetType ||
-      searchParams?.useSpatialSearch)
-  ) {
-    // Remap q to query for metadata search
-    const metadataParams = new URLSearchParams()
-
-    if (query) {
-      metadataParams.set("query", query)
-    }
-
-    // Forward all metadata-specific params
-    if (searchParams.temporalExtentStartDate) {
-      metadataParams.set(
-        "temporalExtentStartDate",
-        searchParams.temporalExtentStartDate
-      )
-    }
-    if (searchParams.temporalExtentEndDate) {
-      metadataParams.set(
-        "temporalExtentEndDate",
-        searchParams.temporalExtentEndDate
-      )
-    }
-    if (searchParams.frameworkType) {
-      metadataParams.set("frameworkType", searchParams.frameworkType)
-    }
-    if (searchParams.datasetType) {
-      metadataParams.set("datasetType", searchParams.datasetType)
-    }
-    if (searchParams.useSpatialSearch) {
-      metadataParams.set("useSpatialSearch", searchParams.useSpatialSearch)
-    }
-    if (searchParams.bbox_north) {
-      metadataParams.set("bbox_north", searchParams.bbox_north)
-    }
-    if (searchParams.bbox_south) {
-      metadataParams.set("bbox_south", searchParams.bbox_south)
-    }
-    if (searchParams.bbox_east) {
-      metadataParams.set("bbox_east", searchParams.bbox_east)
-    }
-    if (searchParams.bbox_west) {
-      metadataParams.set("bbox_west", searchParams.bbox_west)
-    }
-    if (searchParams.sortBy) {
-      metadataParams.set("sortBy", searchParams.sortBy)
-    }
-    if (searchParams.sortOrder) {
-      metadataParams.set("sortOrder", searchParams.sortOrder)
-    }
-    if (page !== "1") {
-      metadataParams.set("page", page)
-    }
-
-    const searchUrl = `/metadata/search?${metadataParams.toString()}`
-    return redirect(searchUrl)
-  }
-
+  // If no query, show the search form
   if (!query) {
-    // If no query is provided, show the search form
     return (
-      <div className="space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Search</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground mb-4">
-              Enter a search term to find metadata records, publications, news,
-              and more.
+      <div className="container mx-auto px-4 py-8">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-bold mb-4">Search Portal</h1>
+            <p className="text-muted-foreground">
+              Search for geospatial data, metadata records, and geographic
+              locations
             </p>
+          </div>
+
+          <div className="mb-8">
             <CentralSearchForm />
-          </CardContent>
-        </Card>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  Metadata Search
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Find datasets, surveys, maps, and other geospatial resources
+                </p>
+                <div className="space-y-2">
+                  <Badge variant="secondary">Datasets</Badge>
+                  <Badge variant="secondary">Maps</Badge>
+                  <Badge variant="secondary">Surveys</Badge>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <MapPin className="h-5 w-5" />
+                  Location Search
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Search for places, coordinates, and geographic features
+                </p>
+                <div className="space-y-2">
+                  <Badge variant="secondary">Cities & Towns</Badge>
+                  <Badge variant="secondary">States & LGAs</Badge>
+                  <Badge variant="secondary">Coordinates</Badge>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       </div>
     )
   }
 
-  // Direct redirects for specific types
-  if (type === "metadata") {
-    return redirect(
-      `/metadata/search?query=${encodeURIComponent(query)}&page=${page}`
-    )
-  } else if (type === "news") {
-    return redirect(`/news?query=${encodeURIComponent(query)}&page=${page}`)
-  } else if (type === "docs") {
-    return redirect(`/docs?query=${encodeURIComponent(query)}&page=${page}`)
+  return (
+    <div className="container mx-auto px-4 py-6">
+      <div className="max-w-6xl mx-auto">
+        {/* Search Header */}
+        <div className="mb-6">
+          <div className="flex items-center gap-4 mb-4">
+            <h1 className="text-2xl font-bold">Search Results</h1>
+            <Badge variant="outline" className="capitalize">
+              {searchType === "auto" ? "Smart Search" : searchType}
+            </Badge>
+          </div>
+
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Search className="h-4 w-4" />
+            <span>
+              Results for: <strong>"{query}"</strong>
+            </span>
+          </div>
+
+          {/* Re-search form */}
+          <div className="mt-4">
+            <CentralSearchForm initialQuery={query} initialType={searchType} />
+          </div>
+        </div>
+
+        {/* Error handling */}
+        {error && (
+          <Alert variant="destructive" className="mb-6">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              {error === "no-results"
+                ? "No results found for your search. Try different keywords or search terms."
+                : "An error occurred while searching. Please try again."}
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Search Results */}
+        <Suspense fallback={<SearchResultsSkeleton />}>
+          <SearchResults
+            query={query}
+            searchType={searchType}
+            page={currentPage}
+            searchParams={searchParams}
+          />
+        </Suspense>
+      </div>
+    </div>
+  )
+}
+
+async function SearchResults({
+  query,
+  searchType,
+  page,
+  searchParams
+}: {
+  query: string
+  searchType: string
+  page: number
+  searchParams: SearchParams
+}) {
+  // Handle location search
+  if (searchType === "location") {
+    return <LocationSearchResults query={query} />
   }
 
-  // If we get here, show tabbed interface with links instead of redirects
-  const metadataUrl = `/metadata/search?query=${encodeURIComponent(query)}&page=${page}`
-  const newsUrl = `/news?query=${encodeURIComponent(query)}&page=${page}`
-  const docsUrl = `/docs?query=${encodeURIComponent(query)}&page=${page}`
+  // Handle metadata search - redirect to existing metadata search
+  if (searchType === "metadata") {
+    const metadataSearchParams = new URLSearchParams()
+    metadataSearchParams.set("q", query)
+    if (page > 1) metadataSearchParams.set("page", page.toString())
 
-  return (
-    <div className="space-y-6">
+    Object.entries(searchParams).forEach(([key, value]) => {
+      if (value && key !== "type" && key !== "q" && key !== "page") {
+        metadataSearchParams.set(key, value)
+      }
+    })
+
+    redirect(`/(app)/metadata/search?${metadataSearchParams.toString()}`)
+  }
+
+  // Auto search - try both types
+  if (searchType === "auto") {
+    return (
+      <Tabs defaultValue="all" className="w-full">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="all">All Results</TabsTrigger>
+          <TabsTrigger value="metadata">Datasets</TabsTrigger>
+          <TabsTrigger value="locations">Places</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="all" className="space-y-6">
+          <LocationSearchResults query={query} />
+          <MetadataSearchCard
+            query={query}
+            page={page}
+            searchParams={searchParams}
+          />
+        </TabsContent>
+
+        <TabsContent value="metadata">
+          <MetadataSearchCard
+            query={query}
+            page={page}
+            searchParams={searchParams}
+          />
+        </TabsContent>
+
+        <TabsContent value="locations">
+          <LocationSearchResults query={query} />
+        </TabsContent>
+      </Tabs>
+    )
+  }
+
+  // Default fallback - redirect to metadata search
+  const metadataSearchParams = new URLSearchParams()
+  metadataSearchParams.set("q", query)
+  if (page > 1) metadataSearchParams.set("page", page.toString())
+
+  Object.entries(searchParams).forEach(([key, value]) => {
+    if (value && key !== "type" && key !== "q" && key !== "page") {
+      metadataSearchParams.set(key, value)
+    }
+  })
+
+  redirect(`/(app)/metadata/search?${metadataSearchParams.toString()}`)
+}
+
+async function LocationSearchResults({ query }: { query: string }) {
+  try {
+    const result = await geocodeLocationAction({
+      searchText: query,
+      autocomplete: false,
+      limit: 10,
+      country: "NG"
+    })
+
+    if (!result.isSuccess || !result.data || result.data.length === 0) {
+      return (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <MapPin className="h-5 w-5" />
+              Location Results
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground">
+              No locations found for "{query}"
+            </p>
+          </CardContent>
+        </Card>
+      )
+    }
+
+    return (
       <Card>
         <CardHeader>
-          <CardTitle>Search Results for "{query}"</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <MapPin className="h-5 w-5" />
+            Location Results ({result.data.length})
+          </CardTitle>
         </CardHeader>
-        <CardContent>
-          <CentralSearchForm initialQuery={query} initialType={type} />
-
-          <div className="mt-6">
-            <Tabs defaultValue="metadata" className="w-full">
-              <TabsList className="w-full grid grid-cols-3">
-                <TabsTrigger value="metadata">Metadata</TabsTrigger>
-                <TabsTrigger value="news">News</TabsTrigger>
-                <TabsTrigger value="docs">Documentation</TabsTrigger>
-              </TabsList>
-              <TabsContent value="metadata" className="py-4">
-                <div className="text-center">
-                  <Link href={metadataUrl}>
-                    <Button>View Metadata Search Results</Button>
-                  </Link>
+        <CardContent className="space-y-4">
+          {result.data.map((location, index) => (
+            <div
+              key={index}
+              className="border rounded-lg p-4 hover:bg-accent/50 transition-colors"
+            >
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <h3 className="font-medium mb-1">{location.place_name}</h3>
+                  <p className="text-sm text-muted-foreground">
+                    {location.properties?.category ||
+                      location.place_type?.[0] ||
+                      "Location"}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Coordinates: {location.center[1].toFixed(4)},{" "}
+                    {location.center[0].toFixed(4)}
+                  </p>
                 </div>
-              </TabsContent>
-              <TabsContent value="news" className="py-4">
-                <div className="text-center">
-                  <Link href={newsUrl}>
-                    <Button>View News Search Results</Button>
-                  </Link>
+                <div className="flex gap-2">
+                  <Button asChild size="sm" variant="outline">
+                    <Link
+                      href={`/map?location=${encodeURIComponent(location.place_name)}&center=${location.center[0]},${location.center[1]}&zoom=12`}
+                    >
+                      <MapPin className="h-4 w-4 mr-1" />
+                      View on Map
+                    </Link>
+                  </Button>
                 </div>
-              </TabsContent>
-              <TabsContent value="docs" className="py-4">
-                <div className="text-center">
-                  <Link href={docsUrl}>
-                    <Button>View Documentation Search Results</Button>
-                  </Link>
-                </div>
-              </TabsContent>
-            </Tabs>
-          </div>
+              </div>
+            </div>
+          ))}
         </CardContent>
       </Card>
+    )
+  } catch (error) {
+    console.error("Error in location search:", error)
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <MapPin className="h-5 w-5" />
+            Location Results
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              Failed to search locations. Please try again.
+            </AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
+    )
+  }
+}
+
+function MetadataSearchCard({
+  query,
+  page,
+  searchParams
+}: {
+  query: string
+  page: number
+  searchParams: SearchParams
+}) {
+  const metadataSearchParams = new URLSearchParams()
+  metadataSearchParams.set("q", query)
+  if (page > 1) metadataSearchParams.set("page", page.toString())
+
+  Object.entries(searchParams).forEach(([key, value]) => {
+    if (value && key !== "type" && key !== "q" && key !== "page") {
+      metadataSearchParams.set(key, value)
+    }
+  })
+
+  const metadataSearchUrl = `/(app)/metadata/search?${metadataSearchParams.toString()}`
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <FileText className="h-5 w-5" />
+          Dataset Results
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="text-center space-y-4">
+          <p className="text-muted-foreground">
+            Search geospatial datasets, maps, and data services for "{query}"
+          </p>
+          <Button asChild>
+            <Link href={metadataSearchUrl}>
+              <FileText className="h-4 w-4 mr-2" />
+              View Dataset Search Results
+            </Link>
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function SearchResultsSkeleton() {
+  return (
+    <div className="space-y-4">
+      {[...Array(3)].map((_, i) => (
+        <Card key={i}>
+          <CardHeader>
+            <div className="h-6 bg-muted rounded animate-pulse" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <div className="h-4 bg-muted rounded animate-pulse" />
+              <div className="h-4 bg-muted rounded animate-pulse w-3/4" />
+            </div>
+          </CardContent>
+        </Card>
+      ))}
     </div>
   )
 }

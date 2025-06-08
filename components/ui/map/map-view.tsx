@@ -61,7 +61,7 @@ const defaultInitialOptions: Omit<maplibregl.MapOptions, "container"> = {
 export default function MapView({
   initialOptions = {},
   className = "h-[700px] w-full",
-  initialStyleId = defaultAvailableBaseStyles[0].id, // Default to the first style
+  initialStyleId = "satellite", // Default to satellite style
   availableBaseStyles = defaultAvailableBaseStyles,
   onMapLoad,
   onStyleChange,
@@ -70,14 +70,29 @@ export default function MapView({
   controlsPosition = "side",
   onStyleChangeHandler
 }: MapViewProps) {
+  const [map, setMap] = useState<Map | null>(null)
+  const [isLoaded, setIsLoaded] = useState(false)
+  const [activeStyleId, setActiveStyleId] = useState<string>("")
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const [isContainerReady, setIsContainerReady] = useState(false)
   const [isInitialized, setIsInitialized] = useState(false)
+  const [mapLibreError, setMapLibreError] = useState<string | null>(null)
 
-  // Set container ready when ref is attached
+  // Set container ready when ref is attached and check MapLibre
   useEffect(() => {
-    if (mapContainerRef.current) {
-      setIsContainerReady(true)
+    // Check if MapLibre GL JS is available
+    try {
+      if (!maplibregl || !maplibregl.Map) {
+        setMapLibreError("MapLibre GL JS is not properly loaded")
+        return
+      }
+
+      if (mapContainerRef.current) {
+        setIsContainerReady(true)
+        setMapLibreError(null)
+      }
+    } catch (error) {
+      setMapLibreError(`MapLibre GL JS error: ${error}`)
     }
   }, [])
 
@@ -153,7 +168,11 @@ export default function MapView({
   )
 
   // Initialize map instance - only when container is ready
-  const { map, isLoaded, error } = useMapInstance({
+  const {
+    map: mapInstance,
+    isLoaded: mapLoaded,
+    error
+  } = useMapInstance({
     container:
       isContainerReady && mapContainerRef.current
         ? mapContainerRef.current
@@ -181,9 +200,9 @@ export default function MapView({
       if (onError) onError(err)
 
       // Attempt to switch to the fallback style if we have a map instance
-      if (map && fallbackStyle) {
+      if (mapInstance && fallbackStyle) {
         try {
-          map.setStyle(fallbackStyle.url)
+          mapInstance.setStyle(fallbackStyle.url)
         } catch (fallbackErr) {
           // If even the fallback fails, log it but don't show another toast
           logMapError(
@@ -195,36 +214,106 @@ export default function MapView({
         }
       }
     },
-    [onError, map]
+    [onError, mapInstance]
   )
 
-  // Set up map styles
-  const { activeStyleId, handleStyleChange } = useMapStyles({
-    map,
-    availableStyles: validatedStyles,
-    initialStyleId,
-    onStyleChange,
-    onStyleError: handleStyleError
-  })
+  // Handle style changes with smooth transition
+  const handleStyleChange = useCallback(
+    (styleId: string) => {
+      if (!mapInstance || !mapLoaded) return
 
-  // Expose the style change handler to parent components if needed
+      const style = validatedStyles.find(s => s.id === styleId)
+      if (!style?.url) {
+        console.warn(`Style not found: ${styleId}`)
+        return
+      }
+
+      // Add fade transition before changing style
+      const mapContainer = mapInstance.getContainer()
+      mapContainer.style.transition = "opacity 0.3s ease-in-out"
+      mapContainer.style.opacity = "0.7"
+
+      // Store current view state
+      const center = mapInstance.getCenter()
+      const zoom = mapInstance.getZoom()
+      const bearing = mapInstance.getBearing()
+      const pitch = mapInstance.getPitch()
+
+      // Change style
+      mapInstance.once("style.load", () => {
+        // Restore view state
+        mapInstance.jumpTo({
+          center,
+          zoom,
+          bearing,
+          pitch
+        })
+
+        // Fade back in
+        setTimeout(() => {
+          mapContainer.style.opacity = "1"
+          setTimeout(() => {
+            mapContainer.style.transition = ""
+          }, 300)
+        }, 100)
+
+        setActiveStyleId(styleId)
+        onStyleChange?.(styleId)
+      })
+
+      try {
+        mapInstance.setStyle(style.url)
+      } catch (error) {
+        console.error("Error changing map style:", error)
+        logMapError(error, "handleStyleChange")
+        // Reset opacity on error
+        mapContainer.style.opacity = "1"
+        mapContainer.style.transition = ""
+      }
+    },
+    [mapInstance, mapLoaded, validatedStyles, onStyleChange]
+  )
+
+  // Update map state when instance is ready
+  useEffect(() => {
+    if (mapInstance) {
+      setMap(mapInstance)
+    }
+  }, [mapInstance])
+
+  // Update loaded state
+  useEffect(() => {
+    if (mapLoaded) {
+      setIsLoaded(true)
+    }
+  }, [mapLoaded])
+
+  // Notify parent when map is loaded
+  useEffect(() => {
+    if (map && mapLoaded && !isInitialized) {
+      setIsInitialized(true)
+      onMapLoad?.(map)
+    }
+  }, [map, mapLoaded, isInitialized, onMapLoad])
+
+  // Expose the style change handler to parent components
   useEffect(() => {
     if (onStyleChangeHandler) {
       onStyleChangeHandler(handleStyleChange)
     }
-  }, [handleStyleChange, onStyleChangeHandler])
+  }, [onStyleChangeHandler, handleStyleChange])
 
   // Set up map controls with default configuration
   // Note: The hook doesn't support custom positions for default controls directly
   // The positions are hardcoded in the hook implementation
   useMapControls({
-    map,
+    map: mapInstance,
     defaultControls: DEFAULT_MAP_CONTROLS
   })
 
   // Set up map viewport
   useMapViewport({
-    map,
+    map: mapInstance,
     initialViewport: {
       center: mergedInitialOptions.center as maplibregl.LngLatLike,
       zoom: mergedInitialOptions.zoom as number,
@@ -235,23 +324,23 @@ export default function MapView({
 
   // Expose the map instance and style change handler to parent components
   useEffect(() => {
-    if (map && isInitialized && onStyleChange) {
+    if (mapInstance && isInitialized && onStyleChange) {
       // Make the style change handler available to parent components
       onStyleChange(activeStyleId)
     }
-  }, [map, isInitialized, activeStyleId, onStyleChange])
+  }, [mapInstance, isInitialized, activeStyleId, onStyleChange])
 
   // Ensure map resizes to fill container when loaded
   useEffect(() => {
-    if (map && isLoaded) {
+    if (mapInstance && mapLoaded) {
       // Small delay to ensure container dimensions are available
       const resizeTimer = setTimeout(() => {
-        map.resize()
+        mapInstance.resize()
       }, 100)
 
       return () => clearTimeout(resizeTimer)
     }
-  }, [map, isLoaded])
+  }, [mapInstance, mapLoaded])
 
   // Check if the API key is missing and we're trying to use a style that requires it
   const isApiKeyMissing = useMemo(() => {
@@ -269,10 +358,31 @@ export default function MapView({
     <div className={`relative ${className}`}>
       <div ref={mapContainerRef} className="h-full w-full" />
 
+      {mapLibreError && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-red-50 border border-red-200 p-4 text-center z-20">
+          <div className="max-w-md space-y-3">
+            <div className="text-red-600 font-semibold">
+              MapLibre GL JS Error
+            </div>
+            <div className="text-sm text-red-700">{mapLibreError}</div>
+            <div className="text-xs text-gray-600">
+              This indicates an issue with the MapLibre GL JS library loading.
+              Please check the browser console for more details.
+            </div>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700 transition-colors"
+            >
+              Reload Page
+            </button>
+          </div>
+        </div>
+      )}
+
       {showControls && controlsPosition === "overlay" && (
         <MapControls
-          map={map}
-          isLoaded={isLoaded}
+          map={mapInstance}
+          isLoaded={mapLoaded}
           validatedStyles={validatedStyles}
           activeStyleId={activeStyleId}
           handleStyleChange={handleStyleChange}
@@ -282,8 +392,8 @@ export default function MapView({
 
       {showControls && controlsPosition === "side" && (
         <MapControls
-          map={map}
-          isLoaded={isLoaded}
+          map={mapInstance}
+          isLoaded={mapLoaded}
           validatedStyles={validatedStyles}
           activeStyleId={activeStyleId}
           handleStyleChange={handleStyleChange}
@@ -291,13 +401,15 @@ export default function MapView({
         />
       )}
 
-      {!isLoaded && (
+      {!mapLoaded && !error && (
         <div className="absolute inset-0 flex items-center justify-center bg-gray-200/50 z-10">
-          <div className="text-center">
-            <p className="mb-2">Loading Map...</p>
+          <div className="text-center space-y-2">
+            <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
+            <p className="text-sm font-medium">Loading Map...</p>
             {isApiKeyMissing && (
-              <p className="text-xs text-amber-600">
-                Note: Some map styles may be unavailable due to missing API key.
+              <p className="text-xs text-amber-600 max-w-sm">
+                Note: Some map styles may be unavailable due to missing MapTiler
+                API key.
               </p>
             )}
           </div>
@@ -306,22 +418,47 @@ export default function MapView({
 
       {error && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-200/80 p-4 text-center z-10">
-          <p className="text-red-600 font-semibold mb-2">Failed to load map</p>
-          <p className="text-sm text-gray-700">{error.message}</p>
-          <div className="text-xs text-gray-500 mt-4 space-y-1">
-            <p>Please check your internet connection and try again.</p>
+          <div className="max-w-md space-y-3">
+            <div className="text-red-600 font-semibold">Failed to load map</div>
+            <div className="text-sm text-gray-700">{error.message}</div>
+
             {isApiKeyMissing && (
-              <div className="p-2 bg-amber-50 border border-amber-200 rounded-md mt-2">
-                <p className="text-amber-700 font-medium">
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-md">
+                <p className="text-amber-700 font-medium text-sm">
                   MapTiler API Key Missing
                 </p>
                 <p className="text-xs text-amber-600 mt-1">
-                  Some map styles require a MapTiler API key. Check the
-                  documentation for setup instructions.
+                  Some map styles require a MapTiler API key. Please set the
+                  NEXT_PUBLIC_MAPTILER_API_KEY environment variable.
+                </p>
+                <p className="text-xs text-amber-600 mt-2">
+                  Get your free API key at:{" "}
+                  <a
+                    href="https://cloud.maptiler.com/account/keys/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline"
+                  >
+                    MapTiler Cloud
+                  </a>
                 </p>
               </div>
             )}
-            <p className="mt-2">Using fallback map configuration.</p>
+
+            <div className="text-xs text-gray-500 space-y-1">
+              <p>
+                Please check your internet connection and try refreshing the
+                page.
+              </p>
+              <p>Using fallback map configuration.</p>
+            </div>
+
+            <button
+              onClick={() => window.location.reload()}
+              className="px-3 py-1 bg-primary text-primary-foreground text-sm rounded hover:bg-primary/90 transition-colors"
+            >
+              Retry
+            </button>
           </div>
         </div>
       )}
