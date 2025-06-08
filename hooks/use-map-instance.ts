@@ -12,7 +12,7 @@ interface UseMapInstanceOptions {
 }
 
 /**
- * Hook to manage a MapLibre GL JS map instance
+ * Hook to manage a MapLibre GL JS map instance with proper cleanup
  *
  * @param options Configuration options for the map instance
  * @returns Object containing the map instance and loading state
@@ -27,8 +27,19 @@ export function useMapInstance({
   const containerRef = useRef<HTMLElement | string | null>(null)
   const initialOptionsRef =
     useRef<Omit<MapOptions, "container">>(initialOptions)
+  const isUnmountedRef = useRef(false)
+  const cleanupFunctionsRef = useRef<Array<() => void>>([])
+
   const [isLoaded, setIsLoaded] = useState(false)
   const [error, setError] = useState<Error | null>(null)
+
+  // Track component unmount to prevent state updates after cleanup
+  useEffect(() => {
+    isUnmountedRef.current = false
+    return () => {
+      isUnmountedRef.current = true
+    }
+  }, [])
 
   // Update initial options ref when they change meaningfully
   useEffect(() => {
@@ -40,9 +51,41 @@ export function useMapInstance({
     }
   }, [initialOptions])
 
+  // Enhanced cleanup function
+  const performCleanup = useCallback(() => {
+    // Execute all registered cleanup functions
+    cleanupFunctionsRef.current.forEach(cleanup => {
+      try {
+        cleanup()
+      } catch (error) {
+        console.warn("Error during cleanup:", error)
+      }
+    })
+    cleanupFunctionsRef.current = []
+
+    // Clean up map instance
+    if (mapRef.current) {
+      try {
+        // MapLibre requires specific event types for off(), so we remove the instance instead
+        mapRef.current.remove()
+      } catch (error) {
+        console.warn("Error cleaning up map instance:", error)
+      }
+      mapRef.current = null
+    }
+
+    // Reset state only if component is still mounted
+    if (!isUnmountedRef.current) {
+      setIsLoaded(false)
+      setError(null)
+    }
+  }, [])
+
   // Stable error handler
   const handleError = useCallback(
     (mapError: Error) => {
+      if (isUnmountedRef.current) return
+
       logMapError(mapError, "Map Runtime Error")
       setError(mapError)
       if (onError) onError(mapError)
@@ -53,6 +96,8 @@ export function useMapInstance({
   // Stable load handler
   const handleLoad = useCallback(
     (map: Map) => {
+      if (isUnmountedRef.current) return
+
       setIsLoaded(true)
       if (onLoad) onLoad(map)
     },
@@ -71,10 +116,7 @@ export function useMapInstance({
     // Clean up existing map if the container has changed
     if (mapRef.current && containerChanged) {
       console.log("Container reference changed, cleaning up existing map")
-      mapRef.current.remove()
-      mapRef.current = null
-      setIsLoaded(false)
-      setError(null)
+      performCleanup()
     }
 
     // Don't re-initialize if we already have a map and the container hasn't changed
@@ -92,10 +134,12 @@ export function useMapInstance({
         ...initialOptionsRef.current
       })
 
-      // Set up event handlers
-      map.on("load", () => handleLoad(map))
+      // Store map reference immediately
+      mapRef.current = map
 
-      map.on("error", e => {
+      // Set up event handlers with proper cleanup tracking
+      const loadHandler = () => handleLoad(map)
+      const errorHandler = (e: any) => {
         console.log("MapLibre error event:", e)
         logMapError(e, "MapLibre Error Event")
 
@@ -103,20 +147,19 @@ export function useMapInstance({
           `Map error: ${e.error?.message || e.message || "Unknown error"}`
         )
         handleError(mapError)
-      })
+      }
 
-      // Store map reference
-      mapRef.current = map
+      map.on("load", loadHandler)
+      map.on("error", errorHandler)
+
+      // Register cleanup functions
+      cleanupFunctionsRef.current.push(
+        () => map.off("load", loadHandler),
+        () => map.off("error", errorHandler)
+      )
 
       // Cleanup function
-      return () => {
-        if (mapRef.current) {
-          mapRef.current.remove()
-          mapRef.current = null
-          setIsLoaded(false)
-          setError(null)
-        }
-      }
+      return performCleanup
     } catch (err) {
       const initError =
         err instanceof Error ? err : new Error("Failed to initialize map")
@@ -124,13 +167,19 @@ export function useMapInstance({
       // Use our centralized error logging
       logMapError(initError, "Map Initialization")
 
-      // Set error state
-      setError(initError)
-
-      // Call the error handler if provided
-      handleError(initError)
+      // Set error state only if component is still mounted
+      if (!isUnmountedRef.current) {
+        setError(initError)
+        // Call the error handler if provided
+        handleError(initError)
+      }
     }
-  }, [container, handleLoad, handleError])
+  }, [container, handleLoad, handleError, performCleanup])
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return performCleanup
+  }, [performCleanup])
 
   return {
     map: mapRef.current,

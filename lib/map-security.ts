@@ -224,14 +224,19 @@ export function createSafePopupContent(data: {
 }
 
 /**
- * Event manager to prevent memory leaks
+ * Enhanced Map Event Manager with comprehensive cleanup tracking
+ * Prevents memory leaks by properly managing all event listeners and DOM elements
  */
 export class MapEventManager {
   private elementHandlers = new WeakMap<HTMLElement, (() => void)[]>()
   private markerHandlers = new WeakMap<any, () => void>()
+  private mapHandlers = new Map<string, () => void>()
+  private animationFrames = new Set<number>()
+  private timeouts = new Set<NodeJS.Timeout>()
+  private intervals = new Set<number>()
 
   /**
-   * Safely adds event listener with automatic cleanup tracking
+   * Add event listener to DOM element with cleanup tracking
    */
   addElementListener(
     element: HTMLElement,
@@ -239,55 +244,172 @@ export class MapEventManager {
     handler: (e: Event) => void,
     options?: AddEventListenerOptions
   ): void {
-    element.addEventListener(event, handler, options)
+    const cleanupHandler = () => {
+      element.removeEventListener(event, handler, options)
+    }
 
-    const handlers = this.elementHandlers.get(element) || []
-    handlers.push(() => element.removeEventListener(event, handler, options))
-    this.elementHandlers.set(element, handlers)
+    // Store cleanup function
+    const existingHandlers = this.elementHandlers.get(element) || []
+    existingHandlers.push(cleanupHandler)
+    this.elementHandlers.set(element, existingHandlers)
+
+    // Add the event listener
+    element.addEventListener(event, handler, options)
   }
 
   /**
-   * Adds marker click handler with cleanup tracking
+   * Add map event listener with cleanup tracking
    */
-  addMarkerHandler(marker: any, handler: () => void): void {
-    const element = marker.getElement()
-    if (element) {
-      this.addElementListener(element, "click", handler)
-      this.markerHandlers.set(marker, handler)
+  addMapListener(map: any, event: string, handler: (e: any) => void): void {
+    const handlerId = `${event}-${Date.now()}-${Math.random()}`
+
+    const cleanupHandler = () => {
+      if (map && typeof map.off === "function") {
+        map.off(event, handler)
+      }
+    }
+
+    this.mapHandlers.set(handlerId, cleanupHandler)
+
+    // Add the event listener
+    if (map && typeof map.on === "function") {
+      map.on(event, handler)
     }
   }
 
   /**
-   * Removes all handlers for a specific element
+   * Add marker handler with cleanup tracking
+   */
+  addMarkerHandler(marker: any, handler: () => void): void {
+    this.markerHandlers.set(marker, handler)
+  }
+
+  /**
+   * Track animation frame for cleanup
+   */
+  addAnimationFrame(frameId: number): void {
+    this.animationFrames.add(frameId)
+  }
+
+  /**
+   * Track timeout for cleanup
+   */
+  addTimeout(timeoutId: NodeJS.Timeout): void {
+    this.timeouts.add(timeoutId)
+  }
+
+  /**
+   * Track interval for cleanup
+   */
+  addInterval(intervalId: number): void {
+    this.intervals.add(intervalId)
+  }
+
+  /**
+   * Remove all event listeners from a specific element
    */
   removeElementHandlers(element: HTMLElement): void {
     const handlers = this.elementHandlers.get(element)
     if (handlers) {
-      handlers.forEach(cleanup => cleanup())
+      handlers.forEach(cleanup => {
+        try {
+          cleanup()
+        } catch (error) {
+          console.warn("Error cleaning up element handler:", error)
+        }
+      })
       this.elementHandlers.delete(element)
     }
   }
 
   /**
-   * Removes handler for a specific marker
+   * Remove marker handler
    */
   removeMarkerHandler(marker: any): void {
     const handler = this.markerHandlers.get(marker)
     if (handler) {
-      const element = marker.getElement()
-      if (element) {
-        this.removeElementHandlers(element)
+      try {
+        handler()
+      } catch (error) {
+        console.warn("Error cleaning up marker handler:", error)
       }
       this.markerHandlers.delete(marker)
     }
   }
 
   /**
-   * Cleanup all managed event listeners
+   * Remove map event listener
+   */
+  removeMapHandler(handlerId: string): void {
+    const handler = this.mapHandlers.get(handlerId)
+    if (handler) {
+      try {
+        handler()
+      } catch (error) {
+        console.warn("Error cleaning up map handler:", error)
+      }
+      this.mapHandlers.delete(handlerId)
+    }
+  }
+
+  /**
+   * Comprehensive cleanup of all tracked resources
    */
   cleanup(): void {
-    // WeakMap entries will be garbage collected automatically
-    // when the referenced objects are no longer reachable
+    // Clean up animation frames
+    this.animationFrames.forEach(frameId => {
+      try {
+        cancelAnimationFrame(frameId)
+      } catch (error) {
+        console.warn("Error canceling animation frame:", error)
+      }
+    })
+    this.animationFrames.clear()
+
+    // Clean up timeouts
+    this.timeouts.forEach(timeoutId => {
+      try {
+        clearTimeout(timeoutId)
+      } catch (error) {
+        console.warn("Error clearing timeout:", error)
+      }
+    })
+    this.timeouts.clear()
+
+    // Clean up intervals
+    this.intervals.forEach(intervalId => {
+      try {
+        clearInterval(intervalId)
+      } catch (error) {
+        console.warn("Error clearing interval:", error)
+      }
+    })
+    this.intervals.clear()
+
+    // Clean up map handlers
+    this.mapHandlers.forEach((cleanup, handlerId) => {
+      try {
+        cleanup()
+      } catch (error) {
+        console.warn(`Error cleaning up map handler ${handlerId}:`, error)
+      }
+    })
+    this.mapHandlers.clear()
+
+    // Clean up marker handlers (WeakMap will be garbage collected automatically)
+    // Clean up element handlers (WeakMap will be garbage collected automatically)
+  }
+
+  /**
+   * Get cleanup statistics for debugging
+   */
+  getCleanupStats() {
+    return {
+      animationFrames: this.animationFrames.size,
+      timeouts: this.timeouts.size,
+      intervals: this.intervals.size,
+      mapHandlers: this.mapHandlers.size
+    }
   }
 }
 

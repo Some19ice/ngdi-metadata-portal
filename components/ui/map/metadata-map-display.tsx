@@ -29,6 +29,7 @@ import {
   MapEventManager
 } from "@/lib/map-security"
 
+
 interface MetadataMapDisplayProps {
   records: MetadataRecord[]
   className?: string
@@ -111,15 +112,15 @@ export default function MetadataMapDisplay({
       initialLayers: []
     })
 
-  // Memoize clustering options to prevent unnecessary re-renders
-  const clusteringOpts = useMemo(
-    () => ({
-      radius: 50,
-      maxZoom: 16,
-      minZoom: 0,
-      extent: 512,
-      nodeSize: 64
-    }),
+  // PERFORMANCE FIX: Simple throttle utility to avoid lodash dependency issues
+  const throttle = useCallback(
+    <T extends (...args: any[]) => void>(func: T, wait: number): T => {
+      let timeout: NodeJS.Timeout | null = null
+      return ((...args: any[]) => {
+        if (timeout) clearTimeout(timeout)
+        timeout = setTimeout(() => func.apply(null, args), wait)
+      }) as T
+    },
     []
   )
 
@@ -128,87 +129,82 @@ export default function MetadataMapDisplay({
     map: mapInstance,
     records,
     onRecordClick,
-    clusterRadius: clusteringOpts.radius,
-    minZoom: clusteringOpts.minZoom,
-    maxZoom: clusteringOpts.maxZoom
+    clusterRadius: 80,
+    minZoom: 0,
+    maxZoom: 12
   })
 
-  // Prepare marker data for the useMapMarkers hook based on clustering state
-  const markerDataArray: MarkerData[] = useMemo(() => {
-    // Only run this on the client side
-    if (typeof window === "undefined") return []
-
-    if (enableClustering && clusters.length > 0) {
-      // Use clustered data - convert to proper MarkerData format
-      return clusters
-        .filter(cluster => {
-          // Only individual points for markers (check if cluster property exists and is false)
-          const properties = cluster.properties as any
-          return !("cluster" in properties) || !properties.cluster
-        })
-        .map(cluster => {
-          const record = cluster.properties as MetadataRecord
-          return {
-            id: record.id || `point-${cluster.geometry.coordinates.join("-")}`,
-            coordinates: cluster.geometry.coordinates as [number, number],
-            title: record.title || "Metadata Record",
-            description: record.description ?? undefined,
-            category: "metadata",
-            metadata: record
-          }
-        })
-    } else {
-      // Use individual markers (original behavior)
-      return records
-        .filter(hasValidSpatialBounds)
-        .map(record => {
-          const center = getRecordCenter(record)
-          if (!center) return null
-
-          return {
-            id: record.id,
-            coordinates: center,
-            title: record.title,
-            description: record.description ?? undefined,
-            category: "metadata",
-            metadata: record
-          }
-        })
-        .filter(Boolean) as MarkerData[]
+  // Set up map viewport first to get fitBounds
+  const { flyTo, fitBounds } = useMapViewport({
+    map: mapInstance,
+    initialViewport: {
+      center: [8.6775, 9.0778] as [number, number], // Nigeria
+      zoom: 5
     }
-  }, [records, clusters, enableClustering])
+  })
+
+  // PERFORMANCE FIX: Memoize marker data to prevent unnecessary re-renders
+  const markerDataArray = useMemo(() => {
+    return records
+      .filter(hasValidSpatialBounds)
+      .map(record => {
+        const center = getRecordCenter(record)
+        if (!center) return null
+        return {
+          id: record.id,
+          coordinates: center,
+          title: record.title,
+          description: record.description || ""
+        }
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null)
+  }, [records])
+
+  // PERFORMANCE FIX: Memoize marker click handler
+  const handleMarkerClick = useCallback(
+    (markerData: any) => {
+      const record = records.find(r => r.id === markerData.id)
+      if (record) {
+        setSelectedRecordId(markerData.id)
+        onRecordClick?.(record)
+        const bounds = getRecordBounds(record)
+        if (bounds) {
+          fitBounds(bounds, { padding: 200, maxZoom: 15 })
+        }
+      }
+    },
+    [records, onRecordClick, fitBounds, setSelectedRecordId]
+  )
+
+  // PERFORMANCE FIX: Memoize cluster click handler
+  const handleClusterClick = useCallback(
+    (clusterData: any) => {
+      expandCluster(parseInt(clusterData.id.replace("cluster-", "")))
+    },
+    [expandCluster]
+  )
+
+  // PERFORMANCE FIX: Memoize markers configuration
+  const markersConfig = useMemo(
+    () => ({
+      onMarkerClick: handleMarkerClick,
+      onClusterClick: handleClusterClick,
+      enablePopups: true,
+      enableClustering
+    }),
+    [handleMarkerClick, handleClusterClick, enableClustering]
+  )
 
   // Set up map markers using the declarative hook
   const { addMarkers, addClusters, clearAllMarkers, markers } = useMapMarkers(
     mapInstance,
-    {
-      onMarkerClick: markerData => {
-        const record = records.find(r => r.id === markerData.id)
-        if (record) {
-          setSelectedRecordId(markerData.id)
-          onRecordClick?.(record)
-          const bounds = getRecordBounds(record)
-          if (bounds) {
-            fitBounds(bounds, { padding: 200, maxZoom: 15 })
-          }
-        }
-      },
-      onClusterClick: clusterData => {
-        expandCluster(parseInt(clusterData.id.replace("cluster-", "")))
-      },
-      enablePopups: true,
-      enableClustering
-    }
+    markersConfig
   )
 
-  // Set up map viewport
-  const { flyTo, fitBounds } = useMapViewport({
-    map: mapInstance,
-    initialViewport: {
-      center: [8.6775, 9.0778], // Nigeria
-      zoom: 5
-    }
-  })
+  // PERFORMANCE FIX: Memoize GeoJSON data to prevent recreation
+  const recordsGeoJSON = useMemo(() => {
+    return recordsToGeoJSON(records)
+  }, [records])
 
   // Unified bounding box layer management - handles initial creation, style changes, and data updates
   useEffect(() => {
@@ -224,7 +220,7 @@ export default function MetadataMapDisplay({
       if (existingSource) {
         // Update existing source data
         if ("setData" in existingSource) {
-          ;(existingSource as any).setData(recordsToGeoJSON(records))
+          ;(existingSource as any).setData(recordsGeoJSON)
         }
       } else {
         // Add source and layer for bounding boxes
@@ -232,7 +228,7 @@ export default function MetadataMapDisplay({
           id: "metadata-bounds",
           source: {
             type: "geojson",
-            data: recordsToGeoJSON(records)
+            data: recordsGeoJSON
           },
           layer: {
             type: "fill",
@@ -318,7 +314,7 @@ export default function MetadataMapDisplay({
   }, [
     mapInstance,
     isMapLoaded,
-    records,
+    recordsGeoJSON, // Use memoized GeoJSON
     showBoundingBoxes,
     selectedRecordId,
     addLayer,
@@ -326,39 +322,47 @@ export default function MetadataMapDisplay({
     activeStyleId // Keep activeStyleId in dependency array to re-run when style changes
   ])
 
+  // PERFORMANCE FIX: Throttle marker updates to prevent excessive re-renders
+  const throttledUpdateMarkers = useCallback(
+    throttle(() => {
+      if (!mapInstance || !isMapLoaded) return
+
+      // Clear existing markers
+      clearAllMarkers()
+
+      // Add individual markers
+      addMarkers(markerDataArray)
+
+      // Add clusters if clustering is enabled
+      if (enableClustering && clusters.length > 0) {
+        const clusterMarkers = clusters
+          .filter((cluster: any) => cluster.properties.cluster)
+          .map((cluster: any) => ({
+            id: `cluster-${cluster.properties.cluster_id}`,
+            coordinates: cluster.geometry.coordinates as [number, number],
+            count: cluster.properties.point_count || 0,
+            items: [] // We don't need individual items for display
+          }))
+
+        addClusters(clusterMarkers)
+      }
+    }, 100), // Throttle to 100ms
+    [
+      mapInstance,
+      isMapLoaded,
+      markerDataArray,
+      clusters,
+      enableClustering,
+      addMarkers,
+      addClusters,
+      clearAllMarkers
+    ]
+  )
+
   // Update markers when data changes
   useEffect(() => {
-    if (!mapInstance || !isMapLoaded) return
-
-    // Clear existing markers
-    clearAllMarkers()
-
-    // Add individual markers
-    addMarkers(markerDataArray)
-
-    // Add clusters if clustering is enabled
-    if (enableClustering && clusters.length > 0) {
-      const clusterMarkers = clusters
-        .filter(cluster => cluster.properties.cluster)
-        .map(cluster => ({
-          id: `cluster-${cluster.properties.cluster_id}`,
-          coordinates: cluster.geometry.coordinates as [number, number],
-          count: cluster.properties.point_count || 0,
-          items: [] // We don't need individual items for display
-        }))
-
-      addClusters(clusterMarkers)
-    }
-  }, [
-    mapInstance,
-    isMapLoaded,
-    markerDataArray,
-    clusters,
-    enableClustering,
-    addMarkers,
-    addClusters,
-    clearAllMarkers
-  ])
+    throttledUpdateMarkers()
+  }, [throttledUpdateMarkers])
 
   // Fit map to bounds of all records when records change
   useEffect(() => {

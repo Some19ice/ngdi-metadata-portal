@@ -1,19 +1,18 @@
 /**
- * Map Library Loader - Optimized loading for map libraries
- * Provides conditional loading, caching, and performance optimizations
+ * Dynamic map library loader
+ * Conditionally loads MapLibre GL JS only when needed
  */
 
-import { MapStyle } from "@/components/ui/map/map-view"
+// Cache for loaded libraries to prevent re-loading
+const libraryCache = new Map<string, any>()
 
-// Map library types
-export type MapLibraryType = "maplibre" | "leaflet"
+export type MapLibraryType = "maplibre"
 
-// Cache for loaded libraries
-const libraryCache = new Map<MapLibraryType, any>()
-const styleCache = new Map<string, any>()
-
-// Loading states
-const loadingStates = new Map<string, Promise<any>>()
+export interface MapLibraryLoader {
+  load(): Promise<any>
+  isLoaded(): boolean
+  getLoadedLibrary(): any | null
+}
 
 /**
  * Conditionally load MapLibre GL JS only when needed
@@ -26,192 +25,106 @@ export async function loadMapLibre() {
     return libraryCache.get(cacheKey)
   }
 
-  // Return existing promise if already loading
-  if (loadingStates.has(cacheKey)) {
-    return loadingStates.get(cacheKey)
-  }
-
-  // Create loading promise
-  const loadingPromise = import("maplibre-gl").then(module => {
-    const maplibregl = module.default
+  // Check if already loaded globally (e.g., via CDN)
+  if (typeof window !== "undefined" && (window as any).maplibregl) {
+    const maplibregl = (window as any).maplibregl
     libraryCache.set(cacheKey, maplibregl)
-    loadingStates.delete(cacheKey)
     return maplibregl
-  })
-
-  loadingStates.set(cacheKey, loadingPromise)
-  return loadingPromise
-}
-
-/**
- * Conditionally load Leaflet only when needed
- */
-export async function loadLeaflet() {
-  const cacheKey = "leaflet"
-
-  // Return cached version if available
-  if (libraryCache.has(cacheKey)) {
-    return libraryCache.get(cacheKey)
   }
 
-  // Return existing promise if already loading
-  if (loadingStates.has(cacheKey)) {
-    return loadingStates.get(cacheKey)
-  }
+  // Dynamic import with error handling
+  try {
+    const loadingPromise = import("maplibre-gl").then(module => {
+      const maplibregl = module.default
+      libraryCache.set(cacheKey, maplibregl)
 
-  // Create loading promise
-  const loadingPromise = Promise.all([
-    import("leaflet"),
-    import("react-leaflet")
-  ]).then(([leafletModule, reactLeafletModule]) => {
-    const L = leafletModule.default
-    const reactLeaflet = reactLeafletModule
-
-    // Fix for default marker icon issue with webpack
-    // @ts-ignore
-    delete L.Icon.Default.prototype._getIconUrl
-    L.Icon.Default.mergeOptions({
-      iconRetinaUrl:
-        "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png",
-      iconUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png",
-      shadowUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png"
+      return maplibregl
     })
 
-    const result = { L, ...reactLeaflet }
-    libraryCache.set(cacheKey, result)
-    loadingStates.delete(cacheKey)
-    return result
-  })
-
-  loadingStates.set(cacheKey, loadingPromise)
-  return loadingPromise
+    return await loadingPromise
+  } catch (error) {
+    console.error("Failed to load MapLibre GL JS:", error)
+    throw new Error("MapLibre GL JS could not be loaded")
+  }
 }
 
 /**
  * Preload map styles for better performance
  */
-export async function preloadMapStyle(styleUrl: string): Promise<any> {
-  if (styleCache.has(styleUrl)) {
-    return styleCache.get(styleUrl)
-  }
+export async function preloadMapStyles(styles: Array<{ url: string }>) {
+  if (typeof window === "undefined") return
 
-  if (loadingStates.has(styleUrl)) {
-    return loadingStates.get(styleUrl)
-  }
-
-  const loadingPromise = fetch(styleUrl)
-    .then(response => response.json())
-    .then(style => {
-      styleCache.set(styleUrl, style)
-      loadingStates.delete(styleUrl)
-      return style
-    })
-    .catch(error => {
-      loadingStates.delete(styleUrl)
-      console.warn(`Failed to preload style ${styleUrl}:`, error)
-      return null
-    })
-
-  loadingStates.set(styleUrl, loadingPromise)
-  return loadingPromise
-}
-
-/**
- * Preload multiple map styles
- */
-export async function preloadMapStyles(styles: MapStyle[]): Promise<void> {
-  const preloadPromises = styles
-    .filter(style => style.url && !styleCache.has(style.url))
-    .map(style => preloadMapStyle(style.url))
+  // Preload style JSON files
+  const preloadPromises = styles.map(async style => {
+    try {
+      const response = await fetch(style.url)
+      if (response.ok) {
+        const styleJson = await response.json()
+        // Store in cache or process as needed
+        return styleJson
+      }
+    } catch (error) {
+      console.warn(`Failed to preload style: ${style.url}`, error)
+    }
+    return null
+  })
 
   await Promise.allSettled(preloadPromises)
 }
 
 /**
- * Clear caches (useful for memory management)
+ * Create map library loader instance
  */
-export function clearMapCaches(): void {
-  libraryCache.clear()
-  styleCache.clear()
-  // Don't clear loading states as they represent active operations
-}
+export function createMapLibraryLoader(): MapLibraryLoader {
+  const cacheKey = "maplibre"
 
-/**
- * Get cache statistics for debugging
- */
-export function getMapCacheStats() {
   return {
-    librariesCached: libraryCache.size,
-    stylesCached: styleCache.size,
-    activeLoading: loadingStates.size,
-    cacheKeys: {
-      libraries: Array.from(libraryCache.keys()),
-      styles: Array.from(styleCache.keys()),
-      loading: Array.from(loadingStates.keys())
+    async load() {
+      return await loadMapLibre()
+    },
+
+    isLoaded() {
+      return libraryCache.has(cacheKey)
+    },
+
+    getLoadedLibrary() {
+      return libraryCache.get(cacheKey) || null
     }
   }
 }
 
 /**
- * Determine which map library to use based on requirements
+ * Get the optimal map library for the given requirements
+ * @param requirements Map requirements
+ * @returns The optimal map library type
  */
 export function getOptimalMapLibrary(requirements: {
-  needs3D?: boolean
+  supports3D?: boolean
   needsDrawing?: boolean
+  needsVectorTiles?: boolean
   needsAdvancedStyling?: boolean
-  datasetSize?: "small" | "medium" | "large"
+  maxDataPoints?: number
 }): MapLibraryType {
-  const { needs3D, needsDrawing, needsAdvancedStyling, datasetSize } =
-    requirements
-
-  // Use MapLibre for 3D, advanced styling, or large datasets
-  if (needs3D || needsAdvancedStyling || datasetSize === "large") {
-    return "maplibre"
-  }
-
-  // Use Leaflet for simple 2D maps, especially with drawing
-  if (needsDrawing || datasetSize === "small") {
-    return "leaflet"
-  }
-
-  // Default to MapLibre for better performance
+  // Always return MapLibre since we've standardized on it
   return "maplibre"
 }
 
 /**
- * Progressive loading hook for map components
+ * Load the appropriate map library based on requirements
  */
-export function useMapLibraryLoader(libraryType: MapLibraryType) {
-  const [library, setLibrary] = React.useState<any>(null)
-  const [loading, setLoading] = React.useState(true)
-  const [error, setError] = React.useState<Error | null>(null)
-
-  React.useEffect(() => {
-    const loadLibrary = async () => {
-      try {
-        setLoading(true)
-        setError(null)
-
-        const lib =
-          libraryType === "maplibre"
-            ? await loadMapLibre()
-            : await loadLeaflet()
-
-        setLibrary(lib)
-      } catch (err) {
-        setError(
-          err instanceof Error ? err : new Error("Failed to load map library")
-        )
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    loadLibrary()
-  }, [libraryType])
-
-  return { library, loading, error }
+export async function loadOptimalMapLibrary(requirements: {
+  supports3D?: boolean
+  needsDrawing?: boolean
+  needsVectorTiles?: boolean
+  needsAdvancedStyling?: boolean
+  maxDataPoints?: number
+}): Promise<any> {
+  return await loadMapLibre()
 }
 
-// Import React for the hook
-import React from "react"
+/**
+ * Clean up cached libraries (useful for testing or memory management)
+ */
+export function clearLibraryCache(): void {
+  libraryCache.clear()
+}
