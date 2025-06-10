@@ -119,9 +119,25 @@ export default async function LandingPage() {
                   className="overflow-hidden hover:shadow-lg transition-all duration-300 group"
                 >
                   <div className="aspect-video bg-muted relative overflow-hidden">
-                    <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center">
-                      <Database className="h-12 w-12 text-muted-foreground" />
-                    </div>
+                    <Image
+                      src={dataset.imageUrl}
+                      alt={dataset.title}
+                      fill
+                      className="object-cover transition-transform duration-300 group-hover:scale-105"
+                      onError={e => {
+                        // Fallback to gradient if image fails to load
+                        const target = e.target as HTMLImageElement
+                        target.style.display = "none"
+                        target.parentElement!.innerHTML = `
+                          <div class="absolute inset-0 bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center">
+                            <svg class="h-12 w-12 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                              <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+                              <path d="M3 5v14a9 3 0 0 0 18 0V5"></path>
+                            </svg>
+                          </div>
+                        `
+                      }}
+                    />
                   </div>
                   <CardHeader>
                     <CardTitle className="group-hover:text-primary transition-colors">
