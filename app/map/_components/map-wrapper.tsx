@@ -430,7 +430,7 @@ function MapWrapper({
   return (
     <div className="flex h-screen bg-gray-50">
       {/* Smart Map Hub Sidebar */}
-      <div className="w-80 bg-white shadow-lg border-r border-gray-200 overflow-y-auto">
+      <div className="w-80 bg-white shadow-2xl border-r-4 border-gray-400 overflow-y-auto relative z-10">
         <MapControlPanel
           map={map}
           isLoaded={isLoaded}
@@ -445,7 +445,7 @@ function MapWrapper({
       </div>
 
       {/* Map Container */}
-      <div className="flex-1 relative">
+      <div className="flex-1 relative ml-2">
         <MapErrorBoundary onError={handleMapError}>
           <MapView
             initialOptions={{
