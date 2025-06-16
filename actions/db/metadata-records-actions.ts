@@ -239,6 +239,9 @@ export async function getMetadataRecordsByOrgAction(
   try {
     const records = await db.query.metadataRecords.findMany({
       where: eq(metadataRecordsTable.organizationId, organizationId),
+      with: {
+        organization: true
+      },
       orderBy: [desc(metadataRecordsTable.updatedAt)]
     })
 
@@ -258,7 +261,7 @@ export async function getMetadataRecordsByOrgAction(
 
 export async function getMetadataRecordsByStatusAction(
   status: SelectMetadataRecord["status"]
-): Promise<ActionState<SelectMetadataRecord[]>> {
+): Promise<ActionState<MetadataRecordWithOrganization[]>> {
   const { userId: currentUserId } = await auth()
   if (!currentUserId) {
     return { isSuccess: false, message: "User not authenticated." }
@@ -281,6 +284,9 @@ export async function getMetadataRecordsByStatusAction(
   try {
     const records = await db.query.metadataRecords.findMany({
       where: eq(metadataRecordsTable.status, status),
+      with: {
+        organization: true
+      },
       orderBy: [desc(metadataRecordsTable.updatedAt)]
     })
 
@@ -326,6 +332,9 @@ export async function getMetadataRecordsForUserAction(
   try {
     const records = await db.query.metadataRecords.findMany({
       where: eq(metadataRecordsTable.creatorUserId, userIdToQuery),
+      with: {
+        organization: true
+      },
       orderBy: [desc(metadataRecordsTable.updatedAt)]
     })
 
@@ -1055,7 +1064,7 @@ export async function getMetadataRecordCountsForOrgByStatusAction(
 export async function getRecentOrgMetadataActivityAction(
   organizationId: string,
   limit: number = 5
-): Promise<ActionState<SelectMetadataRecord[]>> {
+): Promise<ActionState<MetadataRecordWithOrganization[]>> {
   const { userId: currentUserId } = await auth()
   if (!currentUserId) {
     return { isSuccess: false, message: "User not authenticated." }
@@ -1078,6 +1087,9 @@ export async function getRecentOrgMetadataActivityAction(
   try {
     const recentRecords = await db.query.metadataRecords.findMany({
       where: eq(metadataRecordsTable.organizationId, organizationId),
+      with: {
+        organization: true
+      },
       orderBy: [desc(metadataRecordsTable.updatedAt)], // Could also be createdAt or a combination
       limit: limit
     })

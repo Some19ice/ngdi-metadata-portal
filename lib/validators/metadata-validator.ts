@@ -52,18 +52,83 @@ export const LocationInfoSchema = z.object({
 }) satisfies z.ZodType<LocationInfo> // Drizzle type is LocationInfo (not partial, not nullable itself as a field)
 
 // Nested Schemas for SpatialInfo
-export const BoundingBoxInfoSchema = z.object({
-  westBoundingCoordinate: zodNullableNumber,
-  eastBoundingCoordinate: zodNullableNumber,
-  northBoundingCoordinate: zodNullableNumber,
-  southBoundingCoordinate: zodNullableNumber
-}) satisfies z.ZodType<BoundingBoxInfo>
+export const BoundingBoxInfoSchema = z
+  .object({
+    westBoundingCoordinate: z
+      .number()
+      .min(-180, "West bounding coordinate must be between -180 and 180")
+      .max(180, "West bounding coordinate must be between -180 and 180")
+      .nullable(),
+    eastBoundingCoordinate: z
+      .number()
+      .min(-180, "East bounding coordinate must be between -180 and 180")
+      .max(180, "East bounding coordinate must be between -180 and 180")
+      .nullable(),
+    northBoundingCoordinate: z
+      .number()
+      .min(-90, "North bounding coordinate must be between -90 and 90")
+      .max(90, "North bounding coordinate must be between -90 and 90")
+      .nullable(),
+    southBoundingCoordinate: z
+      .number()
+      .min(-90, "South bounding coordinate must be between -90 and 90")
+      .max(90, "South bounding coordinate must be between -90 and 90")
+      .nullable()
+  })
+  .refine(
+    data => {
+      // Cross-validation: ensure coordinates make logical sense
+      if (
+        data.westBoundingCoordinate !== null &&
+        data.eastBoundingCoordinate !== null
+      ) {
+        return data.westBoundingCoordinate <= data.eastBoundingCoordinate
+      }
+      return true
+    },
+    {
+      message:
+        "West bounding coordinate must be less than or equal to east bounding coordinate",
+      path: ["westBoundingCoordinate"]
+    }
+  )
+  .refine(
+    data => {
+      // Cross-validation: ensure coordinates make logical sense
+      if (
+        data.southBoundingCoordinate !== null &&
+        data.northBoundingCoordinate !== null
+      ) {
+        return data.southBoundingCoordinate <= data.northBoundingCoordinate
+      }
+      return true
+    },
+    {
+      message:
+        "South bounding coordinate must be less than or equal to north bounding coordinate",
+      path: ["southBoundingCoordinate"]
+    }
+  ) satisfies z.ZodType<BoundingBoxInfo>
 
-export const VerticalExtentInfoSchema = z.object({
-  minimumValue: zodNullableNumber,
-  maximumValue: zodNullableNumber,
-  unitOfMeasure: zodNullableString
-}) satisfies z.ZodType<VerticalExtentInfo>
+export const VerticalExtentInfoSchema = z
+  .object({
+    minimumValue: zodNullableNumber,
+    maximumValue: zodNullableNumber,
+    unitOfMeasure: zodNullableString
+  })
+  .refine(
+    data => {
+      // Cross-validation: ensure min value is less than or equal to max value
+      if (data.minimumValue !== null && data.maximumValue !== null) {
+        return data.minimumValue <= data.maximumValue
+      }
+      return true
+    },
+    {
+      message: "Minimum value must be less than or equal to maximum value",
+      path: ["minimumValue"]
+    }
+  ) satisfies z.ZodType<VerticalExtentInfo>
 
 export const GeometricObjectSchema = z.object({
   type: zodNullableString,
@@ -89,28 +154,78 @@ export const RasterSpatialRepresentationInfoSchema = z.object({
   compressionGenerationQuantity: zodNullableNumber
 }) satisfies z.ZodType<RasterSpatialRepresentationInfo>
 
-export const SpatialInfoSchema = z.object({
-  coordinateSystem: zodNullableString,
-  projection: zodNullableString,
-  datum: zodNullableString,
-  resolutionScale: zodNullableString,
-  geometricObjectType: zodNullableString,
-  numFeaturesOrLayers: zodNullableNumber,
-  format: zodNullableString,
-  distributionFormat: zodNullableString,
-  spatialRepresentationType: zodNullableString,
-  vectorSpatialRepresentation: VectorSpatialRepresentationInfoSchema.nullable(),
-  rasterSpatialRepresentation: RasterSpatialRepresentationInfoSchema.nullable(),
-  boundingBox: BoundingBoxInfoSchema.nullable(),
-  verticalExtent: VerticalExtentInfoSchema.nullable(),
-  // Additional fields used in the client component
-  scale: zodNullableNumber,
-  resolution: zodNullableString,
-  minLatitude: zodNullableNumber,
-  maxLatitude: zodNullableNumber,
-  minLongitude: zodNullableNumber,
-  maxLongitude: zodNullableNumber
-}) // Removed satisfies constraint since we added custom fields
+export const SpatialInfoSchema = z
+  .object({
+    coordinateSystem: zodNullableString,
+    projection: zodNullableString,
+    datum: zodNullableString,
+    resolutionScale: zodNullableString,
+    geometricObjectType: zodNullableString,
+    numFeaturesOrLayers: z
+      .number()
+      .min(0, "Number of features/layers must be non-negative")
+      .nullable(),
+    format: zodNullableString,
+    distributionFormat: zodNullableString,
+    spatialRepresentationType: zodNullableString,
+    vectorSpatialRepresentation:
+      VectorSpatialRepresentationInfoSchema.nullable(),
+    rasterSpatialRepresentation:
+      RasterSpatialRepresentationInfoSchema.nullable(),
+    boundingBox: BoundingBoxInfoSchema.nullable(),
+    verticalExtent: VerticalExtentInfoSchema.nullable(),
+    // Additional fields used in the client component with coordinate validation
+    scale: z.number().positive("Scale must be positive").nullable(),
+    resolution: zodNullableString,
+    minLatitude: z
+      .number()
+      .min(-90, "Minimum latitude must be between -90 and 90")
+      .max(90, "Minimum latitude must be between -90 and 90")
+      .nullable(),
+    maxLatitude: z
+      .number()
+      .min(-90, "Maximum latitude must be between -90 and 90")
+      .max(90, "Maximum latitude must be between -90 and 90")
+      .nullable(),
+    minLongitude: z
+      .number()
+      .min(-180, "Minimum longitude must be between -180 and 180")
+      .max(180, "Minimum longitude must be between -180 and 180")
+      .nullable(),
+    maxLongitude: z
+      .number()
+      .min(-180, "Maximum longitude must be between -180 and 180")
+      .max(180, "Maximum longitude must be between -180 and 180")
+      .nullable()
+  })
+  .refine(
+    data => {
+      // Cross-validation: ensure min/max coordinates make logical sense
+      if (data.minLatitude !== null && data.maxLatitude !== null) {
+        return data.minLatitude <= data.maxLatitude
+      }
+      return true
+    },
+    {
+      message:
+        "Minimum latitude must be less than or equal to maximum latitude",
+      path: ["minLatitude"]
+    }
+  )
+  .refine(
+    data => {
+      // Cross-validation: ensure min/max coordinates make logical sense
+      if (data.minLongitude !== null && data.maxLongitude !== null) {
+        return data.minLongitude <= data.maxLongitude
+      }
+      return true
+    },
+    {
+      message:
+        "Minimum longitude must be less than or equal to maximum longitude",
+      path: ["minLongitude"]
+    }
+  ) // Removed satisfies constraint since we added custom fields
 
 // For TemporalInfo, Drizzle stores dates as `string | null` (ISO strings)
 // Zod will use `Date | null` for form handling. Conversion happens during action.

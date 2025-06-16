@@ -37,17 +37,80 @@ import {
 } from "@/actions/db/metadata-records-actions"
 
 import MultiStepForm, { FormStep } from "./multi-step-form"
-import {
-  GeneralInformationSection,
-  LocationInformationSection,
-  SpatialInformationSection,
-  TemporalSection,
-  DataQualitySection,
-  ContactAndOtherInformationSection,
-  ProcessingInformationSection,
-  ReviewForm
-} from "./metadata-form-sections"
-import { GISServiceFormSection } from "./gis-service-form-section"
+// Dynamic imports for code splitting and better performance
+import dynamic from "next/dynamic"
+
+// Dynamically import form sections for better bundle splitting
+const GeneralInformationSection = dynamic(
+  () => import("./metadata-form-sections").then(mod => ({ default: mod.GeneralInformationSection })),
+  { 
+    loading: () => <div className="animate-pulse h-96 bg-gray-100 rounded" />,
+    ssr: false
+  }
+)
+
+const LocationInformationSection = dynamic(
+  () => import("./metadata-form-sections").then(mod => ({ default: mod.LocationInformationSection })),
+  { 
+    loading: () => <div className="animate-pulse h-96 bg-gray-100 rounded" />,
+    ssr: false
+  }
+)
+
+const SpatialInformationSection = dynamic(
+  () => import("./metadata-form-sections").then(mod => ({ default: mod.SpatialInformationSection })),
+  { 
+    loading: () => <div className="animate-pulse h-96 bg-gray-100 rounded" />,
+    ssr: false
+  }
+)
+
+const TemporalSection = dynamic(
+  () => import("./metadata-form-sections").then(mod => ({ default: mod.TemporalSection })),
+  { 
+    loading: () => <div className="animate-pulse h-96 bg-gray-100 rounded" />,
+    ssr: false
+  }
+)
+
+const DataQualitySection = dynamic(
+  () => import("./metadata-form-sections").then(mod => ({ default: mod.DataQualitySection })),
+  { 
+    loading: () => <div className="animate-pulse h-96 bg-gray-100 rounded" />,
+    ssr: false
+  }
+)
+
+const ContactAndOtherInformationSection = dynamic(
+  () => import("./metadata-form-sections").then(mod => ({ default: mod.ContactAndOtherInformationSection })),
+  { 
+    loading: () => <div className="animate-pulse h-96 bg-gray-100 rounded" />,
+    ssr: false
+  }
+)
+
+const ProcessingInformationSection = dynamic(
+  () => import("./metadata-form-sections").then(mod => ({ default: mod.ProcessingInformationSection })),
+  { 
+    loading: () => <div className="animate-pulse h-96 bg-gray-100 rounded" />,
+    ssr: false
+  }
+)
+
+const ReviewForm = dynamic(
+  () => import("./metadata-form-sections").then(mod => ({ default: mod.ReviewForm })),
+  { 
+    loading: () => <div className="animate-pulse h-96 bg-gray-100 rounded" />,
+    ssr: false
+  }
+)
+const GISServiceFormSection = dynamic(
+  () => import("./gis-service-form-section").then(mod => ({ default: mod.GISServiceFormSection })),
+  { 
+    loading: () => <div className="animate-pulse h-96 bg-gray-100 rounded" />,
+    ssr: false
+  }
+)
 import { Loader2, Wand2, Lightbulb, Plus } from "lucide-react"
 import { Form } from "@/components/ui/form"
 
@@ -172,42 +235,6 @@ const calculateFormQuality = (data: Partial<MetadataFormValues>) => {
 
   return Math.round((score / maxScore) * 100)
 }
-
-const FORM_STEPS: FormStep[] = [
-  {
-    id: "general",
-    title: "General Information",
-    component: GeneralInformationSection
-  },
-  {
-    id: "location",
-    title: "Location Information",
-    component: LocationInformationSection
-  },
-  {
-    id: "spatial",
-    title: "Spatial Information",
-    component: SpatialInformationSection
-  },
-  { id: "temporal", title: "Temporal Information", component: TemporalSection },
-  { id: "quality", title: "Data Quality", component: DataQualitySection },
-  {
-    id: "processing",
-    title: "Processing Information",
-    component: ProcessingInformationSection
-  },
-  {
-    id: "gis-services",
-    title: "GIS Services",
-    component: GISServiceFormSection
-  },
-  {
-    id: "contact",
-    title: "Contact & Other Information",
-    component: ContactAndOtherInformationSection
-  },
-  { id: "review", title: "Review & Submit", component: ReviewForm }
-]
 
 // Helper to prepare payload for server actions
 function preparePayload(
@@ -412,14 +439,14 @@ export default function MultiStepMetadataFormClient({
 }: MultiStepMetadataFormClientProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const [isLoading, setIsLoading] = useState(true)
   const [isSavingDraft, setIsSavingDraft] = useState(false)
+  const [currentStep, setCurrentStep] = useState(0)
+  const [suggestions, setSuggestions] = useState<Record<string, string[]>>({})
+  const [qualityScore, setQualityScore] = useState(0)
   const [availableOrganizations, setAvailableOrganizations] = useState<
     SelectOrganization[]
   >([])
-  const [currentStep, setCurrentStep] = useState(0)
-  const [qualityScore, setQualityScore] = useState(0)
-  const [suggestions, setSuggestions] = useState<Record<string, string[]>>({})
+  const [isLoading, setIsLoading] = useState(true)
 
   const transformedInitialData = useMemo(() => {
     if (!initialData) return defaultMetadataFormValues
@@ -802,25 +829,52 @@ export default function MultiStepMetadataFormClient({
       <CardHeader className="pb-3">
         <CardTitle className="text-base flex items-center gap-2">
           <Wand2 className="h-4 w-4" />
-          Metadata Quality Score
+          Form Progress & Quality
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="space-y-2">
-          <div className="flex justify-between text-sm">
-            <span>Overall Quality</span>
-            <span className="font-medium">{qualityScore}%</span>
+        <div className="space-y-4">
+          {/* Completion Progress */}
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm">
+              <span>Form Completion</span>
+              <span className="font-medium">{completionPercentage}%</span>
+            </div>
+            <Progress value={completionPercentage} className="h-2" />
+            <div className="text-xs text-muted-foreground">
+              {completionPercentage === 100
+                ? "All required sections completed"
+                : `${relevantSections.length - Math.round((completionPercentage / 100) * relevantSections.length)} sections remaining`}
+            </div>
           </div>
-          <Progress value={qualityScore} className="h-2" />
-          <div className="text-xs text-muted-foreground">
-            {qualityScore >= 80
-              ? "Excellent metadata quality"
-              : qualityScore >= 60
-                ? "Good quality, minor improvements suggested"
-                : qualityScore >= 40
-                  ? "Fair quality, several improvements needed"
-                  : "Poor quality, significant improvements required"}
+
+          {/* Quality Score */}
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm">
+              <span>Metadata Quality</span>
+              <span className="font-medium">{qualityScore}%</span>
+            </div>
+            <Progress value={qualityScore} className="h-2" />
+            <div className="text-xs text-muted-foreground">
+              {qualityScore >= 80
+                ? "Excellent metadata quality"
+                : qualityScore >= 60
+                  ? "Good quality, minor improvements suggested"
+                  : qualityScore >= 40
+                    ? "Fair quality, several improvements needed"
+                    : "Poor quality, significant improvements required"}
+            </div>
           </div>
+
+          {/* Section Status */}
+          {watchedDataType && (
+            <div className="text-xs text-muted-foreground">
+              <span className="font-medium">
+                Active sections for {watchedDataType}:
+              </span>{" "}
+              {relevantSections.length} sections
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>
@@ -918,6 +972,146 @@ export default function MultiStepMetadataFormClient({
     })
   }
 
+  // Add logic to determine which sections to show based on data type
+  const getRelevantSections = (dataType?: string) => {
+    const allSections = [
+      {
+        id: "general",
+        title: "General Information",
+        component: GeneralInformationSection,
+        required: true,
+        description: "Basic metadata and identification"
+      },
+      {
+        id: "location",
+        title: "Location Information",
+        component: LocationInformationSection,
+        required: true,
+        description: "Geographic coverage and spatial extent"
+      },
+      {
+        id: "spatial",
+        title: "Spatial Information",
+        component: SpatialInformationSection,
+        required:
+          dataType === "Vector" ||
+          dataType === "Raster" ||
+          dataType === "Point Cloud",
+        description: "Coordinate systems and spatial properties"
+      },
+      {
+        id: "temporal",
+        title: "Temporal Information",
+        component: TemporalSection,
+        required: false,
+        description: "Time coverage and temporal properties"
+      },
+      {
+        id: "quality",
+        title: "Data Quality",
+        component: DataQualitySection,
+        required: dataType !== "Service",
+        description: "Quality metrics and assessment"
+      },
+      {
+        id: "processing",
+        title: "Processing Information",
+        component: ProcessingInformationSection,
+        required: dataType === "Raster" || dataType === "Point Cloud",
+        description: "Processing history and algorithms"
+      },
+      {
+        id: "gis-service",
+        title: "GIS Service Details",
+        component: GISServiceFormSection,
+        required: dataType === "Service",
+        description: "Service endpoints and capabilities"
+      },
+      {
+        id: "contact",
+        title: "Contact & Additional Info",
+        component: ContactAndOtherInformationSection,
+        required: true,
+        description: "Contact information and additional details"
+      },
+      {
+        id: "review",
+        title: "Review & Submit",
+        component: ReviewForm,
+        required: true,
+        description: "Review your metadata before submission"
+      }
+    ]
+
+    // Filter sections based on data type and requirements
+    return allSections.filter(section => {
+      if (section.required === true) return true
+      if (section.required === false) return dataType ? true : false // Show optional sections only if data type is selected
+      return section.required // Boolean logic for conditional requirements
+    })
+  }
+
+  // Watch for data type changes to update available sections
+  const watchedDataType = form.watch("dataType")
+  const relevantSections = useMemo(
+    () => getRelevantSections(watchedDataType),
+    [watchedDataType]
+  )
+
+  // Calculate completion percentage based on relevant sections only
+  const calculateCompletionPercentage = () => {
+    const formData = form.getValues()
+    let completedSections = 0
+
+    relevantSections.forEach(section => {
+      let sectionComplete = false
+
+      switch (section.id) {
+        case "general":
+          sectionComplete = !!(
+            formData.title &&
+            formData.abstract &&
+            formData.dataType
+          )
+          break
+        case "location":
+          sectionComplete = !!formData.locationInfo?.country
+          break
+        case "spatial":
+          sectionComplete = !!formData.spatialInfo?.coordinateSystem
+          break
+        case "temporal":
+          sectionComplete = !!formData.temporalInfo?.dateFrom
+          break
+        case "quality":
+          sectionComplete = !!(
+            formData.dataQualityInfo?.attributeAccuracyReport ||
+            formData.dataQualityInfo?.logicalConsistencyReport
+          )
+          break
+        case "processing":
+          sectionComplete =
+            !!formData.processingInfo?.processingStepsDescription
+          break
+        case "gis-service":
+          sectionComplete = !!formData.technicalDetailsInfo?.fileFormat
+          break
+        case "contact":
+          sectionComplete = !!(formData.contactName && formData.contactEmail)
+          break
+        case "review":
+          sectionComplete = true // Always complete when reached
+          break
+      }
+
+      if (sectionComplete) completedSections++
+    })
+
+    return Math.round((completedSections / relevantSections.length) * 100)
+  }
+
+  const completionPercentage = calculateCompletionPercentage()
+
   if (isLoading && existingRecordId && !initialData) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -935,7 +1129,7 @@ export default function MultiStepMetadataFormClient({
           onSubmit={onSubmit}
           onSaveDraft={onSaveDraft}
           isSubmitting={isPending}
-          steps={FORM_STEPS}
+          steps={relevantSections}
           currentStep={currentStep}
           setCurrentStep={setCurrentStep}
           isSavingDraft={isSavingDraft}
@@ -943,7 +1137,7 @@ export default function MultiStepMetadataFormClient({
           existingRecordId={existingRecordId}
           isLoading={isLoading}
         >
-          {FORM_STEPS.map((step, index) => (
+          {relevantSections.map((step, index) => (
             <div
               key={step.id}
               className={currentStep === index ? "" : "hidden"}

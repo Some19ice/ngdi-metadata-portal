@@ -16,6 +16,8 @@ export interface FormStep {
   id: string
   title: string
   component: React.ComponentType<any> // Or a more specific props type if available
+  required?: boolean // Added to support conditional sections
+  description?: string // Added to show section descriptions
   // fields?: string[]; // Optional: if validation per step is tied to specific fields in this structure
 }
 
@@ -99,6 +101,32 @@ export default function MultiStepForm({
   const renderStepIndicator = () => {
     return (
       <div className="mb-8">
+        {/* Current step info card */}
+        <div className="mb-6 p-4 bg-muted/30 rounded-lg border">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 text-sm font-medium text-primary">
+              <span>
+                Step {currentStep + 1} of {steps.length}
+              </span>
+            </div>
+            <Separator orientation="vertical" className="h-4" />
+            <div className="flex-1">
+              <h3 className="font-medium">{steps[currentStep]?.title}</h3>
+              {steps[currentStep]?.description && (
+                <p className="text-sm text-muted-foreground mt-1">
+                  {steps[currentStep].description}
+                </p>
+              )}
+            </div>
+            {steps[currentStep]?.required === false && (
+              <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-full">
+                Optional
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Step progress bar */}
         <div className="flex justify-between items-center">
           {steps.map((step, index) => (
             <div
@@ -107,31 +135,40 @@ export default function MultiStepForm({
             >
               <div
                 className={cn(
-                  "w-10 h-10 rounded-full flex items-center justify-center border-2 z-10 bg-background",
+                  "w-8 h-8 rounded-full flex items-center justify-center border-2 z-10 bg-background text-xs font-medium transition-all duration-200",
                   index === currentStep
-                    ? "border-primary text-primary"
+                    ? "border-primary text-primary ring-2 ring-primary/20"
                     : completedSteps[index] // This logic might need adjustment based on validation
                       ? "border-primary bg-primary text-white"
-                      : "border-muted text-muted-foreground"
+                      : index < currentStep
+                        ? "border-primary text-primary"
+                        : "border-muted text-muted-foreground"
                 )}
                 aria-current={index === currentStep ? "step" : undefined}
               >
                 {completedSteps[index] ? (
-                  <Check className="w-5 h-5" />
+                  <Check className="w-4 h-4" />
                 ) : (
                   <span>{index + 1}</span>
                 )}
               </div>
-              <div className="mt-2 text-xs text-center font-medium">
+              <div
+                className={cn(
+                  "mt-2 text-xs text-center font-medium max-w-16 leading-tight",
+                  index === currentStep
+                    ? "text-primary"
+                    : index < currentStep
+                      ? "text-foreground"
+                      : "text-muted-foreground"
+                )}
+              >
                 {step.title}
               </div>
               {index < steps.length - 1 && (
                 <div
                   className={cn(
-                    "absolute top-5 left-1/2 w-full h-0.5",
-                    index < currentStep || completedSteps[index]
-                      ? "bg-primary"
-                      : "bg-muted"
+                    "absolute top-4 left-1/2 w-full h-0.5 transition-all duration-300",
+                    index < currentStep ? "bg-primary" : "bg-muted"
                   )}
                 ></div>
               )}
