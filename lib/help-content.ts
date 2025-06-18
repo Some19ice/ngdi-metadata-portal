@@ -656,12 +656,6 @@ export const helpContent: Record<string, HelpContent> = {
     examples: ["1,250 points", "500 lines", "150 polygons"]
   },
 
-  cellGeometry: {
-    title: "Cell Geometry",
-    content: "The method used to represent pixels in the raster data.",
-    examples: ["Pixel", "Voxel", "Point"]
-  },
-
   transformationParameterAvailability: {
     title: "Transformation Parameter Availability",
     content:

@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm, useFieldArray } from "react-hook-form"
 import { useRouter } from "next/navigation"
-import { useState, useTransition, useEffect, useMemo } from "react"
+import { useState, useTransition, useEffect, useMemo, useCallback } from "react"
 import { toast } from "sonner"
 import { Progress } from "@/components/ui/progress"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -42,56 +42,77 @@ import dynamic from "next/dynamic"
 
 // Dynamically import form sections for better bundle splitting
 const GeneralInformationSection = dynamic(
-  () => import("./metadata-form-sections").then(mod => ({ default: mod.GeneralInformationSection })),
-  { 
+  () =>
+    import("./metadata-form-sections").then(mod => ({
+      default: mod.GeneralInformationSection
+    })),
+  {
     loading: () => <div className="animate-pulse h-96 bg-gray-100 rounded" />,
     ssr: false
   }
 )
 
 const LocationInformationSection = dynamic(
-  () => import("./metadata-form-sections").then(mod => ({ default: mod.LocationInformationSection })),
-  { 
+  () =>
+    import("./metadata-form-sections").then(mod => ({
+      default: mod.LocationInformationSection
+    })),
+  {
     loading: () => <div className="animate-pulse h-96 bg-gray-100 rounded" />,
     ssr: false
   }
 )
 
 const SpatialInformationSection = dynamic(
-  () => import("./metadata-form-sections").then(mod => ({ default: mod.SpatialInformationSection })),
-  { 
+  () =>
+    import("./metadata-form-sections").then(mod => ({
+      default: mod.SpatialInformationSection
+    })),
+  {
     loading: () => <div className="animate-pulse h-96 bg-gray-100 rounded" />,
     ssr: false
   }
 )
 
 const TemporalSection = dynamic(
-  () => import("./metadata-form-sections").then(mod => ({ default: mod.TemporalSection })),
-  { 
+  () =>
+    import("./metadata-form-sections").then(mod => ({
+      default: mod.TemporalSection
+    })),
+  {
     loading: () => <div className="animate-pulse h-96 bg-gray-100 rounded" />,
     ssr: false
   }
 )
 
 const DataQualitySection = dynamic(
-  () => import("./metadata-form-sections").then(mod => ({ default: mod.DataQualitySection })),
-  { 
+  () =>
+    import("./metadata-form-sections").then(mod => ({
+      default: mod.DataQualitySection
+    })),
+  {
     loading: () => <div className="animate-pulse h-96 bg-gray-100 rounded" />,
     ssr: false
   }
 )
 
 const ContactAndOtherInformationSection = dynamic(
-  () => import("./metadata-form-sections").then(mod => ({ default: mod.ContactAndOtherInformationSection })),
-  { 
+  () =>
+    import("./metadata-form-sections").then(mod => ({
+      default: mod.ContactAndOtherInformationSection
+    })),
+  {
     loading: () => <div className="animate-pulse h-96 bg-gray-100 rounded" />,
     ssr: false
   }
 )
 
 const ProcessingInformationSection = dynamic(
-  () => import("./metadata-form-sections").then(mod => ({ default: mod.ProcessingInformationSection })),
-  { 
+  () =>
+    import("./metadata-form-sections").then(mod => ({
+      default: mod.ProcessingInformationSection
+    })),
+  {
     loading: () => <div className="animate-pulse h-96 bg-gray-100 rounded" />,
     ssr: false
   }
@@ -770,9 +791,28 @@ export default function MultiStepMetadataFormClient({
     name: "keywords"
   })
 
-  const watchedValues = form.watch()
+  // Watch only the data type for section updates
+  const watchedDataType = form.watch("dataType")
 
-  // Auto-save functionality
+  // Get dirty fields for auto-save optimization
+  const getDirtyFormData = useCallback(() => {
+    const dirtyFields = form.formState.dirtyFields
+    const allValues = form.getValues()
+
+    // Only include dirty fields in auto-save data
+    const dirtyData: Partial<MetadataFormValues> = {}
+
+    Object.keys(dirtyFields).forEach(key => {
+      const fieldKey = key as keyof MetadataFormValues
+      if (dirtyFields[fieldKey]) {
+        dirtyData[fieldKey] = allValues[fieldKey]
+      }
+    })
+
+    return dirtyData
+  }, [form])
+
+  // Auto-save functionality with optimized data
   const {
     lastSaved,
     isSaving,
@@ -781,28 +821,36 @@ export default function MultiStepMetadataFormClient({
     clearSavedData
   } = useAutoSave({
     key: `metadata-form-${existingRecordId || "new"}`,
-    data: watchedValues,
+    data: getDirtyFormData(),
     onRestore: data => {
-      form.reset(data)
+      // Merge restored data with current form values
+      const currentValues = form.getValues()
+      const mergedData = { ...currentValues, ...data }
+      form.reset(mergedData)
       toast.success("Form data restored from auto-save")
     },
-    debounceMs: 3000, // Wait 3 seconds after user stops typing
-    autoSaveInterval: 60000, // Auto-save every minute
-    enabled: !isSavingDraft && !isPending // Don't auto-save during manual saves
+    debounceMs: 5000, // Wait 5 seconds after user stops typing
+    autoSaveInterval: 120000, // Auto-save every 2 minutes (reduced frequency)
+    enabled:
+      !isSavingDraft &&
+      !isPending &&
+      Object.keys(form.formState.dirtyFields).length > 0 // Only auto-save when there are dirty fields
   })
 
   // Update quality score in real-time
   useEffect(() => {
-    const score = calculateFormQuality(watchedValues)
+    const currentValues = form.getValues()
+    const score = calculateFormQuality(currentValues)
     setQualityScore(score)
-  }, [watchedValues])
+  }, [form, form.formState.isDirty])
 
   // Generate smart suggestions
   const handleFieldFocus = (fieldName: string, value: string) => {
+    const currentValues = form.getValues()
     const smartSuggestions = getSmartSuggestions(
       fieldName,
       value,
-      watchedValues.dataType
+      currentValues.dataType
     )
     setSuggestions(prev => ({
       ...prev,
@@ -1084,8 +1132,7 @@ export default function MultiStepMetadataFormClient({
     })
   }
 
-  // Watch for data type changes to update available sections
-  const watchedDataType = form.watch("dataType")
+  // Get relevant sections based on current data type
   const relevantSections = useMemo(
     () => getRelevantSections(watchedDataType),
     [watchedDataType]
@@ -1157,6 +1204,11 @@ export default function MultiStepMetadataFormClient({
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
         <QualityIndicator />
+        <AutoSaveStatus
+          lastSaved={lastSaved}
+          isSaving={isSaving}
+          hasUnsavedChanges={hasUnsavedChanges}
+        />
         <MultiStepForm
           form={form}
           onSubmit={onSubmit}

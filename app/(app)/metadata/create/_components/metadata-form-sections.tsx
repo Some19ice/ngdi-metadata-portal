@@ -34,11 +34,7 @@ import { Lightbulb } from "lucide-react"
 import { LabelWithHelp } from "@/components/ui/form-field-with-help"
 import { MobileCoordinateInput } from "@/components/ui/mobile-coordinate-input"
 import { MobileDateInput } from "@/components/ui/mobile-date-input"
-import {
-  nigerianStates,
-  getStatesAsOptions,
-  getLGAsByState
-} from "@/lib/data/nigeria-states-lga"
+import { useNigerianStates, useStateLGAs } from "@/lib/hooks/use-nigeria-states"
 
 // Section 1: General Information (Renamed from IdentificationSection)
 export function GeneralInformationSection({
@@ -516,9 +512,17 @@ export function LocationInformationSection({
 }: {
   form: UseFormReturn<MetadataFormValues>
 }) {
+  // Use the optimized hooks for states and LGAs
+  const {
+    statesOptions,
+    isLoading: statesLoading,
+    error: statesError
+  } = useNigerianStates()
+
   // Watch the selected state to update LGA options
   const selectedState = form.watch("locationInfo.state")
-  const lgaOptions = selectedState ? getLGAsByState(selectedState) : []
+  const { lgas: lgaOptions, isLoading: lgasLoading } =
+    useStateLGAs(selectedState)
 
   // Clear LGA when state changes
   const handleStateChange = (stateId: string) => {
@@ -623,20 +627,30 @@ export function LocationInformationSection({
               <Select
                 onValueChange={handleStateChange}
                 value={field.value ?? ""}
+                disabled={statesLoading}
               >
                 <FormControl>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select state" />
+                    <SelectValue
+                      placeholder={
+                        statesLoading ? "Loading states..." : "Select state"
+                      }
+                    />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  {getStatesAsOptions().map(state => (
+                  {statesOptions.map(state => (
                     <SelectItem key={state.value} value={state.value}>
                       {state.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {statesError && (
+                <p className="text-sm text-destructive mt-1">
+                  Failed to load states: {statesError}
+                </p>
+              )}
               <FormMessage />
             </FormItem>
           )}
@@ -1395,7 +1409,9 @@ export function SpatialInformationSection({
             name="spatialInfo.rasterSpatialRepresentation.compressionGenerationQuantity"
             render={({ field }) => (
               <FormItem>
-                <LabelWithHelp helpKey="compressionGenerationQuantity">Compression Generation Quantity</LabelWithHelp>
+                <LabelWithHelp helpKey="compressionGenerationQuantity">
+                  Compression Generation Quantity
+                </LabelWithHelp>
                 <FormControl>
                   <Input
                     type="number"

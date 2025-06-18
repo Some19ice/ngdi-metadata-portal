@@ -71,6 +71,7 @@ export function useAutoSave<T>({
       setLastSaved(timestamp)
       setHasUnsavedChanges(false)
       setHasSavedData(true)
+      // Ensure lastDataRef is updated with the saved data
       lastDataRef.current = serializedData
     } catch (error) {
       console.error("Failed to save data:", error)
@@ -127,6 +128,8 @@ export function useAutoSave<T>({
 
     if (hasChanged) {
       setHasUnsavedChanges(true)
+      // Update lastDataRef immediately to prevent duplicate triggers
+      lastDataRef.current = currentData
 
       // Clear existing debounce timer
       if (debounceRef.current) {

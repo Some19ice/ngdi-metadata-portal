@@ -130,6 +130,7 @@ export function AutoSaveStatus({
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
+                  type="button"
                   variant="ghost"
                   size="sm"
                   onClick={() => setShowRecoveryDialog(true)}

@@ -15,3 +15,6 @@ export * from "../../hooks/use-map-markers"
 export * from "../../hooks/use-map-viewport"
 export * from "../../hooks/use-map-events"
 export * from "../../hooks/use-mobile"
+
+// Data hooks from lib/hooks
+export * from "./use-nigeria-states"

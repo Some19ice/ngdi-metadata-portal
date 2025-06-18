@@ -41,10 +41,15 @@ export function MobileCoordinateInput({
 
   // Format coordinates for display
   const formatCoordinates = (coords: CoordinateValue) => {
-    if (!coords.minX && !coords.minY && !coords.maxX && !coords.maxY) {
+    if (
+      coords.minX == null &&
+      coords.minY == null &&
+      coords.maxX == null &&
+      coords.maxY == null
+    ) {
       return ""
     }
-    return `${coords.minX || ""}, ${coords.minY || ""}, ${coords.maxX || ""}, ${coords.maxY || ""}`
+    return `${coords.minX ?? ""}, ${coords.minY ?? ""}, ${coords.maxX ?? ""}, ${coords.maxY ?? ""}`
   }
 
   const handleSave = () => {
@@ -55,31 +60,6 @@ export function MobileCoordinateInput({
   const handleCancel = () => {
     setTempValue(value)
     setIsOpen(false)
-  }
-
-  // DMS (Degrees, Minutes, Seconds) conversion helpers
-  const dmsToDecimal = (
-    degrees: number,
-    minutes: number,
-    seconds: number,
-    direction: "N" | "S" | "E" | "W"
-  ) => {
-    let decimal = degrees + minutes / 60 + seconds / 3600
-    if (direction === "S" || direction === "W") {
-      decimal = -decimal
-    }
-    return decimal
-  }
-
-  const decimalToDms = (decimal: number) => {
-    const abs = Math.abs(decimal)
-    const degrees = Math.floor(abs)
-    const minutes = Math.floor((abs - degrees) * 60)
-    const seconds =
-      Math.round(((abs - degrees) * 60 - minutes) * 60 * 100) / 100
-    const direction =
-      decimal >= 0 ? (degrees < 90 ? "N" : "E") : degrees < 90 ? "S" : "W"
-    return { degrees, minutes, seconds, direction }
   }
 
   return (
