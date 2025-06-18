@@ -98,21 +98,29 @@ const ProcessingInformationSection = dynamic(
 )
 
 const ReviewForm = dynamic(
-  () => import("./metadata-form-sections").then(mod => ({ default: mod.ReviewForm })),
-  { 
+  () =>
+    import("./metadata-form-sections").then(mod => ({
+      default: mod.MetadataPreviewSection
+    })),
+  {
     loading: () => <div className="animate-pulse h-96 bg-gray-100 rounded" />,
     ssr: false
   }
 )
 const GISServiceFormSection = dynamic(
-  () => import("./gis-service-form-section").then(mod => ({ default: mod.GISServiceFormSection })),
-  { 
+  () =>
+    import("./gis-service-form-section").then(mod => ({
+      default: mod.GISServiceFormSection
+    })),
+  {
     loading: () => <div className="animate-pulse h-96 bg-gray-100 rounded" />,
     ssr: false
   }
 )
 import { Loader2, Wand2, Lightbulb, Plus } from "lucide-react"
 import { Form } from "@/components/ui/form"
+import { AutoSaveStatus } from "@/components/ui/auto-save-status"
+import { useAutoSave } from "@/lib/hooks/use-auto-save"
 
 interface MultiStepMetadataFormClientProps {
   currentUserId?: string | null
@@ -764,6 +772,25 @@ export default function MultiStepMetadataFormClient({
 
   const watchedValues = form.watch()
 
+  // Auto-save functionality
+  const {
+    lastSaved,
+    isSaving,
+    hasUnsavedChanges,
+    restoreData,
+    clearSavedData
+  } = useAutoSave({
+    key: `metadata-form-${existingRecordId || "new"}`,
+    data: watchedValues,
+    onRestore: data => {
+      form.reset(data)
+      toast.success("Form data restored from auto-save")
+    },
+    debounceMs: 3000, // Wait 3 seconds after user stops typing
+    autoSaveInterval: 60000, // Auto-save every minute
+    enabled: !isSavingDraft && !isPending // Don't auto-save during manual saves
+  })
+
   // Update quality score in real-time
   useEffect(() => {
     const score = calculateFormQuality(watchedValues)
@@ -994,30 +1021,36 @@ export default function MultiStepMetadataFormClient({
         title: "Spatial Information",
         component: SpatialInformationSection,
         required:
-          dataType === "Vector" ||
-          dataType === "Raster" ||
-          dataType === "Point Cloud",
+          dataType !== "Document" &&
+          dataType !== "Collection" &&
+          dataType !== "Application", // Show for spatial data types
         description: "Coordinate systems and spatial properties"
       },
       {
         id: "temporal",
         title: "Temporal Information",
         component: TemporalSection,
-        required: false,
+        required: true, // Show for all data types since temporal info is generally important
         description: "Time coverage and temporal properties"
       },
       {
         id: "quality",
         title: "Data Quality",
         component: DataQualitySection,
-        required: dataType !== "Service",
+        required:
+          dataType !== "Service" &&
+          dataType !== "Document" &&
+          dataType !== "Application", // Hide for services, documents, and applications
         description: "Quality metrics and assessment"
       },
       {
         id: "processing",
         title: "Processing Information",
         component: ProcessingInformationSection,
-        required: dataType === "Raster" || dataType === "Point Cloud",
+        required:
+          dataType === "Raster" ||
+          dataType === "Vector" ||
+          dataType === "Table", // Show for processed data types (removed Point Cloud as it's not in enum)
         description: "Processing history and algorithms"
       },
       {

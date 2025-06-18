@@ -17,20 +17,9 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger
-} from "@/components/ui/popover"
-import { Calendar } from "@/components/ui/calendar"
 import { Button } from "@/components/ui/button"
 import { format } from "date-fns"
-import {
-  Calendar as CalendarIcon,
-  X,
-  CheckCircle,
-  ExternalLink
-} from "lucide-react"
+import { X, CheckCircle, ExternalLink } from "lucide-react"
 import { UseFormReturn } from "react-hook-form"
 import { MetadataFormValues } from "@/lib/validators/metadata-validator"
 import { cn } from "@/lib/utils"
@@ -42,6 +31,14 @@ import {
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { Lightbulb } from "lucide-react"
+import { LabelWithHelp } from "@/components/ui/form-field-with-help"
+import { MobileCoordinateInput } from "@/components/ui/mobile-coordinate-input"
+import { MobileDateInput } from "@/components/ui/mobile-date-input"
+import {
+  nigerianStates,
+  getStatesAsOptions,
+  getLGAsByState
+} from "@/lib/data/nigeria-states-lga"
 
 // Section 1: General Information (Renamed from IdentificationSection)
 export function GeneralInformationSection({
@@ -199,7 +196,9 @@ export function GeneralInformationSection({
         name="title"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Title / Name of the data *</FormLabel>
+            <LabelWithHelp helpKey="title" required>
+              Title / Name of the data
+            </LabelWithHelp>
             <FormControl>
               <Input placeholder="Enter dataset title" {...field} />
             </FormControl>
@@ -213,7 +212,9 @@ export function GeneralInformationSection({
         name="abstract"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Abstract / Description *</FormLabel>
+            <LabelWithHelp helpKey="abstract" required>
+              Abstract / Description
+            </LabelWithHelp>
             <FormControl>
               <Textarea
                 placeholder="Brief summary of the dataset"
@@ -232,7 +233,7 @@ export function GeneralInformationSection({
         name="purpose"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Purpose</FormLabel>
+            <LabelWithHelp helpKey="purpose">Purpose</LabelWithHelp>
             <FormControl>
               <Textarea
                 placeholder="Reason or intended use for the dataset"
@@ -252,7 +253,9 @@ export function GeneralInformationSection({
           name="dataType"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Dataset Type *</FormLabel>
+              <LabelWithHelp helpKey="dataType" required>
+                Dataset Type
+              </LabelWithHelp>
               <Select
                 onValueChange={field.onChange}
                 defaultValue={field.value ?? undefined}
@@ -280,7 +283,9 @@ export function GeneralInformationSection({
           name="topicCategory"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Topic Category *</FormLabel>
+              <LabelWithHelp helpKey="topicCategory" required>
+                Topic Category
+              </LabelWithHelp>
               <Select
                 onValueChange={field.onChange}
                 defaultValue={field.value ?? undefined}
@@ -310,7 +315,7 @@ export function GeneralInformationSection({
           name="version"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Version</FormLabel>
+              <LabelWithHelp helpKey="version">Version</LabelWithHelp>
               <FormControl>
                 <Input
                   placeholder="e.g., 1.0, 2023a"
@@ -327,7 +332,9 @@ export function GeneralInformationSection({
           name="language"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Language *</FormLabel>
+              <LabelWithHelp helpKey="language" required>
+                Language
+              </LabelWithHelp>
               <FormControl>
                 <Input
                   placeholder="e.g., en, fr"
@@ -347,7 +354,9 @@ export function GeneralInformationSection({
           name="updateFrequency"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Update Frequency</FormLabel>
+              <LabelWithHelp helpKey="updateFrequency">
+                Update Frequency
+              </LabelWithHelp>
               <FormControl>
                 <Input
                   placeholder="e.g., Annually, As needed, Irregular"
@@ -364,7 +373,9 @@ export function GeneralInformationSection({
           name="assessment"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Assessment / Status of Data</FormLabel>
+              <LabelWithHelp helpKey="status">
+                Assessment / Status of Data
+              </LabelWithHelp>
               <FormControl>
                 <Input
                   placeholder="e.g., Complete, Incomplete, Ongoing"
@@ -383,7 +394,7 @@ export function GeneralInformationSection({
         name="keywords"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Keywords</FormLabel>
+            <LabelWithHelp helpKey="keywords">Keywords</LabelWithHelp>
             <FormControl>
               <Input
                 placeholder="Type keyword and press Enter"
@@ -422,7 +433,9 @@ export function GeneralInformationSection({
           name="thumbnailUrl"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Thumbnail URL</FormLabel>
+              <LabelWithHelp helpKey="thumbnailUrl">
+                Thumbnail URL
+              </LabelWithHelp>
               <FormControl>
                 <Input
                   type="url"
@@ -440,7 +453,9 @@ export function GeneralInformationSection({
           name="cloudCoverPercentage"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Cloud Cover Percentage (%)</FormLabel>
+              <LabelWithHelp helpKey="cloudCover">
+                Cloud Cover Percentage (%)
+              </LabelWithHelp>
               <FormControl>
                 <Input
                   type="number"
@@ -467,7 +482,9 @@ export function GeneralInformationSection({
         name="frameworkType"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Framework Type</FormLabel>
+            <LabelWithHelp helpKey="frameworkType">
+              Framework Type
+            </LabelWithHelp>
             <Select
               onValueChange={field.onChange}
               defaultValue={field.value ?? undefined}
@@ -499,6 +516,26 @@ export function LocationInformationSection({
 }: {
   form: UseFormReturn<MetadataFormValues>
 }) {
+  // Watch the selected state to update LGA options
+  const selectedState = form.watch("locationInfo.state")
+  const lgaOptions = selectedState ? getLGAsByState(selectedState) : []
+
+  // Clear LGA when state changes
+  const handleStateChange = (stateId: string) => {
+    form.setValue("locationInfo.state", stateId)
+    form.setValue("locationInfo.lga", null) // Clear LGA when state changes
+  }
+
+  // Geopolitical zones options
+  const geopoliticalZones = [
+    { value: "north-central", label: "North Central" },
+    { value: "north-east", label: "North East" },
+    { value: "north-west", label: "North West" },
+    { value: "south-east", label: "South East" },
+    { value: "south-south", label: "South South" },
+    { value: "south-west", label: "South West" }
+  ]
+
   return (
     <div className="space-y-6">
       <h3 className="text-lg font-medium mb-3">Location Information</h3>
@@ -507,7 +544,7 @@ export function LocationInformationSection({
         name="locationInfo.country"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Country</FormLabel>
+            <LabelWithHelp helpKey="country">Country</LabelWithHelp>
             <FormControl>
               <Input
                 placeholder="e.g., Nigeria"
@@ -526,14 +563,37 @@ export function LocationInformationSection({
           name="locationInfo.geopoliticalZone"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Geopolitical Zone</FormLabel>
-              <FormControl>
-                <Input
-                  placeholder="e.g., South West"
-                  {...field}
-                  value={field.value ?? ""}
-                />
-              </FormControl>
+              <LabelWithHelp
+                customHelp={{
+                  title: "Geopolitical Zone",
+                  content:
+                    "The geopolitical zone within Nigeria where the data is located.",
+                  examples: [
+                    "North Central",
+                    "North East",
+                    "North West",
+                    "South East",
+                    "South South",
+                    "South West"
+                  ]
+                }}
+              >
+                Geopolitical Zone
+              </LabelWithHelp>
+              <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select geopolitical zone" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {geopoliticalZones.map(zone => (
+                    <SelectItem key={zone.value} value={zone.value}>
+                      {zone.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <FormMessage />
             </FormItem>
           )}
@@ -543,14 +603,40 @@ export function LocationInformationSection({
           name="locationInfo.state"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>State</FormLabel>
-              <FormControl>
-                <Input
-                  placeholder="e.g., Lagos"
-                  {...field}
-                  value={field.value ?? ""}
-                />
-              </FormControl>
+              <LabelWithHelp
+                customHelp={{
+                  title: "State",
+                  content:
+                    "The specific state within Nigeria where the data is geographically located.",
+                  examples: [
+                    "Lagos",
+                    "Abuja (FCT)",
+                    "Kano",
+                    "Rivers",
+                    "Ogun",
+                    "Kaduna"
+                  ]
+                }}
+              >
+                State
+              </LabelWithHelp>
+              <Select
+                onValueChange={handleStateChange}
+                value={field.value ?? ""}
+              >
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select state" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {getStatesAsOptions().map(state => (
+                    <SelectItem key={state.value} value={state.value}>
+                      {state.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <FormMessage />
             </FormItem>
           )}
@@ -563,14 +649,40 @@ export function LocationInformationSection({
           name="locationInfo.lga"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>LGA (Local Government Area)</FormLabel>
-              <FormControl>
-                <Input
-                  placeholder="e.g., Ikeja"
-                  {...field}
-                  value={field.value ?? ""}
-                />
-              </FormControl>
+              <LabelWithHelp
+                customHelp={{
+                  title: "LGA (Local Government Area)",
+                  content:
+                    "The Local Government Area where the data is specifically located within the state.",
+                  examples: selectedState
+                    ? lgaOptions.slice(0, 5).map(lga => lga.name)
+                    : ["Select a state first to see LGA options"]
+                }}
+              >
+                LGA (Local Government Area)
+              </LabelWithHelp>
+              <Select
+                onValueChange={field.onChange}
+                value={field.value ?? ""}
+                disabled={!selectedState || lgaOptions.length === 0}
+              >
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue
+                      placeholder={
+                        selectedState ? "Select LGA" : "Select state first"
+                      }
+                    />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {lgaOptions.map(lga => (
+                    <SelectItem key={lga.id} value={lga.id}>
+                      {lga.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <FormMessage />
             </FormItem>
           )}
@@ -580,7 +692,22 @@ export function LocationInformationSection({
           name="locationInfo.townCity"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Town / City</FormLabel>
+              <LabelWithHelp
+                customHelp={{
+                  title: "Town / City",
+                  content:
+                    "The specific town, city, or urban area covered by the dataset.",
+                  examples: [
+                    "Ikeja",
+                    "Victoria Island",
+                    "Surulere",
+                    "Yaba",
+                    "Ikoyi"
+                  ]
+                }}
+              >
+                Town / City
+              </LabelWithHelp>
               <FormControl>
                 <Input
                   placeholder="e.g., Ikeja"
@@ -688,7 +815,9 @@ export function SpatialInformationSection({
           name="spatialInfo.coordinateSystem"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Coordinate System</FormLabel>
+              <LabelWithHelp helpKey="coordinateSystem">
+                Coordinate System
+              </LabelWithHelp>
               <FormControl>
                 <Input
                   placeholder="e.g., WGS 84, NAD 83"
@@ -719,7 +848,7 @@ export function SpatialInformationSection({
           name="spatialInfo.projection"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Projection</FormLabel>
+              <LabelWithHelp helpKey="projection">Projection</LabelWithHelp>
               <FormControl>
                 <Input
                   placeholder="e.g., UTM Zone 10N, Lambert Conformal Conic"
@@ -739,7 +868,7 @@ export function SpatialInformationSection({
           name="spatialInfo.datum"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Datum</FormLabel>
+              <LabelWithHelp helpKey="datum">Datum</LabelWithHelp>
               <FormControl>
                 <Input
                   placeholder="e.g., D_WGS_1984, D_North_American_1983"
@@ -756,7 +885,9 @@ export function SpatialInformationSection({
           name="spatialInfo.resolutionScale"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Resolution Scale / Equivalent Scale</FormLabel>
+              <LabelWithHelp helpKey="resolutionScale">
+                Resolution Scale / Equivalent Scale
+              </LabelWithHelp>
               <FormControl>
                 <Input
                   placeholder="e.g., 1:24000 or 10 meters"
@@ -776,7 +907,9 @@ export function SpatialInformationSection({
           name="spatialInfo.geometricObjectType"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Geometric Object Type</FormLabel>
+              <LabelWithHelp helpKey="geometricObjectType">
+                Geometric Object Type
+              </LabelWithHelp>
               <Select
                 onValueChange={field.onChange}
                 defaultValue={field.value ?? undefined}
@@ -805,7 +938,9 @@ export function SpatialInformationSection({
           name="spatialInfo.numFeaturesOrLayers"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Number of Features or Layers</FormLabel>
+              <LabelWithHelp helpKey="numFeaturesOrLayers">
+                Number of Features or Layers
+              </LabelWithHelp>
               <FormControl>
                 <Input
                   type="number"
@@ -831,7 +966,7 @@ export function SpatialInformationSection({
           name="spatialInfo.format"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Format</FormLabel>
+              <LabelWithHelp helpKey="format">Format</LabelWithHelp>
               <FormControl>
                 <Input
                   placeholder="e.g., GeoTIFF, Shapefile, GeoJSON"
@@ -848,7 +983,9 @@ export function SpatialInformationSection({
           name="spatialInfo.distributionFormat" // This might be redundant with the one in distributionInfo
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Distribution Format (Spatial)</FormLabel>
+              <LabelWithHelp helpKey="distributionFormat">
+                Distribution Format (Spatial)
+              </LabelWithHelp>
               <FormControl>
                 <Input
                   placeholder="e.g., COG, PMTiles, Esri FileGDB"
@@ -867,7 +1004,9 @@ export function SpatialInformationSection({
         name="spatialInfo.spatialRepresentationType"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Spatial Representation Type</FormLabel>
+            <LabelWithHelp helpKey="spatialRepresentationType">
+              Spatial Representation Type
+            </LabelWithHelp>
             <Select
               onValueChange={field.onChange}
               defaultValue={field.value ?? undefined}
@@ -907,7 +1046,9 @@ export function SpatialInformationSection({
             name="spatialInfo.vectorSpatialRepresentation.topologyLevel"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Topology Level</FormLabel>
+                <LabelWithHelp helpKey="topologyLevel">
+                  Topology Level
+                </LabelWithHelp>
                 <FormControl>
                   <Input
                     placeholder="e.g., GeometryOnly, TopologyComplete"
@@ -923,7 +1064,9 @@ export function SpatialInformationSection({
           {/* Implement UI for geometric objects array */}
           <div className="space-y-2">
             <div className="flex justify-between items-center">
-              <FormLabel>Geometric Objects</FormLabel>
+              <LabelWithHelp helpKey="geometricObjects">
+                Geometric Objects
+              </LabelWithHelp>
               <Button
                 type="button"
                 variant="outline"
@@ -957,7 +1100,12 @@ export function SpatialInformationSection({
                   name={`spatialInfo.vectorSpatialRepresentation.geometricObjects.${index}.type`}
                   render={({ field }) => (
                     <FormItem className="flex-1">
-                      <FormLabel className="text-xs">Type</FormLabel>
+                      <LabelWithHelp
+                        helpKey="geometricObjectType"
+                        className="text-xs"
+                      >
+                        Type
+                      </LabelWithHelp>
                       <Select
                         onValueChange={field.onChange}
                         defaultValue={field.value ?? undefined}
@@ -992,7 +1140,12 @@ export function SpatialInformationSection({
                   name={`spatialInfo.vectorSpatialRepresentation.geometricObjects.${index}.count`}
                   render={({ field }) => (
                     <FormItem className="flex-1">
-                      <FormLabel className="text-xs">Count</FormLabel>
+                      <LabelWithHelp
+                        helpKey="geometricObjectCount"
+                        className="text-xs"
+                      >
+                        Count
+                      </LabelWithHelp>
                       <FormControl>
                         <Input
                           type="number"
@@ -1046,7 +1199,9 @@ export function SpatialInformationSection({
           {/* Implement UI for axis dimensions array */}
           <div className="space-y-2">
             <div className="flex justify-between items-center">
-              <FormLabel>Axis Dimensions</FormLabel>
+              <LabelWithHelp helpKey="axisDimensions">
+                Axis Dimensions
+              </LabelWithHelp>
               <Button
                 type="button"
                 variant="outline"
@@ -1083,7 +1238,9 @@ export function SpatialInformationSection({
                   name={`spatialInfo.rasterSpatialRepresentation.axisDimensions.${index}.name`}
                   render={({ field }) => (
                     <FormItem className="flex-1">
-                      <FormLabel className="text-xs">Name</FormLabel>
+                      <LabelWithHelp helpKey="axisName" className="text-xs">
+                        Name
+                      </LabelWithHelp>
                       <FormControl>
                         <Input
                           placeholder="e.g., X, Y, Z"
@@ -1101,7 +1258,9 @@ export function SpatialInformationSection({
                   name={`spatialInfo.rasterSpatialRepresentation.axisDimensions.${index}.size`}
                   render={({ field }) => (
                     <FormItem className="flex-1">
-                      <FormLabel className="text-xs">Size</FormLabel>
+                      <LabelWithHelp helpKey="axisSize" className="text-xs">
+                        Size
+                      </LabelWithHelp>
                       <FormControl>
                         <Input
                           type="number"
@@ -1127,7 +1286,12 @@ export function SpatialInformationSection({
                   name={`spatialInfo.rasterSpatialRepresentation.axisDimensions.${index}.resolution`}
                   render={({ field }) => (
                     <FormItem className="flex-1">
-                      <FormLabel className="text-xs">Resolution</FormLabel>
+                      <LabelWithHelp
+                        helpKey="axisResolution"
+                        className="text-xs"
+                      >
+                        Resolution
+                      </LabelWithHelp>
                       <FormControl>
                         <Input
                           placeholder="e.g., 10m"
@@ -1168,7 +1332,9 @@ export function SpatialInformationSection({
             name="spatialInfo.rasterSpatialRepresentation.cellGeometry"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Cell Geometry</FormLabel>
+                <LabelWithHelp helpKey="cellGeometry">
+                  Cell Geometry
+                </LabelWithHelp>
                 <FormControl>
                   <Input
                     placeholder="e.g., Pixel, Voxel"
@@ -1185,7 +1351,9 @@ export function SpatialInformationSection({
             name="spatialInfo.rasterSpatialRepresentation.transformationParameterAvailability"
             render={({ field }) => (
               <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
-                <FormLabel>Transformation Parameter Availability</FormLabel>
+                <LabelWithHelp helpKey="transformationParameterAvailability">
+                  Transformation Parameter Availability
+                </LabelWithHelp>
                 <FormControl>
                   <Switch
                     checked={field.value ?? false}
@@ -1200,7 +1368,9 @@ export function SpatialInformationSection({
             name="spatialInfo.rasterSpatialRepresentation.cloudCoverPercentage"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Cloud Cover Percentage (%)</FormLabel>
+                <LabelWithHelp helpKey="cloudCover">
+                  Cloud Cover Percentage (%)
+                </LabelWithHelp>
                 <FormControl>
                   <Input
                     type="number"
@@ -1225,7 +1395,7 @@ export function SpatialInformationSection({
             name="spatialInfo.rasterSpatialRepresentation.compressionGenerationQuantity"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Compression Generation Quantity</FormLabel>
+                <LabelWithHelp helpKey="compressionGenerationQuantity">Compression Generation Quantity</LabelWithHelp>
                 <FormControl>
                   <Input
                     type="number"
@@ -1247,100 +1417,149 @@ export function SpatialInformationSection({
       )}
 
       <h4 className="text-md font-medium pt-4">Bounding Box</h4>
-      <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <FormField
-          control={form.control}
-          name="spatialInfo.boundingBox.westBoundingCoordinate"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>West Bounding Coordinate</FormLabel>
-              <FormControl>
-                <Input
-                  type="number"
-                  placeholder="e.g., -123.45"
-                  {...field}
-                  value={field.value ?? ""}
-                  onChange={e =>
-                    field.onChange(
-                      e.target.value === "" ? null : Number(e.target.value)
-                    )
-                  }
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        {/* East, North, South Bounding Coordinates follow similar pattern */}
-        <FormField
-          control={form.control}
-          name="spatialInfo.boundingBox.eastBoundingCoordinate"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>East Bounding Coordinate</FormLabel>
-              <FormControl>
-                <Input
-                  type="number"
-                  placeholder="e.g., -122.67"
-                  {...field}
-                  value={field.value ?? ""}
-                  onChange={e =>
-                    field.onChange(
-                      e.target.value === "" ? null : Number(e.target.value)
-                    )
-                  }
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="spatialInfo.boundingBox.northBoundingCoordinate"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>North Bounding Coordinate</FormLabel>
-              <FormControl>
-                <Input
-                  type="number"
-                  placeholder="e.g., 49.28"
-                  {...field}
-                  value={field.value ?? ""}
-                  onChange={e =>
-                    field.onChange(
-                      e.target.value === "" ? null : Number(e.target.value)
-                    )
-                  }
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="spatialInfo.boundingBox.southBoundingCoordinate"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>South Bounding Coordinate</FormLabel>
-              <FormControl>
-                <Input
-                  type="number"
-                  placeholder="e.g., 48.54"
-                  {...field}
-                  value={field.value ?? ""}
-                  onChange={e =>
-                    field.onChange(
-                      e.target.value === "" ? null : Number(e.target.value)
-                    )
-                  }
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+      <div className="space-y-4">
+        {/* Mobile Coordinate Input - shows on small screens */}
+        <div className="block sm:hidden">
+          <MobileCoordinateInput
+            value={{
+              minX:
+                form.watch("spatialInfo.boundingBox.westBoundingCoordinate") ??
+                undefined,
+              maxX:
+                form.watch("spatialInfo.boundingBox.eastBoundingCoordinate") ??
+                undefined,
+              minY:
+                form.watch("spatialInfo.boundingBox.southBoundingCoordinate") ??
+                undefined,
+              maxY:
+                form.watch("spatialInfo.boundingBox.northBoundingCoordinate") ??
+                undefined
+            }}
+            onChange={coords => {
+              form.setValue(
+                "spatialInfo.boundingBox.westBoundingCoordinate",
+                coords.minX ?? null
+              )
+              form.setValue(
+                "spatialInfo.boundingBox.eastBoundingCoordinate",
+                coords.maxX ?? null
+              )
+              form.setValue(
+                "spatialInfo.boundingBox.southBoundingCoordinate",
+                coords.minY ?? null
+              )
+              form.setValue(
+                "spatialInfo.boundingBox.northBoundingCoordinate",
+                coords.maxY ?? null
+              )
+            }}
+            placeholder="Tap to set coordinates"
+          />
+        </div>
+
+        {/* Desktop Coordinate Inputs - shows on larger screens */}
+        <div className="hidden sm:grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <FormField
+            control={form.control}
+            name="spatialInfo.boundingBox.westBoundingCoordinate"
+            render={({ field }) => (
+              <FormItem>
+                <LabelWithHelp helpKey="westBoundingCoordinate">
+                  West Bounding Coordinate
+                </LabelWithHelp>
+                <FormControl>
+                  <Input
+                    type="number"
+                    placeholder="e.g., -123.45"
+                    {...field}
+                    value={field.value ?? ""}
+                    onChange={e =>
+                      field.onChange(
+                        e.target.value === "" ? null : Number(e.target.value)
+                      )
+                    }
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="spatialInfo.boundingBox.eastBoundingCoordinate"
+            render={({ field }) => (
+              <FormItem>
+                <LabelWithHelp helpKey="eastBoundingCoordinate">
+                  East Bounding Coordinate
+                </LabelWithHelp>
+                <FormControl>
+                  <Input
+                    type="number"
+                    placeholder="e.g., -122.67"
+                    {...field}
+                    value={field.value ?? ""}
+                    onChange={e =>
+                      field.onChange(
+                        e.target.value === "" ? null : Number(e.target.value)
+                      )
+                    }
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="spatialInfo.boundingBox.northBoundingCoordinate"
+            render={({ field }) => (
+              <FormItem>
+                <LabelWithHelp helpKey="northBoundingCoordinate">
+                  North Bounding Coordinate
+                </LabelWithHelp>
+                <FormControl>
+                  <Input
+                    type="number"
+                    placeholder="e.g., 49.28"
+                    {...field}
+                    value={field.value ?? ""}
+                    onChange={e =>
+                      field.onChange(
+                        e.target.value === "" ? null : Number(e.target.value)
+                      )
+                    }
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="spatialInfo.boundingBox.southBoundingCoordinate"
+            render={({ field }) => (
+              <FormItem>
+                <LabelWithHelp helpKey="southBoundingCoordinate">
+                  South Bounding Coordinate
+                </LabelWithHelp>
+                <FormControl>
+                  <Input
+                    type="number"
+                    placeholder="e.g., 48.54"
+                    {...field}
+                    value={field.value ?? ""}
+                    onChange={e =>
+                      field.onChange(
+                        e.target.value === "" ? null : Number(e.target.value)
+                      )
+                    }
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
       </div>
 
       <h4 className="text-md font-medium pt-4">Vertical Extent</h4>
@@ -1350,7 +1569,9 @@ export function SpatialInformationSection({
           name="spatialInfo.verticalExtent.minimumValue"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Minimum Value</FormLabel>
+              <LabelWithHelp helpKey="minimumValue">
+                Minimum Value
+              </LabelWithHelp>
               <FormControl>
                 <Input
                   type="number"
@@ -1373,7 +1594,9 @@ export function SpatialInformationSection({
           name="spatialInfo.verticalExtent.maximumValue"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Maximum Value</FormLabel>
+              <LabelWithHelp helpKey="maximumValue">
+                Maximum Value
+              </LabelWithHelp>
               <FormControl>
                 <Input
                   type="number"
@@ -1396,7 +1619,9 @@ export function SpatialInformationSection({
           name="spatialInfo.verticalExtent.unitOfMeasure"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Unit of Measure</FormLabel>
+              <LabelWithHelp helpKey="unitOfMeasure">
+                Unit of Measure
+              </LabelWithHelp>
               <FormControl>
                 <Input
                   placeholder="e.g., meters, feet"
@@ -1428,37 +1653,18 @@ export function TemporalSection({
           name="temporalInfo.dateFrom"
           render={({ field }) => (
             <FormItem className="flex flex-col">
-              <FormLabel>Date From (Start of temporal extent)</FormLabel>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <FormControl>
-                    <Button
-                      variant={"outline"}
-                      className={cn(
-                        "w-full pl-3 text-left font-normal",
-                        !field.value && "text-muted-foreground"
-                      )}
-                    >
-                      {field.value ? (
-                        format(new Date(field.value), "PPP")
-                      ) : (
-                        <span>Pick a date</span>
-                      )}
-                      <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                    </Button>
-                  </FormControl>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={field.value ? new Date(field.value) : undefined}
-                    onSelect={date =>
-                      field.onChange(date ? date.toISOString() : null)
-                    }
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
+              <LabelWithHelp helpKey="dateFrom">
+                Date From (Start of temporal extent)
+              </LabelWithHelp>
+              <FormControl>
+                <MobileDateInput
+                  value={field.value ? new Date(field.value) : null}
+                  onChange={date =>
+                    field.onChange(date ? date.toISOString() : null)
+                  }
+                  placeholder="Pick a start date"
+                />
+              </FormControl>
               <FormMessage />
             </FormItem>
           )}
@@ -1469,37 +1675,18 @@ export function TemporalSection({
           name="temporalInfo.dateTo"
           render={({ field }) => (
             <FormItem className="flex flex-col">
-              <FormLabel>Date To (End of temporal extent)</FormLabel>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <FormControl>
-                    <Button
-                      variant={"outline"}
-                      className={cn(
-                        "w-full pl-3 text-left font-normal",
-                        !field.value && "text-muted-foreground"
-                      )}
-                    >
-                      {field.value ? (
-                        format(new Date(field.value), "PPP")
-                      ) : (
-                        <span>Pick a date</span>
-                      )}
-                      <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                    </Button>
-                  </FormControl>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={field.value ? new Date(field.value) : undefined}
-                    onSelect={date =>
-                      field.onChange(date ? date.toISOString() : null)
-                    }
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
+              <LabelWithHelp helpKey="dateTo">
+                Date To (End of temporal extent)
+              </LabelWithHelp>
+              <FormControl>
+                <MobileDateInput
+                  value={field.value ? new Date(field.value) : null}
+                  onChange={date =>
+                    field.onChange(date ? date.toISOString() : null)
+                  }
+                  placeholder="Pick an end date"
+                />
+              </FormControl>
               <FormMessage />
             </FormItem>
           )}
@@ -1524,7 +1711,9 @@ export function DataQualitySection({
         name="dataQualityLineage"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Lineage / Data Source History *</FormLabel>
+            <LabelWithHelp helpKey="lineage" required>
+              Lineage / Data Source History
+            </LabelWithHelp>
             <FormControl>
               <Textarea
                 placeholder="Describe the source of the data, processing steps, and history."
@@ -1543,7 +1732,9 @@ export function DataQualitySection({
         name="dataQualityInfo.attributeAccuracyReport"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Accuracy Report</FormLabel>
+            <LabelWithHelp helpKey="accuracyReport">
+              Accuracy Report
+            </LabelWithHelp>
             <FormControl>
               <Textarea
                 placeholder="Report on the accuracy of the dataset (e.g., positional accuracy, attribute accuracy)."
@@ -1562,7 +1753,9 @@ export function DataQualitySection({
         name="dataQualityInfo.completenessReport"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Completeness Report</FormLabel>
+            <LabelWithHelp helpKey="completenessReport">
+              Completeness Report
+            </LabelWithHelp>
             <FormControl>
               <Textarea
                 placeholder="Report on the completeness of the dataset (e.g., missing data, coverage)."
@@ -1581,7 +1774,9 @@ export function DataQualitySection({
         name="dataQualityInfo.logicalConsistencyReport"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Logical Consistency Report</FormLabel>
+            <LabelWithHelp helpKey="logicalConsistencyReport">
+              Logical Consistency Report
+            </LabelWithHelp>
             <FormControl>
               <Textarea
                 placeholder="Report on the logical consistency of the dataset (e.g., topological consistency, attribute relationships)."
@@ -1617,7 +1812,9 @@ export function ProcessingInformationSection({
         name="processingInfo.processingStepsDescription"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Processing Steps Description</FormLabel>
+            <LabelWithHelp helpKey="processing.stepDescription">
+              Processing Steps Description
+            </LabelWithHelp>
             <FormControl>
               <Textarea
                 placeholder="Describe the steps taken to process the data"
@@ -1636,7 +1833,9 @@ export function ProcessingInformationSection({
         name="processingInfo.softwareAndVersionUsed"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Software and Versions Used</FormLabel>
+            <LabelWithHelp helpKey="processing.software">
+              Software and Versions Used
+            </LabelWithHelp>
             <FormControl>
               <Input
                 placeholder="e.g., ArcGIS Pro 3.0, QGIS 3.22"
@@ -1655,7 +1854,9 @@ export function ProcessingInformationSection({
           name="contactName"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Processor Name</FormLabel>
+              <LabelWithHelp helpKey="contact.individualName">
+                Processor Name
+              </LabelWithHelp>
               <FormControl>
                 <Input
                   placeholder="Name of the person who processed the data"
@@ -1672,7 +1873,9 @@ export function ProcessingInformationSection({
           name="contactEmail"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Processor Email</FormLabel>
+              <LabelWithHelp helpKey="contact.email">
+                Processor Email
+              </LabelWithHelp>
               <FormControl>
                 <Input
                   type="email"
@@ -1692,7 +1895,9 @@ export function ProcessingInformationSection({
         name="contactAddress"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Processor Organization</FormLabel>
+            <LabelWithHelp helpKey="contact.organization">
+              Processor Organization
+            </LabelWithHelp>
             <FormControl>
               <Input
                 placeholder="Organization responsible for processing"
@@ -1710,49 +1915,16 @@ export function ProcessingInformationSection({
         name="processingInfo.processedDate"
         render={({ field }) => (
           <FormItem className="flex flex-col">
-            <FormLabel>Processing Date</FormLabel>
-            <Popover>
-              <PopoverTrigger asChild>
-                <FormControl>
-                  <Button
-                    variant={"outline"}
-                    className={cn(
-                      "w-full pl-3 text-left font-normal",
-                      !field.value && "text-muted-foreground"
-                    )}
-                  >
-                    {field.value ? (
-                      format(
-                        typeof field.value === "string"
-                          ? new Date(field.value)
-                          : field.value,
-                        "PPP"
-                      )
-                    ) : (
-                      <span>Pick a date</span>
-                    )}
-                    <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                  </Button>
-                </FormControl>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={
-                    field.value
-                      ? typeof field.value === "string"
-                        ? new Date(field.value)
-                        : field.value
-                      : undefined
-                  }
-                  onSelect={field.onChange}
-                  disabled={date =>
-                    date > new Date() || date < new Date("1900-01-01")
-                  }
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
+            <LabelWithHelp helpKey="processing.date">
+              Processing Date
+            </LabelWithHelp>
+            <FormControl>
+              <MobileDateInput
+                value={field.value}
+                onChange={field.onChange}
+                placeholder="Pick a date"
+              />
+            </FormControl>
             <FormMessage />
           </FormItem>
         )}
@@ -1767,7 +1939,9 @@ export function ProcessingInformationSection({
           name="dataSources"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Source Citation</FormLabel>
+              <LabelWithHelp helpKey="general.dataSources">
+                Source Citation
+              </LabelWithHelp>
               <FormControl>
                 <Textarea
                   placeholder="Citation for the source data"
@@ -1787,7 +1961,9 @@ export function ProcessingInformationSection({
             name="spatialResolution"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Source Scale</FormLabel>
+                <LabelWithHelp helpKey="spatial.resolution">
+                  Source Scale
+                </LabelWithHelp>
                 <FormControl>
                   <Input
                     placeholder="e.g., 1:50000"
@@ -1804,7 +1980,9 @@ export function ProcessingInformationSection({
             name="technicalDetailsInfo.fileFormat"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Source Format</FormLabel>
+                <LabelWithHelp helpKey="spatial.format">
+                  Source Format
+                </LabelWithHelp>
                 <FormControl>
                   <Input
                     placeholder="e.g., Shapefile, GeoTIFF"
@@ -1839,7 +2017,9 @@ export function ContactAndOtherInformationSection({
         name="contactName"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Point of Contact *</FormLabel>
+            <LabelWithHelp helpKey="contact.individualName">
+              Point of Contact *
+            </LabelWithHelp>
             <FormControl>
               <Input
                 placeholder="Name or department for contact"
@@ -1857,7 +2037,9 @@ export function ContactAndOtherInformationSection({
           name="contactEmail"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Contact Email *</FormLabel>
+              <LabelWithHelp helpKey="contact.email">
+                Contact Email *
+              </LabelWithHelp>
               <FormControl>
                 <Input
                   type="email"
@@ -1875,7 +2057,9 @@ export function ContactAndOtherInformationSection({
           name="contactPhone"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Contact Phone</FormLabel>
+              <LabelWithHelp helpKey="contact.phone">
+                Contact Phone
+              </LabelWithHelp>
               <FormControl>
                 <Input
                   type="tel"
@@ -1894,7 +2078,9 @@ export function ContactAndOtherInformationSection({
         name="contactAddress"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Organization Name</FormLabel>
+            <LabelWithHelp helpKey="contact.organization">
+              Organization Name
+            </LabelWithHelp>
             <FormControl>
               <Input
                 placeholder="Name of the responsible organization"
@@ -1915,7 +2101,9 @@ export function ContactAndOtherInformationSection({
           name="spatialReferenceSystem"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Data Standard</FormLabel>
+              <LabelWithHelp helpKey="general.dataStandard">
+                Data Standard
+              </LabelWithHelp>
               <FormControl>
                 <Input
                   placeholder="e.g., ISO 19115, FGDC CSDGM"
@@ -1932,7 +2120,9 @@ export function ContactAndOtherInformationSection({
           name="notes"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Data Dictionary URL</FormLabel>
+              <LabelWithHelp helpKey="distribution.onlineResource">
+                Data Dictionary URL
+              </LabelWithHelp>
               <FormControl>
                 <Input
                   type="url"
@@ -1955,7 +2145,9 @@ export function ContactAndOtherInformationSection({
           name="technicalDetailsInfo.fileFormat"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Distribution Format Name *</FormLabel>
+              <LabelWithHelp helpKey="spatial.format">
+                Distribution Format Name *
+              </LabelWithHelp>
               <FormControl>
                 <Input
                   placeholder="e.g., GeoTIFF, Shapefile, CSV"
@@ -1972,7 +2164,9 @@ export function ContactAndOtherInformationSection({
           name="version"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Format Version</FormLabel>
+              <LabelWithHelp helpKey="general.version">
+                Format Version
+              </LabelWithHelp>
               <FormControl>
                 <Input
                   placeholder="e.g., 1.0, 2.1"
@@ -1990,7 +2184,9 @@ export function ContactAndOtherInformationSection({
         name="distributionInfo.downloadUrl"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Access URL (Download/Service/API)</FormLabel>
+            <LabelWithHelp helpKey="distribution.accessUrl">
+              Access URL (Download/Service/API)
+            </LabelWithHelp>
             <FormControl>
               <Input
                 type="url"
@@ -2011,7 +2207,9 @@ export function ContactAndOtherInformationSection({
         name="spatialReferenceSystem"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Metadata Standard</FormLabel>
+            <LabelWithHelp helpKey="general.metadataStandard">
+              Metadata Standard
+            </LabelWithHelp>
             <FormControl>
               <Input
                 placeholder="e.g., ISO 19115-1:2014, Dublin Core"
@@ -2028,7 +2226,9 @@ export function ContactAndOtherInformationSection({
         name="language"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Metadata Language</FormLabel>
+            <LabelWithHelp helpKey="general.language">
+              Metadata Language
+            </LabelWithHelp>
             <FormControl>
               <Input
                 placeholder="e.g., en, fr"
@@ -2046,7 +2246,9 @@ export function ContactAndOtherInformationSection({
         name="additionalInformation"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Additional Information</FormLabel>
+            <LabelWithHelp helpKey="general.additionalInfo">
+              Additional Information
+            </LabelWithHelp>
             <FormControl>
               <Textarea
                 placeholder="Any other relevant information not covered elsewhere."
@@ -2097,355 +2299,88 @@ export function MetadataPreviewSection({
     return String(value)
   }
 
-  // Helper to create a more readable label from a camelCase field name
-  const formatLabel = (fieldName: string) => {
-    const result = fieldName.replace(/([A-Z])/g, " $1")
-    return result.charAt(0).toUpperCase() + result.slice(1)
-  }
-
   return (
     <div className="space-y-6">
-      <h3 className="text-lg font-medium text-primary">Review Your Metadata</h3>
-      <p className="text-sm text-muted-foreground">
-        Please review the information below before submitting.
-      </p>
-      <div className="space-y-4 divide-y divide-border rounded-md border p-4 md:p-6">
-        {Object.entries(values).map(([key, value]) => {
-          // Skip internal react-hook-form properties or fields you don't want to show
-          if (
-            key === "control" ||
-            key === "trigger" ||
-            key === "formState" ||
-            key === "watch" ||
-            key === "reset" ||
-            key === "handleSubmit" ||
-            key === "register" ||
-            key === "setValue" ||
-            key === "getValues" ||
-            key === "getFieldState" ||
-            key === "clearErrors" ||
-            key === "_formState"
-          ) {
-            return null
-          }
-          // You can add more sophisticated filtering or ordering of fields here
-          return (
-            <div key={key} className="pt-4 first:pt-0">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                <dt className="font-medium text-foreground md:col-span-1">
-                  {formatLabel(key)}:
-                </dt>
-                <dd className="text-muted-foreground md:col-span-2">
-                  {renderValue(value)}
-                </dd>
-              </div>
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
-// Placeholder for ReviewForm - to be implemented in Subtask 24.12
-export function ReviewForm({
-  form
-}: {
-  form: UseFormReturn<MetadataFormValues>
-}) {
-  const data = form.getValues() // Get all form values for review
-
-  // Define section headers based on form steps
-  const sections = [
-    {
-      title: "General Information",
-      fields: [
-        "title",
-        "dataType",
-        "abstract",
-        "purpose",
-        "organizationId",
-        "keywords",
-        "version",
-        "language"
-      ]
-    },
-    {
-      title: "Location Information",
-      fields: ["locationInfo", "geographicDescription"]
-    },
-    {
-      title: "Spatial Information",
-      fields: [
-        "spatialRepresentationType",
-        "spatialReferenceSystem",
-        "spatialResolution",
-        "boundingBoxNorth",
-        "boundingBoxSouth",
-        "boundingBoxEast",
-        "boundingBoxWest"
-      ]
-    },
-    {
-      title: "Temporal Information",
-      fields: ["temporalExtentFrom", "temporalExtentTo"]
-    },
-    {
-      title: "Data Quality Information",
-      fields: [
-        "dataQualityInfo",
-        "dataQualityScope",
-        "dataQualityLineage",
-        "dataQualityReport"
-      ]
-    },
-    {
-      title: "Processing Information",
-      fields: ["processingInfo", "dataSources", "methodology"]
-    },
-    {
-      title: "Contact & Distribution Information",
-      fields: [
-        "contactName",
-        "contactEmail",
-        "contactPhone",
-        "contactAddress",
-        "distributionInfo",
-        "licence",
-        "accessAndUseLimitations"
-      ]
-    },
-    {
-      title: "Additional Information",
-      fields: ["notes", "additionalInformation"]
-    }
-  ]
-
-  // Format a value for display
-  const formatValue = (value: any): React.ReactNode => {
-    if (value === null || value === undefined || value === "") {
-      return <span className="text-muted-foreground italic">Not provided</span>
-    }
-
-    if (typeof value === "boolean") {
-      return value ? "Yes" : "No"
-    }
-
-    if (value instanceof Date) {
-      return format(value, "PPP")
-    }
-
-    if (Array.isArray(value)) {
-      return value.length > 0 ? (
-        <div className="flex flex-wrap gap-1">
-          {value.map((item, i) => (
-            <span key={i} className="px-2 py-1 bg-muted rounded-md text-xs">
-              {item}
-            </span>
-          ))}
-        </div>
-      ) : (
-        <span className="text-muted-foreground italic">None</span>
-      )
-    }
-
-    if (typeof value === "object") {
-      return null // We'll handle objects specifically
-    }
-
-    // Special handling for URLs
-    if (typeof value === "string") {
-      if (
-        value.startsWith("http://") ||
-        value.startsWith("https://") ||
-        value.includes("www.")
-      ) {
-        return (
-          <a
-            href={value}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-primary hover:underline flex items-center"
-          >
-            {value}
-            <ExternalLink className="h-3 w-3 ml-1" />
-          </a>
-        )
-      }
-
-      // Format emails
-      if (value.includes("@") && value.includes(".")) {
-        return (
-          <a href={`mailto:${value}`} className="text-primary hover:underline">
-            {value}
-          </a>
-        )
-      }
-    }
-
-    return String(value)
-  }
-
-  // Format a field name for display
-  const formatFieldName = (name: string): string => {
-    // Convert camelCase to Title Case with spaces
-    return name
-      .replace(/([A-Z])/g, " $1")
-      .replace(/^./, str => str.toUpperCase())
-      .replace(/Info$/, " Information")
-  }
-
-  // Render an object's values
-  const renderObjectValues = (obj: Record<string, any>) => {
-    if (!obj) return null
-
-    return Object.entries(obj).map(([key, value]) => {
-      // Skip empty values or nested objects (will be handled separately)
-      if (
-        value === null ||
-        value === undefined ||
-        value === "" ||
-        (typeof value === "object" &&
-          !Array.isArray(value) &&
-          !(value instanceof Date))
-      ) {
-        return null
-      }
-
-      return (
-        <div key={key} className="px-4 py-2 border-t">
-          <div className="font-medium text-sm">{formatFieldName(key)}:</div>
-          <div className="text-sm mt-1">{formatValue(value)}</div>
-        </div>
-      )
-    })
-  }
-
-  return (
-    <div className="space-y-8">
-      <div>
-        <h3 className="text-lg font-medium">Review Your Submission</h3>
-        <p className="text-sm text-muted-foreground mt-1">
-          Please review all information carefully before submitting. You can go
-          back to any section to make changes.
+      <div className="text-center">
+        <h3 className="text-lg font-medium">Review Your Metadata</h3>
+        <p className="text-muted-foreground">
+          Please review all the information below before submitting
         </p>
       </div>
 
-      {/* Summary Card */}
-      <div className="bg-muted/30 rounded-lg border p-4">
-        <div className="grid gap-4 md:grid-cols-3">
-          <div>
-            <h4 className="text-sm font-medium mb-1">Title</h4>
-            <p className="text-sm">
-              {data.title || "Untitled Metadata Record"}
-            </p>
-          </div>
-
-          <div>
-            <h4 className="text-sm font-medium mb-1">Data Type</h4>
-            <p className="text-sm">{data.dataType || "Not specified"}</p>
-          </div>
-
-          <div>
-            <h4 className="text-sm font-medium mb-1">Organization</h4>
-            <p className="text-sm">{data.organizationId || "Not specified"}</p>
-          </div>
-
-          <div className="col-span-3">
-            <h4 className="text-sm font-medium mb-1">Abstract</h4>
-            <p className="text-sm line-clamp-2">
-              {data.abstract || "No abstract provided"}
-            </p>
+      <div className="space-y-4">
+        <div className="p-4 border rounded-lg">
+          <h4 className="font-medium mb-2">General Information</h4>
+          <div className="grid gap-2 text-sm">
+            <div>
+              <strong>Title:</strong> {renderValue(values.title)}
+            </div>
+            <div>
+              <strong>Data Type:</strong> {renderValue(values.dataType)}
+            </div>
+            <div>
+              <strong>Abstract:</strong> {renderValue(values.abstract)}
+            </div>
+            <div>
+              <strong>Keywords:</strong> {renderValue(values.keywords)}
+            </div>
           </div>
         </div>
 
-        <div className="mt-4 pt-4 border-t flex items-center justify-between">
-          <div className="flex items-center">
-            <CheckCircle className="h-5 w-5 text-green-500 mr-2" />
-            <p className="text-sm font-medium">Ready for submission</p>
-          </div>
-
-          <div className="text-sm text-muted-foreground">
-            Last updated: {new Date().toLocaleDateString()}
+        <div className="p-4 border rounded-lg">
+          <h4 className="font-medium mb-2">Location Information</h4>
+          <div className="grid gap-2 text-sm">
+            <div>
+              <strong>Country:</strong>{" "}
+              {renderValue(values.locationInfo?.country)}
+            </div>
+            <div>
+              <strong>State:</strong> {renderValue(values.locationInfo?.state)}
+            </div>
+            <div>
+              <strong>LGA:</strong> {renderValue(values.locationInfo?.lga)}
+            </div>
           </div>
         </div>
-      </div>
 
-      <div className="space-y-6">
-        {sections.map(section => {
-          // Check if there's any data to show in this section
-          const hasContent = section.fields.some(field => {
-            const value = data[field as keyof typeof data]
-            return (
-              value !== null &&
-              value !== undefined &&
-              value !== "" &&
-              !(
-                typeof value === "object" &&
-                Object.keys(value || {}).length === 0
-              )
-            )
-          })
-
-          if (!hasContent) return null
-
-          return (
-            <div
-              key={section.title}
-              className="border rounded-lg overflow-hidden"
-            >
-              <div className="bg-muted px-4 py-3">
-                <h4 className="font-medium">{section.title}</h4>
+        {values.spatialInfo && (
+          <div className="p-4 border rounded-lg">
+            <h4 className="font-medium mb-2">Spatial Information</h4>
+            <div className="grid gap-2 text-sm">
+              <div>
+                <strong>Coordinate System:</strong>{" "}
+                {renderValue(values.spatialInfo.coordinateSystem)}
               </div>
               <div>
-                {section.fields.map(field => {
-                  const value = data[field as keyof typeof data]
-
-                  // Skip empty values
-                  if (value === null || value === undefined || value === "") {
-                    return null
-                  }
-
-                  // Handle objects differently
-                  if (
-                    typeof value === "object" &&
-                    !Array.isArray(value) &&
-                    !(value instanceof Date)
-                  ) {
-                    return renderObjectValues(value as Record<string, any>)
-                  }
-
-                  // Skip empty arrays
-                  if (Array.isArray(value) && value.length === 0) {
-                    return null
-                  }
-
-                  return (
-                    <div
-                      key={field}
-                      className="px-4 py-3 border-t first:border-t-0"
-                    >
-                      <div className="font-medium text-sm">
-                        {formatFieldName(field)}:
-                      </div>
-                      <div className="mt-1 text-sm">{formatValue(value)}</div>
-                    </div>
-                  )
-                })}
+                <strong>Format:</strong>{" "}
+                {renderValue(values.spatialInfo.format)}
               </div>
             </div>
-          )
-        })}
+          </div>
+        )}
+
+        {values.temporalInfo && (
+          <div className="p-4 border rounded-lg">
+            <h4 className="font-medium mb-2">Temporal Information</h4>
+            <div className="grid gap-2 text-sm">
+              <div>
+                <strong>Date From:</strong>{" "}
+                {renderValue(values.temporalInfo.dateFrom)}
+              </div>
+              <div>
+                <strong>Date To:</strong>{" "}
+                {renderValue(values.temporalInfo.dateTo)}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
-      <div className="bg-muted/50 rounded-lg p-4 border border-muted">
-        <div className="flex items-center">
-          <CheckCircle className="h-5 w-5 text-green-500 mr-2" />
-          <p className="text-sm font-medium">
-            Ready to submit? Use the buttons below to save as a draft or submit
-            your metadata record.
-          </p>
-        </div>
+      <div className="text-center p-4 border-t">
+        <p className="text-sm text-muted-foreground">
+          You can go back to any section to make changes, or submit your
+          metadata record.
+        </p>
       </div>
     </div>
   )

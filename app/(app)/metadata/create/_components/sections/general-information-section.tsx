@@ -27,6 +27,7 @@ import {
   frameworkTypeEnum,
   metadataTopicCategoryEnum
 } from "@/db/schema/metadata-records-schema"
+import { LabelWithHelp } from "@/components/ui/form-field-with-help"
 
 // Section 1: General Information (Renamed from IdentificationSection)
 export function GeneralInformationSection({
@@ -184,7 +185,9 @@ export function GeneralInformationSection({
         name="title"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Title *</FormLabel>
+            <LabelWithHelp helpKey="title" required>
+              Title
+            </LabelWithHelp>
             <FormControl>
               <Input
                 placeholder="e.g., Urban Planning Dataset for Downtown Area"
@@ -203,7 +206,9 @@ export function GeneralInformationSection({
         name="abstract"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Abstract *</FormLabel>
+            <LabelWithHelp helpKey="abstract" required>
+              Abstract
+            </LabelWithHelp>
             <FormControl>
               <Textarea
                 placeholder="Provide a comprehensive description of your dataset, including its purpose, content, and potential applications..."
@@ -224,7 +229,9 @@ export function GeneralInformationSection({
           name="dataType"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Data Type *</FormLabel>
+              <LabelWithHelp helpKey="dataType" required>
+                Data Type
+              </LabelWithHelp>
               <Select
                 onValueChange={field.onChange}
                 defaultValue={field.value || undefined}
@@ -252,7 +259,18 @@ export function GeneralInformationSection({
           name="frameworkType"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Framework Type *</FormLabel>
+              <LabelWithHelp
+                helpKey="frameworkType"
+                customHelp={{
+                  title: "Framework Type",
+                  content:
+                    "The metadata standard or framework used to describe your dataset.",
+                  examples: ["NGDI", "ISO 19115", "Dublin Core", "DCAT"]
+                }}
+                required
+              >
+                Framework Type
+              </LabelWithHelp>
               <Select
                 onValueChange={field.onChange}
                 defaultValue={field.value || undefined}
@@ -281,7 +299,22 @@ export function GeneralInformationSection({
         name="topicCategory"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Topic Category *</FormLabel>
+            <LabelWithHelp
+              customHelp={{
+                title: "Topic Category",
+                content:
+                  "The main theme or subject area that best describes your dataset content.",
+                examples: [
+                  "Environment: Environmental monitoring, ecology",
+                  "Transportation: Roads, railways, airports",
+                  "Society: Demographics, education, health",
+                  "Economy: Business, agriculture, industry"
+                ]
+              }}
+              required
+            >
+              Topic Category
+            </LabelWithHelp>
             <Select
               onValueChange={field.onChange}
               defaultValue={field.value || undefined}
@@ -312,7 +345,7 @@ export function GeneralInformationSection({
             const keywords = field.value || []
             return (
               <FormItem>
-                <FormLabel>Keywords</FormLabel>
+                <LabelWithHelp helpKey="keywords">Keywords</LabelWithHelp>
                 <FormControl>
                   <Input
                     placeholder="Add keywords and press Enter"
@@ -349,7 +382,21 @@ export function GeneralInformationSection({
         name="purpose"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Purpose</FormLabel>
+            <LabelWithHelp
+              customHelp={{
+                title: "Purpose",
+                content:
+                  "The specific reason why this dataset was created and how it's intended to be used.",
+                examples: [
+                  "Urban planning and development monitoring",
+                  "Environmental impact assessment",
+                  "Infrastructure planning and management",
+                  "Research and academic studies"
+                ]
+              }}
+            >
+              Purpose
+            </LabelWithHelp>
             <FormControl>
               <Textarea
                 placeholder="Describe the purpose or intended use of this dataset..."
@@ -367,7 +414,15 @@ export function GeneralInformationSection({
         name="language"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Language</FormLabel>
+            <LabelWithHelp
+              customHelp={{
+                title: "Language",
+                content:
+                  "The primary language used in the dataset content, labels, and documentation."
+              }}
+            >
+              Language
+            </LabelWithHelp>
             <FormControl>
               <Input
                 placeholder="e.g., English, French, etc."
