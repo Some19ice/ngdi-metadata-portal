@@ -48,6 +48,13 @@ export async function geocodeLocationAction(
     const baseUrl = getBaseUrl()
     const url = `${baseUrl}/api/map/geocode?${queryParams.toString()}`
 
+    console.log("Geocoding action:", {
+      searchText: searchText.substring(0, 50),
+      baseUrl,
+      fullUrl: url,
+      timestamp: new Date().toISOString()
+    })
+
     const response = await fetch(url, {
       method: "GET",
       headers: {
@@ -57,9 +64,36 @@ export async function geocodeLocationAction(
       cache: "no-store"
     })
 
+    console.log("Geocoding response status:", {
+      status: response.status,
+      statusText: response.statusText,
+      ok: response.ok,
+      url: response.url
+    })
+
     if (!response.ok) {
-      const errorData = await response.json()
-      console.error("Geocoding API Error:", errorData)
+      const errorData = await response
+        .json()
+        .catch(() => ({ error: "Unknown error" }))
+      console.error("Geocoding API Error:", {
+        status: response.status,
+        statusText: response.statusText,
+        errorData,
+        url: response.url
+      })
+
+      // If we get a response with fallback data, still return success
+      if (errorData.features && Array.isArray(errorData.features)) {
+        return {
+          isSuccess: true,
+          message:
+            errorData.warning ||
+            errorData.error ||
+            "Using fallback geocoding data",
+          data: errorData.features
+        }
+      }
+
       throw new Error(
         errorData.error ||
           `Failed to fetch geocoding data: ${response.status} ${response.statusText}`
@@ -68,15 +102,31 @@ export async function geocodeLocationAction(
 
     const data: GeocodingResponse = await response.json()
 
+    console.log("Geocoding success:", {
+      featuresCount: data.features?.length || 0,
+      hasFeatures: !!data.features,
+      query: data.query,
+      attribution: data.attribution
+    })
+
     return {
       isSuccess: true,
-      message: "Geocoding successful",
+      message: data.features?.length
+        ? `Found ${data.features.length} location${data.features.length > 1 ? "s" : ""}`
+        : "No locations found",
       data: data.features || []
     }
   } catch (error) {
-    console.error("Error in geocodeLocationAction:", error)
+    console.error("Error in geocodeLocationAction:", {
+      error: error instanceof Error ? error.message : String(error),
+      searchText: searchText.substring(0, 50),
+      timestamp: new Date().toISOString(),
+      stack: error instanceof Error ? error.stack : undefined
+    })
+
     const errorMessage =
       error instanceof Error ? error.message : "An unknown error occurred"
+
     return {
       isSuccess: false,
       message: `Geocoding failed: ${errorMessage}`

@@ -16,6 +16,9 @@ import {
 } from "@/lib/map-security"
 import MapSearchInput from "./map-search-input"
 import { toast } from "sonner"
+import { Drawer, DrawerContent, DrawerTrigger } from "@/components/ui/drawer"
+import { Button } from "@/components/ui/button"
+import { Menu } from "lucide-react"
 
 // Lazy load heavy components
 const MapView = dynamic(() => import("@/components/ui/map/map-view"), {
@@ -235,6 +238,17 @@ function MapWrapper({
   const validatedStyles = getAvailableMapStyles()
   const eventManagerRef = useRef<MapEventManager>(new MapEventManager())
 
+  // Responsive detection (mobile screens under 1024px)
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    const updateScreen = () => setIsMobile(window.innerWidth < 1024)
+    updateScreen()
+    window.addEventListener("resize", updateScreen)
+    return () => window.removeEventListener("resize", updateScreen)
+  }, [])
+
+  const [drawerOpen, setDrawerOpen] = useState(false)
+
   // Update search results when prop changes
   useEffect(() => {
     setCurrentSearchResults(searchResults || [])
@@ -246,30 +260,42 @@ function MapWrapper({
 
     // Set initial style ID from the map
     const currentStyle = mapInstance.getStyle()
-    if (currentStyle && currentStyle.name) {
-      setActiveStyleId(currentStyle.name)
+    if (currentStyle) {
+      // Use name if available, otherwise fall back to the style id field.
+      const derivedId =
+        (currentStyle as any).name || (currentStyle as any).id || ""
+      setActiveStyleId(derivedId)
     }
+
+    // MapView controls are handled via props, not manually here
   }, [])
+
+  // Debounce style switching to avoid hammering the CDN when users click rapidly.
+  const styleChangeTimeout = useRef<NodeJS.Timeout | null>(null)
 
   const handleStyleChange = useCallback(
     (styleId: string) => {
-      setActiveStyleId(styleId)
+      // Clear previous pending change
+      if (styleChangeTimeout.current) {
+        clearTimeout(styleChangeTimeout.current)
+      }
 
-      // Apply the style change to the map
-      if (map && isLoaded) {
-        const selectedStyle = validatedStyles.find(
-          style => style.id === styleId
-        )
-        if (selectedStyle && selectedStyle.url) {
-          try {
-            map.setStyle(selectedStyle.url)
-            toast.success(`Map style changed to ${selectedStyle.name}`)
-          } catch (error) {
-            console.error("Failed to change map style:", error)
-            toast.error("Failed to change map style")
+      styleChangeTimeout.current = setTimeout(() => {
+        setActiveStyleId(styleId)
+
+        if (map && isLoaded) {
+          const selectedStyle = validatedStyles.find(s => s.id === styleId)
+          if (selectedStyle?.url) {
+            try {
+              map.setStyle(selectedStyle.url)
+              toast.success(`Map style changed to ${selectedStyle.name}`)
+            } catch (error) {
+              console.error("Failed to change map style:", error)
+              toast.error("Failed to change map style")
+            }
           }
         }
-      }
+      }, 400) // 400 ms debounce
     },
     [map, isLoaded, validatedStyles]
   )
@@ -429,8 +455,8 @@ function MapWrapper({
 
   return (
     <div className="flex h-screen bg-gray-50">
-      {/* Smart Map Hub Sidebar */}
-      <div className="w-80 bg-white shadow-2xl border-r-4 border-gray-400 overflow-y-auto relative z-10">
+      {/* Desktop Sidebar */}
+      <div className="hidden lg:block w-80 bg-white shadow-2xl border-r-4 border-gray-400 overflow-y-auto relative z-10">
         <MapControlPanel
           map={map}
           isLoaded={isLoaded}
@@ -444,8 +470,36 @@ function MapWrapper({
         />
       </div>
 
+      {/* Mobile Drawer Trigger */}
+      {isMobile && (
+        <Drawer open={drawerOpen} onOpenChange={setDrawerOpen}>
+          <DrawerTrigger asChild>
+            <Button
+              size="icon"
+              variant="secondary"
+              className="fixed bottom-4 left-4 z-20 rounded-full shadow-lg lg:hidden"
+            >
+              <Menu className="h-5 w-5" />
+            </Button>
+          </DrawerTrigger>
+          <DrawerContent className="h-[85vh] p-0 overflow-y-auto">
+            <MapControlPanel
+              map={map}
+              isLoaded={isLoaded}
+              validatedStyles={validatedStyles}
+              activeStyleId={activeStyleId}
+              handleControlStyleChange={handleStyleChange}
+              handleSearchQuery={handleSearchQuery}
+              handleLocationSelect={handleLocationSelect}
+              copyCoordinates={copyCoordinates}
+              currentSearchResults={currentSearchResults}
+            />
+          </DrawerContent>
+        </Drawer>
+      )}
+
       {/* Map Container */}
-      <div className="flex-1 relative ml-2">
+      <div className="flex-1 relative ml-0 lg:ml-2">
         <MapErrorBoundary onError={handleMapError}>
           <MapView
             initialOptions={{

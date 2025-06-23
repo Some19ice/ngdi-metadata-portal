@@ -60,6 +60,8 @@ export default function MapSearchInput({
       abortControllerRef.current = new AbortController()
 
       try {
+        console.log("Map search: searching for", query)
+
         const result = await geocodeLocationAction({
           searchText: query,
           autocomplete: true,
@@ -67,12 +69,18 @@ export default function MapSearchInput({
           country: "NG" // Bias towards Nigeria
         })
 
+        console.log("Map search result:", {
+          isSuccess: result.isSuccess,
+          message: result.message,
+          dataLength: result.data?.length || 0
+        })
+
         if (result.isSuccess) {
           return result.data
         } else {
-          console.error("Geocoding error:", result.message)
+          console.error("Map geocoding error:", result.message)
           if (!abortControllerRef.current.signal.aborted) {
-            toast.error("Search failed. Please try again.")
+            toast.error(result.message || "Search failed. Please try again.")
           }
           return []
         }
@@ -80,6 +88,12 @@ export default function MapSearchInput({
         if (error instanceof Error && error.name === "AbortError") {
           // Request was cancelled, ignore
           return []
+        }
+        console.error("Map search error:", error)
+        if (!abortControllerRef.current.signal.aborted) {
+          toast.error(
+            "Search failed. Please check your connection and try again."
+          )
         }
         throw error
       }

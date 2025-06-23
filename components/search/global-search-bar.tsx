@@ -223,12 +223,21 @@ export default function GlobalSearchBar() {
     try {
       // Get location suggestions
       if (searchType === "auto" || searchType === "location") {
+        console.log("Fetching location suggestions for:", searchQuery)
+
         const locationResult = await geocodeLocationAction({
           searchText: searchQuery,
           autocomplete: true,
           limit: 3,
           country: "NG"
         })
+
+        console.log("Location suggestion result:", {
+          isSuccess: locationResult.isSuccess,
+          message: locationResult.message,
+          dataLength: locationResult.data?.length || 0
+        })
+
         if (locationResult.isSuccess && locationResult.data) {
           const locationSuggestions = locationResult.data
             .slice(0, 3)
@@ -239,6 +248,9 @@ export default function GlobalSearchBar() {
               icon: <MapPin className="h-4 w-4 text-blue-600" />
             }))
           suggestions.push(...locationSuggestions)
+        } else if (!locationResult.isSuccess) {
+          console.error("Location suggestions failed:", locationResult.message)
+          // Still try to show metadata suggestions
         }
       }
 
@@ -261,6 +273,14 @@ export default function GlobalSearchBar() {
     } catch (error) {
       console.error("Error fetching suggestions:", error)
       setSuggestions([])
+
+      // Show user-friendly error message
+      if (typeof window !== "undefined" && window.posthog) {
+        window.posthog.capture("search_suggestions_error", {
+          error_message: error instanceof Error ? error.message : String(error),
+          search_query: searchQuery.substring(0, 50)
+        })
+      }
     }
 
     setIsLoadingSuggestions(false)
