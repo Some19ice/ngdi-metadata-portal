@@ -241,10 +241,16 @@ function MapWrapper({
   // Responsive detection (mobile screens under 1024px)
   const [isMobile, setIsMobile] = useState(false)
   useEffect(() => {
-    const updateScreen = () => setIsMobile(window.innerWidth < 1024)
+    const updateScreen = () => {
+      if (typeof window !== "undefined") {
+        setIsMobile(window.innerWidth < 1024)
+      }
+    }
     updateScreen()
-    window.addEventListener("resize", updateScreen)
-    return () => window.removeEventListener("resize", updateScreen)
+    if (typeof window !== "undefined") {
+      window.addEventListener("resize", updateScreen)
+      return () => window.removeEventListener("resize", updateScreen)
+    }
   }, [])
 
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -442,6 +448,15 @@ function MapWrapper({
   useEffect(() => {
     return () => {
       eventManagerRef.current.cleanup()
+    }
+  }, [])
+
+  // Cleanup styleChangeTimeout on unmount
+  useEffect(() => {
+    return () => {
+      if (styleChangeTimeout.current) {
+        clearTimeout(styleChangeTimeout.current)
+      }
     }
   }, [])
 
