@@ -2,7 +2,14 @@
 
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { SearchIcon, MapPin, FileText, Newspaper, BookOpen } from "lucide-react"
+import {
+  SearchIcon,
+  MapPin,
+  FileText,
+  Newspaper,
+  BookOpen,
+  Loader2
+} from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
 import {
@@ -17,15 +24,22 @@ import {
   FormControl,
   FormField,
   FormItem,
-  FormLabel
+  FormLabel,
+  FormMessage
 } from "@/components/ui/form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
+import { toast } from "@/hooks/use-toast"
 
 const searchFormSchema = z.object({
-  q: z.string().min(1, "Please enter a search term"),
-  type: z.string().default("auto")
+  q: z
+    .string()
+    .min(1, "Please enter a search term")
+    .min(2, "Search term must be at least 2 characters")
+    .max(100, "Search term cannot exceed 100 characters")
+    .transform(val => val.trim()),
+  type: z.enum(["auto", "location", "metadata", "news", "docs"]).default("auto")
 })
 
 type SearchFormValues = z.infer<typeof searchFormSchema>
@@ -40,20 +54,53 @@ export default function CentralSearchForm({
   initialType = "auto"
 }: CentralSearchFormProps) {
   const router = useRouter()
+  const [isSearching, setIsSearching] = useState(false)
 
   const form = useForm<SearchFormValues>({
     resolver: zodResolver(searchFormSchema),
     defaultValues: {
       q: initialQuery,
-      type: initialType
+      type:
+        initialType === "location" ||
+        initialType === "metadata" ||
+        initialType === "news" ||
+        initialType === "docs"
+          ? initialType
+          : "auto"
     }
   })
 
-  function onSubmit(values: SearchFormValues) {
-    const params = new URLSearchParams()
-    params.set("q", values.q)
-    params.set("type", values.type)
-    router.push(`/search?${params.toString()}`)
+  async function onSubmit(values: SearchFormValues) {
+    try {
+      setIsSearching(true)
+
+      // Validate that we have a proper search term
+      if (!values.q || values.q.trim().length === 0) {
+        toast({
+          title: "Invalid Search",
+          description: "Please enter a valid search term",
+          variant: "destructive"
+        })
+        return
+      }
+
+      const params = new URLSearchParams()
+      params.set("q", values.q.trim())
+      if (values.type !== "auto") {
+        params.set("type", values.type)
+      }
+
+      router.push(`/search?${params.toString()}`)
+    } catch (error) {
+      console.error("Search error:", error)
+      toast({
+        title: "Search Error",
+        description: "An error occurred while searching. Please try again.",
+        variant: "destructive"
+      })
+    } finally {
+      setIsSearching(false)
+    }
   }
 
   const getSearchTypeIcon = (type: string) => {
@@ -86,6 +133,8 @@ export default function CentralSearchForm({
     }
   }
 
+  const currentType = form.watch("type")
+
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -99,12 +148,16 @@ export default function CentralSearchForm({
                   <div className="relative">
                     <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                     <Input
-                      placeholder={getSearchTypePlaceholder(form.watch("type"))}
+                      placeholder={getSearchTypePlaceholder(currentType)}
                       {...field}
                       className="pl-10"
+                      disabled={isSearching}
+                      autoComplete="off"
+                      spellCheck="false"
                     />
                   </div>
                 </FormControl>
+                <FormMessage />
               </FormItem>
             )}
           />
@@ -117,7 +170,8 @@ export default function CentralSearchForm({
                 <FormControl>
                   <Select
                     onValueChange={field.onChange}
-                    defaultValue={field.value}
+                    value={field.value}
+                    disabled={isSearching}
                   >
                     <SelectTrigger>
                       <div className="flex items-center gap-2">
@@ -159,37 +213,46 @@ export default function CentralSearchForm({
                     </SelectContent>
                   </Select>
                 </FormControl>
+                <FormMessage />
               </FormItem>
             )}
           />
 
-          <Button type="submit" className="w-full md:w-auto">
-            <SearchIcon className="h-4 w-4 mr-2" />
-            Search
+          <Button
+            type="submit"
+            className="w-full md:w-auto"
+            disabled={isSearching}
+          >
+            {isSearching ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <SearchIcon className="h-4 w-4 mr-2" />
+            )}
+            {isSearching ? "Searching..." : "Search"}
           </Button>
         </div>
 
         {/* Search Type Description */}
         <div className="text-sm text-muted-foreground">
-          {form.watch("type") === "auto" && (
+          {currentType === "auto" && (
             <p>
               Intelligent search that automatically detects whether you're
               searching for locations, datasets, or other content.
             </p>
           )}
-          {form.watch("type") === "location" && (
+          {currentType === "location" && (
             <p>
               Find Nigerian cities, states, regions, coordinates, and other
               geographic locations.
             </p>
           )}
-          {form.watch("type") === "metadata" && (
+          {currentType === "metadata" && (
             <p>Search geospatial datasets, maps, and data services.</p>
           )}
-          {form.watch("type") === "news" && (
+          {currentType === "news" && (
             <p>Find news articles and announcements from the NGDI portal.</p>
           )}
-          {form.watch("type") === "docs" && (
+          {currentType === "docs" && (
             <p>Search documentation, guides, and help articles.</p>
           )}
         </div>

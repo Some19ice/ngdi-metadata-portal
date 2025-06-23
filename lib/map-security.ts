@@ -150,12 +150,32 @@ export function createSafeSearchMarker(
   container.setAttribute("tabindex", "0")
   container.setAttribute("data-result-index", String(index))
 
-  const numberCircle = document.createElement("div")
-  numberCircle.className = "search-marker-circle"
-  numberCircle.textContent = String(index + 1)
-  numberCircle.setAttribute("aria-hidden", "true")
+  // Create main circular head
+  const head = document.createElement("div")
+  head.className = "search-marker-head"
+  head.textContent = String(index + 1)
+  head.setAttribute("aria-hidden", "true")
 
-  container.appendChild(numberCircle)
+  // Tail triangle (CSS triangle)
+  const tail = document.createElement("div")
+  tail.className = "search-marker-tail"
+  tail.setAttribute("aria-hidden", "true")
+
+  // Optional pulse ring
+  const pulse = document.createElement("div")
+  pulse.className = "search-marker-pulse"
+  pulse.setAttribute("aria-hidden", "true")
+
+  container.appendChild(pulse)
+  container.appendChild(head)
+  container.appendChild(tail)
+
+  // Accessible text label (appears on hover/focus)
+  const label = document.createElement("div")
+  label.className = "search-marker-label"
+  label.textContent = placeName
+  container.appendChild(label)
+
   return container
 }
 

@@ -12,3 +12,4 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export { getBaseUrl } from "./utils/get-base-url"
+export * from "./utils/search-utils"

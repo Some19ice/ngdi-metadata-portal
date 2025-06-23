@@ -33,9 +33,9 @@ const defaultAvailableBaseStyles: MapStyle[] = getAvailableMapStyles()
 // Define default controls configuration outside component to prevent re-creation
 const DEFAULT_MAP_CONTROLS = {
   navigation: true,
-  scale: true,
-  fullscreen: true,
-  geolocate: true
+  scale: false, // We add scale manually in map-wrapper
+  fullscreen: false, // We have FAB fullscreen button
+  geolocate: false // We have FAB locate button
 } as const
 
 interface MapViewProps {

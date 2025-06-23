@@ -782,33 +782,57 @@ export async function searchMetadataRecordsAction(params: {
   pageSize?: number
 }): Promise<ActionState<PaginatedMetadataRecords>> {
   const { userId: currentUserId } = await auth()
-  // Public users can search published records.
-  // Logged-in users might see more based on their roles/permissions for non-published.
 
   try {
-    const conditions = []
-    const pageNumber = params.page || 1
-    const size = params.pageSize || 10 // Default page size
+    // Input validation
+    const pageNumber = Math.max(1, params.page || 1)
+    const size = Math.min(Math.max(1, params.pageSize || 10), 100) // Limit max page size to 100
     const offset = (pageNumber - 1) * size
 
-    if (params.query) {
-      const q = `%${params.query}%`
-      conditions.push(
-        or(
-          ilike(metadataRecordsTable.title, q),
-          ilike(metadataRecordsTable.abstract, q),
-          ilike(metadataRecordsTable.purpose, q)
-          // Keyword search updated below
-        )
-      )
+    // Validate query length for security
+    if (params.query && params.query.length > 200) {
+      return {
+        isSuccess: false,
+        message: "Search query too long. Maximum 200 characters allowed."
+      }
     }
 
-    // Add search for keywords (TEXT[] array)
-    if (params.query) {
-      const keywordQuery = `%${params.query}%`
-      conditions.push(
-        sql`EXISTS (SELECT 1 FROM unnest(${metadataRecordsTable.keywords}) keyword WHERE keyword ILIKE ${keywordQuery})`
-      )
+    // Validate temporal dates
+    if (params.temporalExtentStartDate) {
+      const startDate = new Date(params.temporalExtentStartDate)
+      if (isNaN(startDate.getTime())) {
+        return {
+          isSuccess: false,
+          message: "Invalid start date format. Use ISO date string."
+        }
+      }
+    }
+
+    if (params.temporalExtentEndDate) {
+      const endDate = new Date(params.temporalExtentEndDate)
+      if (isNaN(endDate.getTime())) {
+        return {
+          isSuccess: false,
+          message: "Invalid end date format. Use ISO date string."
+        }
+      }
+    }
+
+    const conditions = []
+
+    // Text search conditions - Fixed OR logic structure
+    if (params.query && params.query.trim()) {
+      const q = `%${params.query.trim()}%`
+      const textSearchConditions = [
+        ilike(metadataRecordsTable.title, q),
+        ilike(metadataRecordsTable.abstract, q),
+        ilike(metadataRecordsTable.purpose, q),
+        // Keyword search in TEXT[] array
+        sql`EXISTS (SELECT 1 FROM unnest(${metadataRecordsTable.keywords}) keyword WHERE keyword ILIKE ${q})`
+      ]
+
+      // Add the OR condition as a single condition
+      conditions.push(or(...textSearchConditions))
     }
 
     if (params.organizationId) {
@@ -817,58 +841,63 @@ export async function searchMetadataRecordsAction(params: {
       )
     }
 
+    // Status filtering with permission check
     if (params.status) {
       conditions.push(eq(metadataRecordsTable.status, params.status))
     } else {
       // Default to searching only published records if no specific status is given
       // unless user has special permissions to view all.
       if (currentUserId) {
-        const canViewAll = await hasPermission(
-          currentUserId,
-          "manage",
-          "metadata"
-        ) // Example permission
-        if (!canViewAll) {
+        try {
+          const canViewAll = await hasPermission(
+            currentUserId,
+            "manage",
+            "metadata"
+          )
+          if (!canViewAll) {
+            conditions.push(eq(metadataRecordsTable.status, "Published"))
+          }
+        } catch (permissionError) {
+          console.warn(
+            "Permission check failed, defaulting to Published only:",
+            permissionError
+          )
           conditions.push(eq(metadataRecordsTable.status, "Published"))
         }
-        // If canViewAll is true, no status condition is added, so all statuses are searched.
       } else {
         // Unauthenticated users only see Published records.
         conditions.push(eq(metadataRecordsTable.status, "Published"))
       }
     }
 
+    // Temporal extent filtering
     if (params.temporalExtentStartDate) {
       conditions.push(
-        sql`(${metadataRecordsTable.temporalInfo} ->> 'dateTo')::date >= ${params.temporalExtentStartDate}`
+        sql`(${metadataRecordsTable.temporalInfo} ->> 'dateTo')::date >= ${params.temporalExtentStartDate}::date`
       )
     }
 
     if (params.temporalExtentEndDate) {
       conditions.push(
-        sql`(${metadataRecordsTable.temporalInfo} ->> 'dateFrom')::date <= ${params.temporalExtentEndDate}`
+        sql`(${metadataRecordsTable.temporalInfo} ->> 'dateFrom')::date <= ${params.temporalExtentEndDate}::date`
       )
     }
 
-    // Add filter for frameworkType
+    // Framework type filtering
     if (params.frameworkType) {
-      // frameworkType is text, direct equality should work.
-      // Using SQL fragment due to persistent incorrect linter inference of enum type
       conditions.push(
         sql`${metadataRecordsTable.frameworkType} = ${params.frameworkType}`
       )
     }
 
-    // Add filter for dataType (corrected from datasetType)
+    // Data type filtering (mapping datasetType to dataType for backward compatibility)
     if (params.datasetType) {
-      // User might still send `datasetType`, map to `dataType`
-      // dataType IS an enum. Cast the input string to text for comparison, PG will handle implicit cast to enum if valid.
       conditions.push(
-        sql`${metadataRecordsTable.dataType} = ${params.datasetType}::text`
+        sql`${metadataRecordsTable.dataType}::text = ${params.datasetType}`
       )
     }
 
-    // Add spatial search conditions - Bounding Box filter
+    // Spatial search conditions - Bounding Box filter with validation
     if (
       params.bbox_north &&
       params.bbox_south &&
@@ -881,36 +910,64 @@ export async function searchMetadataRecordsAction(params: {
         const east = parseFloat(params.bbox_east)
         const west = parseFloat(params.bbox_west)
 
-        if (!isNaN(north) && !isNaN(south) && !isNaN(east) && !isNaN(west)) {
-          // Check if spatial_info and boundingBox exist before attempting to query the geometry
-          conditions.push(
-            sql`
-              (metadata_records.spatial_info IS NOT NULL AND 
-              metadata_records.spatial_info ? 'boundingBox' AND
-              ST_Intersects(
-                ST_MakeEnvelope(${west}, ${south}, ${east}, ${north}, 4326),
-                (metadata_records.spatial_info ->> 'boundingBox')::geometry
-              ))
-            `
-          )
-        } else {
-          console.warn("Invalid BBOX parameters provided.")
+        // Validate coordinate bounds
+        if (
+          isNaN(north) ||
+          isNaN(south) ||
+          isNaN(east) ||
+          isNaN(west) ||
+          north < -90 ||
+          north > 90 ||
+          south < -90 ||
+          south > 90 ||
+          east < -180 ||
+          east > 180 ||
+          west < -180 ||
+          west > 180 ||
+          north <= south ||
+          east <= west
+        ) {
+          return {
+            isSuccess: false,
+            message:
+              "Invalid bounding box coordinates. Check latitude/longitude bounds and ensure north > south, east > west."
+          }
         }
+
+        // Check if spatial_info and boundingBox exist before attempting to query the geometry
+        conditions.push(
+          sql`
+            (${metadataRecordsTable.spatialInfo} IS NOT NULL AND 
+            ${metadataRecordsTable.spatialInfo} ? 'boundingBox' AND
+            ST_Intersects(
+              ST_MakeEnvelope(${west}, ${south}, ${east}, ${north}, 4326),
+              (${metadataRecordsTable.spatialInfo} ->> 'boundingBox')::geometry
+            ))
+          `
+        )
       } catch (e) {
         console.warn("Error parsing BBOX parameters:", e)
+        return {
+          isSuccess: false,
+          message: "Invalid bounding box parameters format."
+        }
       }
     }
 
     const finalConditions =
       conditions.length > 0 ? and(...conditions) : undefined
 
+    // Sorting with validation
     let orderByClause: any[] = [desc(metadataRecordsTable.updatedAt)] // Default sort
     if (params.sortBy) {
-      const sortColumn = (metadataRecordsTable as any)[params.sortBy]
-      if (sortColumn) {
-        orderByClause = [
-          params.sortOrder === "asc" ? asc(sortColumn) : desc(sortColumn)
-        ]
+      const validSortColumns = ["title", "createdAt", "updatedAt", "status"]
+      if (validSortColumns.includes(params.sortBy)) {
+        const sortColumn = (metadataRecordsTable as any)[params.sortBy]
+        if (sortColumn) {
+          orderByClause = [
+            params.sortOrder === "asc" ? asc(sortColumn) : desc(sortColumn)
+          ]
+        }
       } else {
         console.warn(
           `Invalid sortBy column: ${params.sortBy}. Defaulting to updatedAt.`
@@ -918,26 +975,21 @@ export async function searchMetadataRecordsAction(params: {
       }
     }
 
-    // Fetch records with pagination and sorting
-    const recordsQuery = db.query.metadataRecords.findMany({
-      where: finalConditions,
-      with: {
-        organization: true
-      },
-      orderBy: orderByClause,
-      limit: size,
-      offset: offset
-    })
-
-    // Fetch total count for pagination
-    const totalRecordsQuery = db
-      .select({ count: count() })
-      .from(metadataRecordsTable)
-      .where(finalConditions)
-
+    // Use Promise.all for concurrent execution
     const [records, totalRecordsResult] = await Promise.all([
-      recordsQuery,
-      totalRecordsQuery
+      db.query.metadataRecords.findMany({
+        where: finalConditions,
+        with: {
+          organization: true
+        },
+        orderBy: orderByClause,
+        limit: size,
+        offset: offset
+      }),
+      db
+        .select({ count: count() })
+        .from(metadataRecordsTable)
+        .where(finalConditions)
     ])
 
     const totalRecords = totalRecordsResult[0]?.count || 0
@@ -945,7 +997,7 @@ export async function searchMetadataRecordsAction(params: {
 
     return {
       isSuccess: true,
-      message: "Metadata records searched successfully.",
+      message: `Found ${totalRecords} metadata record${totalRecords === 1 ? "" : "s"}.`,
       data: {
         records,
         totalRecords,
@@ -956,9 +1008,26 @@ export async function searchMetadataRecordsAction(params: {
     }
   } catch (error) {
     console.error("Error searching metadata records:", error)
+
+    // Handle specific database errors
+    if (error instanceof Error) {
+      if (error.message.includes("invalid input syntax")) {
+        return {
+          isSuccess: false,
+          message: "Invalid search parameters format."
+        }
+      }
+      if (error.message.includes("permission denied")) {
+        return {
+          isSuccess: false,
+          message: "Insufficient permissions to search metadata records."
+        }
+      }
+    }
+
     return {
       isSuccess: false,
-      message: "Failed to search metadata records."
+      message: "Failed to search metadata records. Please try again."
     }
   }
 }

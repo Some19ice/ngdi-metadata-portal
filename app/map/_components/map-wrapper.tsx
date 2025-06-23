@@ -2,7 +2,7 @@
 
 import "maplibre-gl/dist/maplibre-gl.css"
 import { useState, useCallback, useRef, useEffect, memo } from "react"
-import { Map, Marker, Popup, LngLatBounds } from "maplibre-gl"
+import { Map, Marker, Popup, LngLatBounds, ScaleControl } from "maplibre-gl"
 import dynamic from "next/dynamic"
 import { MapErrorBoundary } from "@/components/ui/map/map-error-boundary"
 import { MapStyle } from "@/components/ui/map/map-view"
@@ -18,7 +18,16 @@ import MapSearchInput from "./map-search-input"
 import { toast } from "sonner"
 import { Drawer, DrawerContent, DrawerTrigger } from "@/components/ui/drawer"
 import { Button } from "@/components/ui/button"
-import { Menu } from "lucide-react"
+import {
+  Menu,
+  ChevronsLeft,
+  ChevronsRight,
+  ZoomIn,
+  ZoomOut,
+  Compass,
+  Home
+} from "lucide-react"
+import MapFabGroup from "./map-fab-group"
 
 // Lazy load heavy components
 const MapView = dynamic(() => import("@/components/ui/map/map-view"), {
@@ -63,24 +72,18 @@ const MapControlPanel = memo(
     currentSearchResults: GeocodingFeature[]
   }) => {
     return (
-      <div className="p-6 space-y-6">
-        {/* Smart Map Hub Header */}
-        <div className="text-center">
-          <h2 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-            Smart Map Hub
-          </h2>
-          <p className="text-sm text-gray-600 mt-1">AI-powered navigation</p>
-
-          <div className="flex items-center justify-center gap-2 mt-3">
-            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-            <span className="text-xs font-medium text-green-700">
-              Connected
-            </span>
-          </div>
+      <div className="p-4 space-y-4">
+        {/* Header */}
+        <div className="text-center border-b border-gray-100 pb-4">
+          <h2 className="text-lg font-semibold text-gray-900">Map Controls</h2>
+          <p className="text-sm text-gray-500 mt-1">Navigate and explore</p>
         </div>
 
-        {/* Enhanced Search Input */}
-        <div>
+        {/* Search Input */}
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-gray-700">
+            Search Location
+          </label>
           <MapSearchInput
             onSearch={handleSearchQuery}
             onLocationSelect={handleLocationSelect}
@@ -88,88 +91,125 @@ const MapControlPanel = memo(
           />
         </div>
 
-        {/* Live Statistics Dashboard */}
-        <div className="bg-white/80 backdrop-blur-sm p-4 rounded-xl border border-gray-200">
-          <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-            <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
-            Live Statistics
-          </h3>
-          <div className="grid grid-cols-2 gap-3 text-xs">
-            <div className="bg-blue-50 p-2 rounded-lg">
-              <p className="text-blue-600 font-medium">Zoom</p>
-              <p className="text-lg font-bold text-blue-800">
-                {map ? Math.round(map.getZoom() * 10) / 10 : "--"}
-              </p>
-            </div>
-            <div className="bg-purple-50 p-2 rounded-lg">
-              <p className="text-purple-600 font-medium">Bearing</p>
-              <p className="text-lg font-bold text-purple-800">
-                {map ? Math.round(map.getBearing()) : 0}°
-              </p>
-            </div>
-            <div className="bg-green-50 p-2 rounded-lg col-span-2">
-              <p className="text-green-600 font-medium">Current Center</p>
-              <p
-                className="text-sm font-mono text-green-800 cursor-pointer hover:bg-green-100 p-1 rounded transition-colors"
-                onClick={copyCoordinates}
-                title="Click to copy coordinates"
+        {/* Map Style Selector */}
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-gray-700">Map Style</label>
+          <div className="grid grid-cols-2 gap-2">
+            {validatedStyles.slice(0, 4).map(style => (
+              <button
+                key={style.id}
+                onClick={() => handleControlStyleChange(style.id)}
+                className={`p-2 text-xs rounded-lg border-2 transition-all ${
+                  activeStyleId === style.id
+                    ? "border-blue-500 bg-blue-50 text-blue-700"
+                    : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
+                }`}
+                disabled={!style.url}
               >
-                {map
-                  ? `${map.getCenter().lat.toFixed(4)}, ${map.getCenter().lng.toFixed(4)}`
-                  : "Loading..."}
-              </p>
-            </div>
+                {style.name}
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* Smart Recommendations */}
+        {/* Quick Stats */}
         {isLoaded && map && (
-          <div className="bg-amber-50 rounded-xl p-3 border border-amber-200">
-            <h4 className="text-sm font-medium text-amber-800 mb-2 flex items-center gap-2">
-              💡 Smart Suggestion
-            </h4>
-            <p className="text-xs text-amber-700">
-              {map.getZoom() > 12
-                ? "Perfect zoom for street-level exploration!"
-                : map.getZoom() < 6
-                  ? "Try zooming in for more detail"
-                  : "Optimal zoom level for overview navigation"}
-            </p>
+          <div className="bg-gray-50 rounded-lg p-3 space-y-2">
+            <h4 className="text-sm font-medium text-gray-700">Current View</h4>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div>
+                <span className="text-gray-500">Zoom:</span>
+                <span className="ml-1 font-medium">
+                  {Math.round(map.getZoom() * 10) / 10}
+                </span>
+              </div>
+              <div>
+                <span className="text-gray-500">Bearing:</span>
+                <span className="ml-1 font-medium">
+                  {Math.round(map.getBearing())}°
+                </span>
+              </div>
+            </div>
+            <button
+              onClick={copyCoordinates}
+              className="w-full text-left text-xs text-gray-600 hover:text-gray-800 hover:bg-gray-100 p-2 rounded transition-colors"
+              title="Click to copy coordinates"
+            >
+              <span className="text-gray-500">Center:</span>
+              <span className="ml-1 font-mono">
+                {`${map.getCenter().lat.toFixed(4)}, ${map.getCenter().lng.toFixed(4)}`}
+              </span>
+            </button>
           </div>
         )}
 
-        {/* Map Controls */}
-        <div className="bg-white/80 backdrop-blur-sm p-4 rounded-xl border border-gray-200">
-          <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
-            <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse" />
-            Map Controls
-          </h4>
-          <MapControls
-            map={map}
-            isLoaded={isLoaded}
-            validatedStyles={validatedStyles}
-            activeStyleId={activeStyleId}
-            handleStyleChange={handleControlStyleChange}
-            showLocationSearch={false}
-            className="bg-transparent"
-          />
-        </div>
-
-        {/* Search Results Panel */}
-        {currentSearchResults && currentSearchResults.length > 0 && (
-          <SearchResultsPanel
-            searchResults={currentSearchResults}
-            onLocationClick={location => {
-              if (map) {
-                map.flyTo({
-                  center: location.center,
-                  zoom: 12,
-                  duration: 1000
+        {/* Quick Actions */}
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-gray-700">
+            Quick Actions
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => map?.zoomIn()}
+              disabled={!isLoaded}
+              className="flex items-center justify-center gap-2 p-2 text-sm bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+            >
+              <ZoomIn className="h-4 w-4" />
+              Zoom In
+            </button>
+            <button
+              onClick={() => map?.zoomOut()}
+              disabled={!isLoaded}
+              className="flex items-center justify-center gap-2 p-2 text-sm bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+            >
+              <ZoomOut className="h-4 w-4" />
+              Zoom Out
+            </button>
+            <button
+              onClick={() => map?.setBearing(0)}
+              disabled={!isLoaded}
+              className="flex items-center justify-center gap-2 p-2 text-sm bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+            >
+              <Compass className="h-4 w-4" />
+              Reset North
+            </button>
+            <button
+              onClick={() =>
+                map?.flyTo({
+                  center: NIGERIA_COORDINATES,
+                  zoom: 6,
+                  duration: 2000
                 })
               }
-            }}
-          />
+              disabled={!isLoaded}
+              className="flex items-center justify-center gap-2 p-2 text-sm bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+            >
+              <Home className="h-4 w-4" />
+              Home View
+            </button>
+          </div>
+        </div>
+
+        {/* Search Results */}
+        {currentSearchResults && currentSearchResults.length > 0 && (
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-gray-700">
+              Search Results ({currentSearchResults.length})
+            </label>
+            <SearchResultsPanel
+              searchResults={currentSearchResults}
+              onLocationClick={handleLocationSelect}
+            />
+          </div>
         )}
+
+        {/* Help Text */}
+        <div className="text-xs text-gray-500 pt-2 border-t border-gray-100">
+          <p>
+            Use the floating buttons on the map for more actions like locate me
+            and fullscreen.
+          </p>
+        </div>
       </div>
     )
   }
@@ -254,6 +294,12 @@ function MapWrapper({
   }, [])
 
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("mapSidebarCollapsed") === "1"
+    }
+    return false
+  })
 
   // Update search results when prop changes
   useEffect(() => {
@@ -263,6 +309,10 @@ function MapWrapper({
   const handleMapLoad = useCallback((mapInstance: Map) => {
     setMap(mapInstance)
     setIsLoaded(true)
+
+    // Add metric scale control bottom-left
+    const scale = new ScaleControl({ maxWidth: 120, unit: "metric" })
+    mapInstance.addControl(scale, "bottom-left")
 
     // Set initial style ID from the map
     const currentStyle = mapInstance.getStyle()
@@ -319,25 +369,54 @@ function MapWrapper({
     }
   }
 
+  // Clear user location markers
+  const clearUserLocationMarkers = useCallback(() => {
+    if (map) {
+      const existingUserMarkers = document.querySelectorAll(
+        ".user-location-marker"
+      )
+      existingUserMarkers.forEach(marker => {
+        const mapMarker = (marker as any).__maplibreMarker
+        if (mapMarker) {
+          mapMarker.remove()
+        }
+      })
+    }
+  }, [map])
+
   // Handle search from MapSearchInput component
   const handleLocationSelect = useCallback(
     (location: GeocodingFeature) => {
+      // Clear any existing user location markers when searching for new locations
+      clearUserLocationMarkers()
+
       setCurrentSearchResults([location])
       if (map) {
         map.flyTo({
           center: location.center,
-          zoom: 12,
-          duration: 1000
+          zoom: 13,
+          duration: 3500,
+          essential: true,
+          easing: t => {
+            // Gentler ease-in-out animation
+            return t * t * (3 - 2 * t)
+          }
         })
       }
     },
-    [map]
+    [map, clearUserLocationMarkers]
   )
 
-  const handleSearchQuery = useCallback((searchTerm: string) => {
-    // This handles non-geocoded searches
-    console.log("Search query:", searchTerm)
-  }, [])
+  // Handle search query from MapSearchInput
+  const handleSearchQuery = useCallback(
+    (searchTerm: string) => {
+      // Clear user location markers when starting a new search
+      clearUserLocationMarkers()
+      // Note: The actual search logic is handled inside MapSearchInput component
+      console.log("Search query:", searchTerm)
+    },
+    [clearUserLocationMarkers]
+  )
 
   // Add markers for search results when map is loaded - SECURE VERSION
   useEffect(() => {
@@ -419,30 +498,27 @@ function MapWrapper({
         )
       })
 
-      // If there's only one result or a highlighted location, zoom to it
-      if (currentSearchResults.length === 1 || highlightedLocation) {
-        const targetLocation = currentSearchResults[0]
-        map.flyTo({
-          center: targetLocation.center,
-          zoom: Math.max(initialZoom || 6, 10),
-          duration: 1000
-        })
-      } else if (
+      // Fit bounds to show all search results when there are multiple
+      if (
         currentSearchResults.length > 1 &&
         typeof LngLatBounds !== "undefined"
       ) {
-        // Fit bounds to show all search results
         const bounds = new LngLatBounds()
         currentSearchResults.forEach(location => {
           bounds.extend(location.center)
         })
         map.fitBounds(bounds, {
           padding: 50,
-          duration: 1000
+          duration: 2000,
+          essential: true,
+          easing: t => {
+            // Gentle ease-in-out for bounds fitting
+            return t * t * (3 - 2 * t)
+          }
         })
       }
     }
-  }, [map, isLoaded, currentSearchResults, highlightedLocation, initialZoom])
+  }, [map, isLoaded, currentSearchResults, highlightedLocation])
 
   // Cleanup event listeners on unmount
   useEffect(() => {
@@ -468,21 +544,50 @@ function MapWrapper({
     })
   }
 
+  const toggleSidebar = () => {
+    setSidebarCollapsed(prev => {
+      const next = !prev
+      if (typeof window !== "undefined") {
+        localStorage.setItem("mapSidebarCollapsed", next ? "1" : "0")
+      }
+      return next
+    })
+  }
+
+  // Clear search results function
+  const clearSearchResults = useCallback(() => {
+    setCurrentSearchResults([])
+  }, [])
+
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-full bg-gray-50 gap-4">
       {/* Desktop Sidebar */}
-      <div className="hidden lg:block w-80 bg-white shadow-2xl border-r-4 border-gray-400 overflow-y-auto relative z-10">
-        <MapControlPanel
-          map={map}
-          isLoaded={isLoaded}
-          validatedStyles={validatedStyles}
-          activeStyleId={activeStyleId}
-          handleControlStyleChange={handleStyleChange}
-          handleSearchQuery={handleSearchQuery}
-          handleLocationSelect={handleLocationSelect}
-          copyCoordinates={copyCoordinates}
-          currentSearchResults={currentSearchResults}
-        />
+      <div
+        className={`hidden lg:flex lg:flex-col bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden relative z-10 transition-all duration-300 ${sidebarCollapsed ? "w-0 opacity-0" : "w-80"}`}
+      >
+        <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
+          <MapControlPanel
+            map={map}
+            isLoaded={isLoaded}
+            validatedStyles={validatedStyles}
+            activeStyleId={activeStyleId}
+            handleControlStyleChange={handleStyleChange}
+            handleSearchQuery={handleSearchQuery}
+            handleLocationSelect={handleLocationSelect}
+            copyCoordinates={copyCoordinates}
+            currentSearchResults={currentSearchResults}
+          />
+        </div>
+        {/* Collapse Toggle - only show when sidebar is visible */}
+        {!sidebarCollapsed && (
+          <button
+            onClick={toggleSidebar}
+            className="absolute -right-3 top-1/2 transform -translate-y-1/2 w-6 h-12 bg-white border border-gray-200 shadow-md flex items-center justify-center rounded-r-md hover:bg-gray-50 transition-colors"
+            aria-label="Hide sidebar"
+          >
+            <ChevronsLeft className="h-4 w-4 text-gray-600" />
+          </button>
+        )}
       </div>
 
       {/* Mobile Drawer Trigger */}
@@ -497,24 +602,26 @@ function MapWrapper({
               <Menu className="h-5 w-5" />
             </Button>
           </DrawerTrigger>
-          <DrawerContent className="h-[85vh] p-0 overflow-y-auto">
-            <MapControlPanel
-              map={map}
-              isLoaded={isLoaded}
-              validatedStyles={validatedStyles}
-              activeStyleId={activeStyleId}
-              handleControlStyleChange={handleStyleChange}
-              handleSearchQuery={handleSearchQuery}
-              handleLocationSelect={handleLocationSelect}
-              copyCoordinates={copyCoordinates}
-              currentSearchResults={currentSearchResults}
-            />
+          <DrawerContent className="h-[85vh] p-0 overflow-hidden">
+            <div className="h-full overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
+              <MapControlPanel
+                map={map}
+                isLoaded={isLoaded}
+                validatedStyles={validatedStyles}
+                activeStyleId={activeStyleId}
+                handleControlStyleChange={handleStyleChange}
+                handleSearchQuery={handleSearchQuery}
+                handleLocationSelect={handleLocationSelect}
+                copyCoordinates={copyCoordinates}
+                currentSearchResults={currentSearchResults}
+              />
+            </div>
           </DrawerContent>
         </Drawer>
       )}
 
       {/* Map Container */}
-      <div className="flex-1 relative ml-0 lg:ml-2">
+      <div className="flex-1 relative overflow-hidden rounded-lg shadow-lg">
         <MapErrorBoundary onError={handleMapError}>
           <MapView
             initialOptions={{
@@ -528,6 +635,17 @@ function MapWrapper({
           />
         </MapErrorBoundary>
       </div>
+
+      {/* Floating Action Buttons */}
+      <MapFabGroup
+        map={map}
+        isMobile={isMobile}
+        onToggleDrawer={() => setDrawerOpen(open => !open)}
+        drawerOpen={drawerOpen}
+        onClearSearchResults={clearSearchResults}
+        onToggleSidebar={toggleSidebar}
+        sidebarCollapsed={sidebarCollapsed}
+      />
     </div>
   )
 }

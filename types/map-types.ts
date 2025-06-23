@@ -13,4 +13,5 @@ export interface GeocodingResponse {
   query: string[]
   features: GeocodingFeature[]
   attribution: string
+  warning?: string
 }

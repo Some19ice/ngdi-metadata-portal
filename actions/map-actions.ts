@@ -17,11 +17,10 @@ export async function geocodeLocationAction(
 ): Promise<ActionState<GeocodingFeature[]>> {
   const { searchText, autocomplete = true, limit = 5, ...otherParams } = params
 
-  if (!searchText || searchText.trim().length < 2) {
-    // Don't search for very short strings to avoid excessive API calls
+  if (!searchText || searchText.trim().length < 1) {
     return {
       isSuccess: true,
-      message: "Search term too short.",
+      message: "Search term is required.",
       data: []
     }
   }
@@ -89,7 +88,7 @@ export async function geocodeLocationAction(
           message:
             errorData.warning ||
             errorData.error ||
-            "Using fallback geocoding data",
+            "Using enhanced Nigerian location data",
           data: errorData.features
         }
       }
@@ -106,14 +105,17 @@ export async function geocodeLocationAction(
       featuresCount: data.features?.length || 0,
       hasFeatures: !!data.features,
       query: data.query,
-      attribution: data.attribution
+      attribution: data.attribution,
+      warning: data.warning
     })
 
     return {
       isSuccess: true,
-      message: data.features?.length
-        ? `Found ${data.features.length} location${data.features.length > 1 ? "s" : ""}`
-        : "No locations found",
+      message:
+        data.warning ||
+        (data.features?.length
+          ? `Found ${data.features.length} location${data.features.length > 1 ? "s" : ""}`
+          : "No locations found"),
       data: data.features || []
     }
   } catch (error) {
