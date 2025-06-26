@@ -11,6 +11,7 @@ import {
   transformToMetadataParams,
   type SearchParams
 } from "@/lib/utils/search-utils"
+import { SEARCH_RESULTS_PAGE_SIZE } from "@/lib/constants"
 
 interface InlineMetadataResultsProps {
   query: string
@@ -25,7 +26,7 @@ export default function InlineMetadataResults({
   page,
   searchParams,
   showTitle = true,
-  maxResults = 10
+  maxResults = SEARCH_RESULTS_PAGE_SIZE
 }: InlineMetadataResultsProps) {
   return (
     <Suspense fallback={<MetadataResultsSkeleton showTitle={showTitle} />}>
@@ -45,7 +46,7 @@ async function MetadataResultsFetcher({
   page,
   searchParams,
   showTitle,
-  maxResults = 10
+  maxResults = SEARCH_RESULTS_PAGE_SIZE
 }: InlineMetadataResultsProps) {
   try {
     // Validate inputs

@@ -200,12 +200,18 @@ export default function GlobalSearchBar() {
       ).length
 
       // If query contains location-specific terms, prefer location search
-      if (locationScore > metadataScore) {
+      // If one score is significantly higher, return that type
+      if (locationScore > metadataScore + 2) {
+        // Location has at least 2 more relevant keywords
         return "location"
       }
+      if (metadataScore > locationScore + 2) {
+        // Metadata has at least 2 more relevant keywords
+        return "metadata"
+      }
 
-      // Default to metadata search
-      return "metadata"
+      // If scores are close or both are low, default to auto
+      return "auto"
     },
     []
   )
@@ -254,19 +260,31 @@ export default function GlobalSearchBar() {
         }
       }
 
-      // Add mock metadata suggestions (replace with real API call)
+      // Get metadata suggestions
       if (searchType === "auto" || searchType === "metadata") {
-        const metadataSuggestions = [
-          { title: `"${searchQuery}" in titles`, query: searchQuery },
-          { title: `"${searchQuery}" in keywords`, query: searchQuery },
-          { title: `"${searchQuery}" in descriptions`, query: searchQuery }
-        ].map(item => ({
-          type: "metadata" as const,
-          data: item,
-          displayText: item.title,
-          icon: <FileText className="h-4 w-4 text-green-600" />
-        }))
-        suggestions.push(...metadataSuggestions)
+        console.log("Fetching metadata suggestions for:", searchQuery)
+        const metadataResult = await searchMetadataSuggestionsAction({
+          query: searchQuery,
+          limit: 3
+        })
+
+        console.log("Metadata suggestion result:", {
+          isSuccess: metadataResult.isSuccess,
+          message: metadataResult.message,
+          dataLength: metadataResult.data?.length || 0
+        })
+
+        if (metadataResult.isSuccess && metadataResult.data) {
+          const metadataSuggestions = metadataResult.data.map(item => ({
+            type: "metadata" as const,
+            data: { title: item.title, query: item.title }, // Use title as query for now
+            displayText: item.title,
+            icon: <FileText className="h-4 w-4 text-green-600" />
+          }))
+          suggestions.push(...metadataSuggestions)
+        } else if (!metadataResult.isSuccess) {
+          console.error("Metadata suggestions failed:", metadataResult.message)
+        }
       }
 
       setSuggestions(suggestions)

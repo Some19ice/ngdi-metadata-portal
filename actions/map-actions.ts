@@ -7,6 +7,8 @@ interface GeocodeParams {
   searchText: string
   autocomplete?: boolean
   limit?: number
+  page?: number // Added for pagination
+  pageSize?: number // Added for pagination
   country?: string // Optional: limit search to specific countries (e.g., "US,CA")
   bbox?: [number, number, number, number] // Optional: limit search to a bounding box [minLng, minLat, maxLng, maxLat]
   proximity?: [number, number] // Optional: bias results towards a location [lng, lat]
@@ -15,7 +17,17 @@ interface GeocodeParams {
 export async function geocodeLocationAction(
   params: GeocodeParams
 ): Promise<ActionState<GeocodingFeature[]>> {
-  const { searchText, autocomplete = true, limit = 5, ...otherParams } = params
+  const {
+    searchText,
+    autocomplete = true,
+    limit = 5,
+    page = 1,
+    pageSize = 10,
+    ...otherParams
+  } = params
+
+  const actualLimit = pageSize // Use pageSize as the actual limit for the API call
+  const offset = (page - 1) * actualLimit // Calculate offset
 
   if (!searchText || searchText.trim().length < 1) {
     return {
@@ -30,7 +42,8 @@ export async function geocodeLocationAction(
     const queryParams = new URLSearchParams({
       q: searchText,
       autocomplete: String(autocomplete),
-      limit: String(limit)
+      limit: String(actualLimit), // Use actualLimit
+      offset: String(offset) // Add offset
     })
 
     Object.entries(otherParams).forEach(([key, value]) => {

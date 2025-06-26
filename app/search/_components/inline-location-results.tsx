@@ -9,16 +9,33 @@ import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { GeocodingFeature } from "@/types"
 
+import { Suspense } from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { MapPin, ExternalLink, AlertCircle, Navigation } from "lucide-react"
+import Link from "next/link"
+import { geocodeLocationAction } from "@/actions/map-actions"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
+import type { GeocodingFeature } from "@/types"
+import { useRouter } from "next/navigation"
+import { SEARCH_RESULTS_PAGE_SIZE } from "@/lib/constants"
+
 interface InlineLocationResultsProps {
   query: string
   showTitle?: boolean
   maxResults?: number
+  page?: number
+  pageSize?: number
 }
 
 export default function InlineLocationResults({
   query,
   showTitle = true,
-  maxResults = 5
+  maxResults = SEARCH_RESULTS_PAGE_SIZE,
+  page = 1,
+  pageSize = 10
 }: InlineLocationResultsProps) {
   return (
     <Suspense fallback={<LocationResultsSkeleton showTitle={showTitle} />}>
@@ -26,6 +43,8 @@ export default function InlineLocationResults({
         query={query}
         showTitle={showTitle}
         maxResults={maxResults}
+        page={page}
+        pageSize={pageSize}
       />
     </Suspense>
   )
@@ -34,7 +53,9 @@ export default function InlineLocationResults({
 async function LocationResultsFetcher({
   query,
   showTitle,
-  maxResults = 5
+  maxResults = SEARCH_RESULTS_PAGE_SIZE,
+  page = 1,
+  pageSize = 10
 }: InlineLocationResultsProps) {
   try {
     // Validate inputs
@@ -60,7 +81,9 @@ async function LocationResultsFetcher({
 
     const result = await geocodeLocationAction({
       searchText: query.trim(),
-      limit: Math.min(Math.max(1, maxResults), 10), // Clamp between 1 and 10
+      limit: maxResults, // Use maxResults for the initial display limit
+      page: page,
+      pageSize: pageSize,
       autocomplete: false, // For search results, use full geocoding
       country: "NG" // Limit to Nigeria for this portal
     })
@@ -89,6 +112,24 @@ async function LocationResultsFetcher({
     }
 
     const features = result.data
+    const totalLocations = features.length // Assuming the API returns all matching results up to the limit
+    const hasMore = totalLocations === pageSize // Simple check if more results might exist
+
+    const router = useRouter()
+
+    const handleNextPage = () => {
+      router.push(
+        `/search?q=${encodeURIComponent(query)}&type=location&page=${page + 1}`
+      )
+    }
+
+    const handlePrevPage = () => {
+      if (page > 1) {
+        router.push(
+          `/search?q=${encodeURIComponent(query)}&type=location&page=${page - 1}`
+        )
+      }
+    }
 
     if (!features || features.length === 0) {
       return (
@@ -149,16 +190,25 @@ async function LocationResultsFetcher({
             />
           ))}
 
-          {features.length >= maxResults && (
-            <div className="pt-4 border-t">
-              <div className="flex items-center justify-center">
-                <Button asChild variant="outline" size="sm">
-                  <Link href={`/map?search=${encodeURIComponent(query)}`}>
-                    <Navigation className="h-4 w-4 mr-2" />
-                    View More Results on Map
-                  </Link>
-                </Button>
-              </div>
+          {features.length > 0 && (
+            <div className="pt-4 border-t flex justify-between items-center">
+              <Button
+                onClick={handlePrevPage}
+                disabled={page <= 1}
+                variant="outline"
+                size="sm"
+              >
+                Previous
+              </Button>
+              <span className="text-sm text-muted-foreground">Page {page}</span>
+              <Button
+                onClick={handleNextPage}
+                disabled={!hasMore}
+                variant="outline"
+                size="sm"
+              >
+                Next
+              </Button>
             </div>
           )}
         </CardContent>

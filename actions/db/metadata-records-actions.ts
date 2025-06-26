@@ -1211,6 +1211,64 @@ export async function getOrganizationsAction(): Promise<
   }
 }
 
+export async function searchMetadataSuggestionsAction(params: {
+  query: string
+  limit?: number
+}): Promise<ActionState<{ title: string; id: string }[]>> {
+  const { userId: currentUserId } = await auth()
+
+  try {
+    const { query, limit = 5 } = params
+    if (!query || query.trim().length < 2) {
+      return { isSuccess: true, message: "Query too short.", data: [] }
+    }
+
+    const q = `%${query.trim()}%`
+    const conditions = [
+      or(
+        ilike(metadataRecordsTable.title, q),
+        sql`EXISTS (SELECT 1 FROM unnest(${metadataRecordsTable.keywords}) keyword WHERE keyword ILIKE ${q})`
+      )
+    ]
+
+    // Only show published records to unauthenticated users or those without manage permission
+    if (!currentUserId) {
+      conditions.push(eq(metadataRecordsTable.status, "Published"))
+    } else {
+      const canViewAll = await hasPermission(
+        currentUserId,
+        "manage",
+        "metadata"
+      )
+      if (!canViewAll) {
+        conditions.push(eq(metadataRecordsTable.status, "Published"))
+      }
+    }
+
+    const suggestions = await db.query.metadataRecords.findMany({
+      columns: {
+        id: true,
+        title: true
+      },
+      where: and(...conditions),
+      limit: limit,
+      orderBy: [desc(metadataRecordsTable.updatedAt)]
+    })
+
+    return {
+      isSuccess: true,
+      message: "Metadata suggestions retrieved successfully.",
+      data: suggestions.map(s => ({ title: s.title, id: s.id }))
+    }
+  } catch (error) {
+    console.error("Error searching metadata suggestions:", error)
+    return {
+      isSuccess: false,
+      message: "Failed to retrieve metadata suggestions."
+    }
+  }
+}
+
 export async function getMetadataRecordsWithSpatialBoundsAction(): Promise<
   ActionState<SelectMetadataRecord[]>
 > {

@@ -54,3 +54,4 @@ export const LICENSE_TYPES = [
 ] as const
 
 export const ITEMS_PER_PAGE = 20
+export const SEARCH_RESULTS_PAGE_SIZE = 20
