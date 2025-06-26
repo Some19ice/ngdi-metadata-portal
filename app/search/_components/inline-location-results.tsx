@@ -8,19 +8,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { GeocodingFeature } from "@/types"
-
-import { Suspense } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { MapPin, ExternalLink, AlertCircle, Navigation } from "lucide-react"
-import Link from "next/link"
-import { geocodeLocationAction } from "@/actions/map-actions"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
-import { Skeleton } from "@/components/ui/skeleton"
-import type { GeocodingFeature } from "@/types"
-import { useRouter } from "next/navigation"
 import { SEARCH_RESULTS_PAGE_SIZE } from "@/lib/constants"
+import { LocationPagination } from "./location-pagination"
 
 interface InlineLocationResultsProps {
   query: string
@@ -115,22 +104,6 @@ async function LocationResultsFetcher({
     const totalLocations = features.length // Assuming the API returns all matching results up to the limit
     const hasMore = totalLocations === pageSize // Simple check if more results might exist
 
-    const router = useRouter()
-
-    const handleNextPage = () => {
-      router.push(
-        `/search?q=${encodeURIComponent(query)}&type=location&page=${page + 1}`
-      )
-    }
-
-    const handlePrevPage = () => {
-      if (page > 1) {
-        router.push(
-          `/search?q=${encodeURIComponent(query)}&type=location&page=${page - 1}`
-        )
-      }
-    }
-
     if (!features || features.length === 0) {
       return (
         <Card>
@@ -191,23 +164,18 @@ async function LocationResultsFetcher({
           ))}
 
           {features.length > 0 && (
-            <div className="pt-4 border-t flex justify-between items-center">
-              <Button
-                onClick={handlePrevPage}
-                disabled={page <= 1}
-                variant="outline"
-                size="sm"
-              >
-                Previous
-              </Button>
-              <span className="text-sm text-muted-foreground">Page {page}</span>
-              <Button
-                onClick={handleNextPage}
-                disabled={!hasMore}
-                variant="outline"
-                size="sm"
-              >
-                Next
+            <LocationPagination query={query} page={page} hasMore={hasMore} />
+          )}
+
+          {features.length > 0 && (
+            <div className="pt-4 border-t">
+              <Button asChild variant="outline" className="w-full">
+                <Link
+                  href={`/search?q=${encodeURIComponent(query)}&type=location`}
+                >
+                  <Navigation className="h-4 w-4 mr-2" />
+                  View All Location Results
+                </Link>
               </Button>
             </div>
           )}
@@ -216,7 +184,6 @@ async function LocationResultsFetcher({
     )
   } catch (error) {
     console.error("Error in LocationResultsFetcher:", error)
-
     return (
       <Card>
         {showTitle && (
@@ -231,8 +198,7 @@ async function LocationResultsFetcher({
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              An unexpected error occurred while searching locations. Please try
-              again.
+              An unexpected error occurred while searching for locations.
             </AlertDescription>
           </Alert>
         </CardContent>

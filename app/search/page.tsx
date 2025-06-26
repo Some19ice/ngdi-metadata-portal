@@ -26,6 +26,7 @@ import { MetadataResultsSkeleton } from "./_components/metadata-results-skeleton
 
 import { searchMetadataRecordsAction } from "@/actions/db/metadata-records-actions"
 import { geocodeLocationAction } from "@/actions/map-actions"
+import { SEARCH_RESULTS_PAGE_SIZE } from "@/lib/constants"
 
 interface SearchPageProps {
   searchParams: Promise<{
@@ -261,7 +262,7 @@ async function SearchResults({
                     <InlineMetadataResults
                       query={query}
                       page={1}
-                      searchParams={params}
+                      searchParams={{}}
                       maxResults={SEARCH_RESULTS_PAGE_SIZE}
                     />
                     {metadataData.totalRecords > 20 && (
