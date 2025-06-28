@@ -78,15 +78,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       icon: ShieldCheck,
       isActive:
         pathname.includes("/dashboard") ||
-        pathname.includes("/system-users") ||
-        pathname.includes("/organizations") ||
+        pathname.includes("/admin/users") ||
+        pathname.includes("/admin/organizations") ||
         pathname.includes("/metadata-oversight") ||
         pathname.includes("/system-settings") ||
         pathname.includes("/audit-logs"),
       items: [
         { title: "Dashboard", url: "/dashboard" },
-        { title: "Users", url: "/system-users" },
-        { title: "Organizations", url: "/organizations" },
+        { title: "Users", url: "/admin/users" },
+        { title: "Organizations", url: "/admin/organizations" },
         { title: "Metadata Oversight", url: "/metadata-oversight" },
         { title: "System Settings", url: "/system-settings" },
         { title: "Audit Logs", url: "/audit-logs" }

@@ -7,6 +7,97 @@ export interface HelpContent {
 }
 
 export const helpContent: Record<string, HelpContent> = {
+  // Organization Information
+  organizationName: {
+    title: "Organization Name",
+    content:
+      "The official name of the organization. This will be displayed throughout the portal and in metadata records.",
+    examples: [
+      "National Mapping Agency",
+      "Lagos State Geographic Information Service",
+      "Federal Ministry of Environment"
+    ]
+  },
+
+  organizationDescription: {
+    title: "Organization Description",
+    content:
+      "A brief overview of the organization's purpose, mission, and activities. This helps users understand the organization's role in geospatial data.",
+    examples: [
+      "A government agency responsible for national mapping and surveying activities.",
+      "The primary geospatial data provider for Lagos State, focused on urban planning and development."
+    ]
+  },
+
+  organizationContactName: {
+    title: "Primary Contact Name",
+    content:
+      "The name of the main person responsible for this organization's account or who can be contacted for inquiries.",
+    examples: ["Dr. John Adebayo", "Mary Okonkwo", "Prof. Ibrahim Suleiman"]
+  },
+
+  organizationContactEmail: {
+    title: "Primary Contact Email",
+    content:
+      "The main email address for contacting this organization. This will be used for important notifications and account-related communications.",
+    examples: [
+      "info@nationalmapping.gov.ng",
+      "contact@lagosgis.org",
+      "data@environment.gov.ng"
+    ]
+  },
+
+  organizationContactPhone: {
+    title: "Primary Contact Phone",
+    content:
+      "The main phone number for contacting this organization. Include country code for international numbers.",
+    examples: ["+234-1-234-5678", "+234-803-123-4567", "0807-123-4567"]
+  },
+
+  organizationWebsite: {
+    title: "Organization Website",
+    content:
+      "The official website of the organization. This provides users with more information about the organization and its services.",
+    examples: [
+      "https://www.nationalmapping.gov.ng",
+      "https://lagosgis.org",
+      "https://environment.gov.ng"
+    ]
+  },
+
+  organizationAddress: {
+    title: "Organization Address",
+    content:
+      "The physical address or headquarters location of the organization. This helps establish credibility and location context.",
+    examples: [
+      "Plot 123, Central Business District, Abuja, FCT",
+      "Lagos State Secretariat, Alausa, Ikeja, Lagos",
+      "Federal Ministry Complex, Area 11, Garki, Abuja"
+    ]
+  },
+
+  organizationLogo: {
+    title: "Organization Logo URL",
+    content:
+      "A web-accessible URL to the organization's logo image. This will be displayed in the portal and metadata records. Recommended size: 200x200 pixels.",
+    examples: [
+      "https://example.com/images/logo.png",
+      "https://cdn.organization.gov.ng/logo.svg",
+      "https://assets.lagosgis.org/branding/logo.jpg"
+    ]
+  },
+
+  organizationStatus: {
+    title: "Organization Status",
+    content:
+      "The current operational status of the organization in the portal. This controls whether the organization can actively contribute data.",
+    examples: [
+      "Active: Organization can publish metadata and datasets",
+      "Inactive: Organization account is temporarily disabled",
+      "Pending: Organization is awaiting approval or setup"
+    ]
+  },
+
   // General Information
   title: {
     title: "Dataset Title",

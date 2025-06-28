@@ -30,7 +30,7 @@ import {
 } from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox"
 import { DateRangePicker } from "@/components/ui/date-range-picker"
-import { BoundingBoxSelector } from "@/components/ui/map/bounding-box-selector"
+import BoundingBoxSelector from "@/components/ui/map/bounding-box-selector"
 import {
   Search,
   Filter,
@@ -571,8 +571,8 @@ export default function AdvancedSearchInterface({
                 <div>
                   <Label>Geographic Area</Label>
                   <BoundingBoxSelector
-                    value={filters.bbox}
-                    onChange={bbox => updateFilter("bbox", bbox)}
+                    initialBounds={filters.bbox}
+                    onBoundsChange={bbox => updateFilter("bbox", bbox)}
                   />
                 </div>
               </FilterSection>

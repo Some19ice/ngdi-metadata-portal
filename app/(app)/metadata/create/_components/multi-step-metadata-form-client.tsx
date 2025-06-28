@@ -147,6 +147,8 @@ interface MultiStepMetadataFormClientProps {
   currentUserId?: string | null
   existingRecordId?: string | null
   initialData?: Partial<SelectMetadataRecord> | null
+  defaultOrganizationId?: string | null
+  userRole?: "Node Officer" | "Metadata Creator" | "Metadata Approver" | null
 }
 
 // Smart suggestions based on field content
@@ -464,7 +466,9 @@ function preparePayload(
 export default function MultiStepMetadataFormClient({
   currentUserId,
   existingRecordId,
-  initialData
+  initialData,
+  defaultOrganizationId,
+  userRole
 }: MultiStepMetadataFormClientProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -973,7 +977,12 @@ export default function MultiStepMetadataFormClient({
       form.reset(transformedInitialData)
       setIsLoading(false)
     } else {
-      form.reset(defaultMetadataFormValues)
+      // Set default organization ID if user belongs to an organization
+      const defaultFormValues = { ...defaultMetadataFormValues }
+      if (defaultOrganizationId) {
+        defaultFormValues.organizationId = defaultOrganizationId
+      }
+      form.reset(defaultFormValues)
     }
     fetchOrgsAndSetLoading()
   }, [existingRecordId, initialData, form, transformedInitialData])

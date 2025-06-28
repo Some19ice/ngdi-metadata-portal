@@ -6,6 +6,7 @@ import { redirect } from "next/navigation"
 import { hasPermission } from "@/lib/rbac"
 import { MetadataFormValues } from "@/lib/validators/metadata-validator"
 import MultiStepMetadataFormClient from "./multi-step-metadata-form-client"
+import { getCurrentUserOrganizationAction } from "@/actions/db/user-organizations-actions"
 
 interface MultiStepMetadataFormLoaderProps {
   existingRecordId?: string | null
@@ -23,9 +24,23 @@ export default async function MultiStepMetadataFormLoader({
     redirect("/login")
   }
 
-  const canCreateMetadata = await hasPermission(userId, "create", "metadata")
+  // Get user's current organization context
+  const currentOrgResult = await getCurrentUserOrganizationAction()
+  const currentOrganization =
+    currentOrgResult.isSuccess && currentOrgResult.data
+      ? currentOrgResult.data.organization
+      : null
+  const userRole =
+    currentOrgResult.isSuccess && currentOrgResult.data
+      ? currentOrgResult.data.userRole
+      : null
 
-  if (!userId || !canCreateMetadata) {
+  // Check if user can create metadata based on their role
+  const canCreateMetadata = await hasPermission(userId, "create", "metadata")
+  const canCreateInOrg =
+    userRole === "Metadata Creator" || userRole === "Node Officer"
+
+  if (!canCreateMetadata && !canCreateInOrg) {
     redirect("/metadata?error=unauthorized")
   }
 
@@ -37,6 +52,8 @@ export default async function MultiStepMetadataFormLoader({
       currentUserId={userId}
       existingRecordId={existingRecordId}
       initialData={initialData}
+      defaultOrganizationId={currentOrganization?.id}
+      userRole={userRole}
     />
   )
 }

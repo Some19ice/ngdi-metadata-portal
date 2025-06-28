@@ -311,7 +311,9 @@ export default function OrganizationDataTable({
                       Assign Node Officer
                     </DropdownMenuItem>
                     <DropdownMenuItem
-                      onClick={() => router.push(`/organizations/${org.id}`)}
+                      onClick={() =>
+                        router.push(`/admin/organizations/${org.id}`)
+                      }
                     >
                       <Eye className="mr-2 h-4 w-4" />
                       View Details
@@ -346,9 +348,9 @@ export default function OrganizationDataTable({
       {selectedOrganization && isNodeOfficerDialogOpen && (
         <AssignNodeOfficerDialog
           organization={selectedOrganization}
-          isOpen={isNodeOfficerDialogOpen}
+          open={isNodeOfficerDialogOpen}
           onOpenChange={setIsNodeOfficerDialogOpen}
-          onSuccess={handleNodeOfficerSuccess}
+          onRefresh={handleNodeOfficerSuccess}
         />
       )}
 

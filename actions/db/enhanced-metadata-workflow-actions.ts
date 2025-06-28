@@ -4,6 +4,7 @@ import { db } from "@/db/db"
 import {
   metadataRecordsTable,
   organizationsTable,
+  userOrganizationsTable,
   type InsertMetadataRecord,
   type SelectMetadataRecord
 } from "@/db/schema"
@@ -22,6 +23,7 @@ import {
   isNotNull
 } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
+import { createNotificationAction } from "@/actions/notifications-actions"
 
 // Enhanced search filters interface
 interface MetadataSearchFilters {
@@ -569,7 +571,10 @@ export async function submitForReviewAction(
 
     // Check if user has permission to submit
     const record = await db.query.metadataRecords.findFirst({
-      where: eq(metadataRecordsTable.id, recordId)
+      where: eq(metadataRecordsTable.id, recordId),
+      with: {
+        organization: true
+      }
     })
 
     if (!record) {
@@ -605,7 +610,44 @@ export async function submitForReviewAction(
       })
       .where(eq(metadataRecordsTable.id, recordId))
 
-    // TODO: Create review task/notification
+    // Find all metadata approvers in the organization
+    if (record.organizationId) {
+      const approvers = await db.query.userOrganizations.findMany({
+        where: and(
+          eq(userOrganizationsTable.organizationId, record.organizationId),
+          eq(userOrganizationsTable.role, "Metadata Approver")
+        )
+      })
+
+      // Send notification to each approver
+      for (const approver of approvers) {
+        await createNotificationAction({
+          recipientUserId: approver.userId,
+          type: "MetadataStatusChange",
+          title: "New Metadata Submission for Review",
+          message: `A metadata record titled "${record.title}" has been submitted for your review by the creator.`,
+          link: `/metadata/${recordId}`
+        })
+      }
+
+      // Also notify the node officer
+      const nodeOfficers = await db.query.userOrganizations.findMany({
+        where: and(
+          eq(userOrganizationsTable.organizationId, record.organizationId),
+          eq(userOrganizationsTable.role, "Node Officer")
+        )
+      })
+
+      for (const officer of nodeOfficers) {
+        await createNotificationAction({
+          recipientUserId: officer.userId,
+          type: "MetadataStatusChange",
+          title: "Metadata Submitted for Review",
+          message: `A metadata record titled "${record.title}" has been submitted for review in your organization.`,
+          link: `/officer-dashboard`
+        })
+      }
+    }
 
     revalidatePath("/metadata")
 
@@ -639,18 +681,58 @@ export async function approveMetadataAction(
       }
     }
 
-    // TODO: Check if user has reviewer permissions
+    // Get the metadata record
+    const record = await db.query.metadataRecords.findFirst({
+      where: eq(metadataRecordsTable.id, recordId)
+    })
+
+    if (!record) {
+      return {
+        isSuccess: false,
+        message: "Metadata record not found"
+      }
+    }
+
+    // Check if user is a metadata approver or node officer for the organization
+    if (record.organizationId) {
+      const userOrgRole = await db.query.userOrganizations.findFirst({
+        where: and(
+          eq(userOrganizationsTable.userId, userId),
+          eq(userOrganizationsTable.organizationId, record.organizationId),
+          or(
+            eq(userOrganizationsTable.role, "Metadata Approver"),
+            eq(userOrganizationsTable.role, "Node Officer")
+          )
+        )
+      })
+
+      if (!userOrgRole) {
+        return {
+          isSuccess: false,
+          message:
+            "You don't have permission to approve metadata for this organization"
+        }
+      }
+    }
 
     await db
       .update(metadataRecordsTable)
       .set({
         status: "Published",
         publicationDate: new Date().toISOString(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
+        ...(reviewNotes && { internalNotes: reviewNotes })
       })
       .where(eq(metadataRecordsTable.id, recordId))
 
-    // TODO: Store review notes, notify creator
+    // Notify the creator that their metadata has been approved
+    await createNotificationAction({
+      recipientUserId: record.creatorUserId,
+      type: "MetadataStatusChange",
+      title: "Metadata Record Approved",
+      message: `Your metadata record "${record.title}" has been approved and published!`,
+      link: `/metadata/${recordId}`
+    })
 
     revalidatePath("/metadata")
 
@@ -664,6 +746,91 @@ export async function approveMetadataAction(
     return {
       isSuccess: false,
       message: "Failed to approve metadata"
+    }
+  }
+}
+
+/**
+ * Reject metadata record and send back for corrections
+ */
+export async function rejectMetadataAction(
+  recordId: string,
+  rejectionReason: string
+): Promise<ActionState<void>> {
+  try {
+    const { userId } = await auth()
+    if (!userId) {
+      return {
+        isSuccess: false,
+        message: "Authentication required"
+      }
+    }
+
+    // Get the metadata record
+    const record = await db.query.metadataRecords.findFirst({
+      where: eq(metadataRecordsTable.id, recordId)
+    })
+
+    if (!record) {
+      return {
+        isSuccess: false,
+        message: "Metadata record not found"
+      }
+    }
+
+    // Check if user is a metadata approver or node officer for the organization
+    if (record.organizationId) {
+      const userOrgRole = await db.query.userOrganizations.findFirst({
+        where: and(
+          eq(userOrganizationsTable.userId, userId),
+          eq(userOrganizationsTable.organizationId, record.organizationId),
+          or(
+            eq(userOrganizationsTable.role, "Metadata Approver"),
+            eq(userOrganizationsTable.role, "Node Officer")
+          )
+        )
+      })
+
+      if (!userOrgRole) {
+        return {
+          isSuccess: false,
+          message:
+            "You don't have permission to review metadata for this organization"
+        }
+      }
+    }
+
+    // Update status back to draft with rejection notes
+    await db
+      .update(metadataRecordsTable)
+      .set({
+        status: "Draft",
+        updatedAt: new Date(),
+        internalNotes: `Rejected: ${rejectionReason}\n\nPrevious notes: ${record.internalNotes || ""}`
+      })
+      .where(eq(metadataRecordsTable.id, recordId))
+
+    // Notify the creator about the rejection
+    await createNotificationAction({
+      recipientUserId: record.creatorUserId,
+      type: "MetadataStatusChange",
+      title: "Metadata Record Needs Revision",
+      message: `Your metadata record "${record.title}" needs revisions. Reason: ${rejectionReason}`,
+      link: `/metadata/${recordId}/edit`
+    })
+
+    revalidatePath("/metadata")
+
+    return {
+      isSuccess: true,
+      message: "Metadata sent back for corrections",
+      data: undefined
+    }
+  } catch (error) {
+    console.error("Error rejecting metadata:", error)
+    return {
+      isSuccess: false,
+      message: "Failed to reject metadata"
     }
   }
 }

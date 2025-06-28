@@ -3,7 +3,13 @@
 import { clerkClient, type User, type EmailAddress } from "@clerk/nextjs/server"
 import { ActionState } from "@/types"
 import { db } from "@/db/db"
-import { rolesTable, userRolesTable, roleEnum } from "@/db/schema"
+import {
+  rolesTable,
+  userRolesTable,
+  roleEnum,
+  userOrganizationsTable,
+  organizationsTable
+} from "@/db/schema"
 import { and, eq, inArray, like, or } from "drizzle-orm"
 import { requiresRole, hasPermission, getUserRoles } from "@/lib/rbac"
 import { auth } from "@clerk/nextjs/server"
@@ -310,4 +316,289 @@ export async function updateUserRoleAction(
     }
     return { isSuccess: false, message: errMsg }
   }
+}
+
+/**
+ * Creates a new user account and assigns them to an organization with a specific role.
+ * Used for hierarchical account creation:
+ * - System Admin creates Node Officer accounts
+ * - Node Officers create Metadata Creator and Approver accounts
+ */
+export async function createUserForOrganizationAction(params: {
+  email: string
+  firstName: string
+  lastName: string
+  password: string
+  organizationId: string
+  role: "Node Officer" | "Metadata Creator" | "Metadata Approver"
+  sendWelcomeEmail?: boolean
+}): Promise<ActionState<{ userId: string; email: string }>> {
+  try {
+    const authState = await auth()
+    if (!authState.userId) {
+      return {
+        isSuccess: false,
+        message: "Unauthorized: User not authenticated."
+      }
+    }
+
+    // Check permissions based on role being created
+    if (params.role === "Node Officer") {
+      // Only System Admin can create Node Officer accounts
+      const isSystemAdmin = await hasPermission(
+        authState.userId,
+        "manage",
+        "organizations"
+      )
+      if (!isSystemAdmin) {
+        return {
+          isSuccess: false,
+          message:
+            "Only System Administrators can create Node Officer accounts."
+        }
+      }
+    } else {
+      // Node Officers can create Metadata Creator and Approver accounts for their organization
+      const isNodeOfficerForOrg = await db.query.userOrganizations.findFirst({
+        where: and(
+          eq(userOrganizationsTable.userId, authState.userId),
+          eq(userOrganizationsTable.organizationId, params.organizationId),
+          eq(userOrganizationsTable.role, "Node Officer")
+        )
+      })
+
+      if (!isNodeOfficerForOrg) {
+        return {
+          isSuccess: false,
+          message:
+            "Only Node Officers can create accounts for their organization members."
+        }
+      }
+    }
+
+    // Verify organization exists
+    const organization = await db.query.organizations.findFirst({
+      where: eq(organizationsTable.id, params.organizationId)
+    })
+
+    if (!organization) {
+      return {
+        isSuccess: false,
+        message: "Organization not found."
+      }
+    }
+
+    // Create Clerk user
+    const client = await clerkClient()
+
+    try {
+      const clerkUser = await client.users.createUser({
+        emailAddress: [params.email],
+        password: params.password,
+        firstName: params.firstName,
+        lastName: params.lastName,
+        publicMetadata: {
+          organizationId: params.organizationId,
+          organizationName: organization.name,
+          role: params.role
+        }
+      })
+
+      // Add user to organization with specified role
+      await db.insert(userOrganizationsTable).values({
+        userId: clerkUser.id,
+        organizationId: params.organizationId,
+        role: params.role
+      })
+
+      // If creating a Node Officer, also assign the global Node Officer role
+      if (params.role === "Node Officer") {
+        const nodeOfficerRole = await db.query.roles.findFirst({
+          where: eq(rolesTable.name, "Node Officer")
+        })
+
+        if (nodeOfficerRole) {
+          await db.insert(userRolesTable).values({
+            userId: clerkUser.id,
+            roleId: nodeOfficerRole.id
+          })
+        }
+      }
+
+      // Send welcome email with credentials if requested
+      if (params.sendWelcomeEmail) {
+        await createNotificationAction({
+          recipientUserId: clerkUser.id,
+          type: "NewRoleAssignment",
+          title: `Welcome to ${organization.name}`,
+          message: `You have been added as a ${params.role} for ${organization.name}. Please log in with your provided credentials to access the system.`,
+          link: "/login"
+        })
+      }
+
+      // Notify the creating user
+      await createNotificationAction({
+        recipientUserId: authState.userId,
+        type: "Other",
+        title: "User Account Created",
+        message: `Successfully created account for ${params.firstName} ${params.lastName} as ${params.role} in ${organization.name}.`,
+        link: `/organization-users?orgId=${params.organizationId}`
+      })
+
+      return {
+        isSuccess: true,
+        message: `User account created successfully.`,
+        data: {
+          userId: clerkUser.id,
+          email: params.email
+        }
+      }
+    } catch (clerkError: any) {
+      // Handle Clerk-specific errors
+      if (clerkError.errors) {
+        const errorMessages = clerkError.errors
+          .map((e: any) => e.message)
+          .join(", ")
+        return {
+          isSuccess: false,
+          message: `Failed to create user: ${errorMessages}`
+        }
+      }
+      throw clerkError
+    }
+  } catch (error) {
+    console.error("Error creating user for organization:", error)
+    return {
+      isSuccess: false,
+      message:
+        error instanceof Error
+          ? error.message
+          : "Failed to create user account."
+    }
+  }
+}
+
+/**
+ * Creates multiple user accounts for an organization in bulk.
+ * Only Node Officers can use this for their organization.
+ */
+export async function createBulkUsersForOrganizationAction(params: {
+  organizationId: string
+  users: Array<{
+    email: string
+    firstName: string
+    lastName: string
+    role: "Metadata Creator" | "Metadata Approver"
+  }>
+  sendWelcomeEmails?: boolean
+}): Promise<
+  ActionState<{
+    created: Array<{ email: string; userId: string }>
+    failed: Array<{ email: string; error: string }>
+  }>
+> {
+  try {
+    const authState = await auth()
+    if (!authState.userId) {
+      return {
+        isSuccess: false,
+        message: "Unauthorized: User not authenticated."
+      }
+    }
+
+    // Verify user is Node Officer for this organization
+    const isNodeOfficerForOrg = await db.query.userOrganizations.findFirst({
+      where: and(
+        eq(userOrganizationsTable.userId, authState.userId),
+        eq(userOrganizationsTable.organizationId, params.organizationId),
+        eq(userOrganizationsTable.role, "Node Officer")
+      )
+    })
+
+    if (!isNodeOfficerForOrg) {
+      return {
+        isSuccess: false,
+        message:
+          "Only Node Officers can create bulk accounts for their organization."
+      }
+    }
+
+    const created: Array<{ email: string; userId: string }> = []
+    const failed: Array<{ email: string; error: string }> = []
+    const client = await clerkClient()
+
+    for (const userData of params.users) {
+      try {
+        // Generate a secure temporary password
+        const tempPassword = generateSecurePassword()
+
+        const clerkUser = await client.users.createUser({
+          emailAddress: [userData.email],
+          password: tempPassword,
+          firstName: userData.firstName,
+          lastName: userData.lastName,
+          publicMetadata: {
+            organizationId: params.organizationId,
+            role: userData.role
+          }
+        })
+
+        // Add to organization
+        await db.insert(userOrganizationsTable).values({
+          userId: clerkUser.id,
+          organizationId: params.organizationId,
+          role: userData.role
+        })
+
+        created.push({
+          email: userData.email,
+          userId: clerkUser.id
+        })
+
+        // Send welcome email with temporary password
+        if (params.sendWelcomeEmails) {
+          // In production, this would send an actual email
+          // For now, create a notification
+          await createNotificationAction({
+            recipientUserId: clerkUser.id,
+            type: "NewRoleAssignment",
+            title: "Welcome to NGDI Portal",
+            message: `You have been added as a ${userData.role}. Your temporary password is: ${tempPassword}. Please change it upon first login.`,
+            link: "/login"
+          })
+        }
+      } catch (error: any) {
+        failed.push({
+          email: userData.email,
+          error: error.message || "Unknown error"
+        })
+      }
+    }
+
+    return {
+      isSuccess: true,
+      message: `Created ${created.length} users successfully. ${failed.length} failed.`,
+      data: { created, failed }
+    }
+  } catch (error) {
+    console.error("Error creating bulk users:", error)
+    return {
+      isSuccess: false,
+      message:
+        error instanceof Error ? error.message : "Failed to create bulk users."
+    }
+  }
+}
+
+/**
+ * Generates a secure temporary password
+ */
+function generateSecurePassword(): string {
+  const chars =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*"
+  let password = ""
+  for (let i = 0; i < 12; i++) {
+    password += chars.charAt(Math.floor(Math.random() * chars.length))
+  }
+  return password
 }

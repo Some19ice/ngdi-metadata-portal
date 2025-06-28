@@ -277,7 +277,7 @@ export default function UserList({ users, className }: UserListProps) {
                       Edit Roles
                     </DropdownMenuItem>
                     <DropdownMenuItem
-                      onClick={() => router.push(`/system-users/${user.id}`)}
+                      onClick={() => router.push(`/admin/users/${user.id}`)}
                     >
                       <Eye className="mr-2 h-4 w-4" />
                       View Profile

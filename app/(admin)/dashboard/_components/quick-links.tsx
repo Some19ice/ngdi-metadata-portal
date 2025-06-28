@@ -41,13 +41,13 @@ export default function QuickLinks() {
       title: "Users",
       description: "Manage system users and access",
       icon: <Users className="h-5 w-5 text-blue-500" />,
-      href: "/system-users"
+      href: "/admin/users"
     },
     {
       title: "Organizations",
       description: "Manage organizations and Node Officers",
       icon: <Building className="h-5 w-5 text-indigo-500" />,
-      href: "/organizations"
+      href: "/admin/organizations"
     },
     {
       title: "Metadata",

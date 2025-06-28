@@ -12,7 +12,6 @@ import { usersTable } from "./users-schema"
 
 export const organizationUserRoleEnum = pgEnum("organization_user_role", [
   "Node Officer",
-  "Member",
   "Metadata Creator",
   "Metadata Approver"
 ])

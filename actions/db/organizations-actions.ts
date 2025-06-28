@@ -181,7 +181,8 @@ function validateOrganizationData(data: Partial<InsertOrganization>): {
 }
 
 /**
- * Checks for duplicate organization names (case-insensitive)
+ * Checks for duplicate or similar organization names
+ * Uses exact match (case-insensitive) and similarity algorithms
  */
 async function checkDuplicateOrganizationName(
   name: string,
@@ -189,19 +190,177 @@ async function checkDuplicateOrganizationName(
 ): Promise<boolean> {
   const trimmedName = name.trim()
 
-  let query = db
-    .select({ id: organizationsTable.id })
+  // First check for exact match (case-insensitive)
+  let exactQuery = db
+    .select({ id: organizationsTable.id, name: organizationsTable.name })
     .from(organizationsTable)
     .where(ilike(organizationsTable.name, trimmedName))
 
-  const existing = await query
+  const exactMatches = await exactQuery
 
   // If we're updating an organization, exclude its own ID from the duplicate check
   if (excludeId) {
-    return existing.some(org => org.id !== excludeId)
+    const hasExactDuplicate = exactMatches.some(org => org.id !== excludeId)
+    if (hasExactDuplicate) return true
+  } else if (exactMatches.length > 0) {
+    return true
   }
 
-  return existing.length > 0
+  // Now check for similar names using various techniques
+  const allOrganizations = await db
+    .select({ id: organizationsTable.id, name: organizationsTable.name })
+    .from(organizationsTable)
+
+  // Filter out the current organization if updating
+  const orgsToCheck = excludeId
+    ? allOrganizations.filter(org => org.id !== excludeId)
+    : allOrganizations
+
+  // Check for similarity
+  const normalizedNewName = normalizeName(trimmedName)
+
+  for (const org of orgsToCheck) {
+    const normalizedExistingName = normalizeName(org.name)
+
+    // Check for very similar names
+    if (areNamesSimilar(normalizedNewName, normalizedExistingName)) {
+      return true
+    }
+
+    // Check for common government/official variations
+    if (areGovernmentNamesSimilar(trimmedName, org.name)) {
+      return true
+    }
+  }
+
+  return false
+}
+
+/**
+ * Normalizes organization names for comparison
+ * Removes common words, punctuation, and standardizes spacing
+ */
+function normalizeName(name: string): string {
+  // Common words to remove for comparison
+  const stopWords = [
+    "the",
+    "of",
+    "and",
+    "for",
+    "nigeria",
+    "nigerian",
+    "federal",
+    "national"
+  ]
+
+  return name
+    .toLowerCase()
+    .replace(/[^\w\s]/g, " ") // Remove punctuation
+    .split(/\s+/)
+    .filter(word => word.length > 2 && !stopWords.includes(word))
+    .join(" ")
+    .trim()
+}
+
+/**
+ * Checks if two normalized names are similar using various techniques
+ */
+function areNamesSimilar(name1: string, name2: string): boolean {
+  // If normalized names are identical
+  if (name1 === name2) return true
+
+  // Check if one name contains all significant words from the other
+  const words1 = name1.split(" ")
+  const words2 = name2.split(" ")
+
+  // If all words from shorter name are in longer name
+  const shorterWords = words1.length < words2.length ? words1 : words2
+  const longerWords = words1.length < words2.length ? words2 : words1
+
+  if (shorterWords.every(word => longerWords.includes(word))) {
+    return true
+  }
+
+  // Levenshtein distance check for very similar names
+  const distance = levenshteinDistance(name1, name2)
+  const maxLength = Math.max(name1.length, name2.length)
+  const similarity = 1 - distance / maxLength
+
+  // If names are 80% similar or more
+  return similarity >= 0.8
+}
+
+/**
+ * Special check for government organization name variations
+ */
+function areGovernmentNamesSimilar(name1: string, name2: string): boolean {
+  const govPatterns = [
+    { pattern: /ministry\s+of\s+(\w+)/i, type: "ministry" },
+    { pattern: /(\w+)\s+ministry/i, type: "ministry" },
+    { pattern: /department\s+of\s+(\w+)/i, type: "department" },
+    { pattern: /(\w+)\s+department/i, type: "department" },
+    { pattern: /(\w+)\s+agency/i, type: "agency" },
+    { pattern: /(\w+)\s+commission/i, type: "commission" },
+    { pattern: /(\w+)\s+board/i, type: "board" },
+    { pattern: /(\w+)\s+authority/i, type: "authority" }
+  ]
+
+  let type1 = null,
+    keyword1 = null
+  let type2 = null,
+    keyword2 = null
+
+  // Extract type and keyword from both names
+  for (const { pattern, type } of govPatterns) {
+    const match1 = name1.match(pattern)
+    const match2 = name2.match(pattern)
+
+    if (match1) {
+      type1 = type
+      keyword1 = match1[1].toLowerCase()
+    }
+    if (match2) {
+      type2 = type
+      keyword2 = match2[1].toLowerCase()
+    }
+  }
+
+  // If both are government entities of the same type with similar keywords
+  if (type1 && type1 === type2 && keyword1 && keyword2) {
+    return keyword1 === keyword2 || levenshteinDistance(keyword1, keyword2) <= 2
+  }
+
+  return false
+}
+
+/**
+ * Calculates Levenshtein distance between two strings
+ */
+function levenshteinDistance(str1: string, str2: string): number {
+  const m = str1.length
+  const n = str2.length
+  const dp: number[][] = Array(m + 1)
+    .fill(null)
+    .map(() => Array(n + 1).fill(0))
+
+  for (let i = 0; i <= m; i++) dp[i][0] = i
+  for (let j = 0; j <= n; j++) dp[0][j] = j
+
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      if (str1[i - 1] === str2[j - 1]) {
+        dp[i][j] = dp[i - 1][j - 1]
+      } else {
+        dp[i][j] = Math.min(
+          dp[i - 1][j] + 1, // deletion
+          dp[i][j - 1] + 1, // insertion
+          dp[i - 1][j - 1] + 1 // substitution
+        )
+      }
+    }
+  }
+
+  return dp[m][n]
 }
 
 /**
@@ -365,26 +524,27 @@ function sanitizeOrganizationData(
  * ```
  */
 export async function createOrganizationAction(
-  data: InsertOrganization
+  organization: InsertOrganization
 ): Promise<ActionState<SelectOrganization>> {
-  const { userId } = await auth()
-  if (!userId) {
-    return { isSuccess: false, message: "Unauthorized: User not logged in." }
-  }
-  const canCreate = await hasPermission(userId, "create", "organizations")
-  if (!canCreate) {
-    return {
-      isSuccess: false,
-      message: "Forbidden: You do not have permission to create organizations."
-    }
-  }
-
   try {
-    // Sanitize input data
-    const sanitizedData = sanitizeOrganizationData(data)
+    // Get the current user
+    const { userId } = await auth()
 
-    // Validate input data
-    const validation = validateOrganizationData(sanitizedData)
+    if (!userId) {
+      return { isSuccess: false, message: "Unauthorized" }
+    }
+
+    // Check permissions - use "manage" instead of "create" since that's what's defined in the system
+    const canCreate = await hasPermission(userId, "manage", "organizations")
+    if (!canCreate) {
+      return {
+        isSuccess: false,
+        message: "Forbidden: Insufficient permissions"
+      }
+    }
+
+    // Validate organization data
+    const validation = validateOrganizationData(organization)
     if (!validation.isValid) {
       return {
         isSuccess: false,
@@ -392,16 +552,16 @@ export async function createOrganizationAction(
       }
     }
 
-    // Check for duplicate organization name
-    if (sanitizedData.name) {
-      const isDuplicate = await checkDuplicateOrganizationName(
-        sanitizedData.name
-      )
-      if (isDuplicate) {
-        return {
-          isSuccess: false,
-          message: "An organization with this name already exists."
-        }
+    // Sanitize the organization data
+    const sanitizedData = sanitizeOrganizationData(organization)
+
+    // Check for duplicate organization name (case-insensitive)
+    const isDuplicate = await checkDuplicateOrganizationName(organization.name)
+    if (isDuplicate) {
+      return {
+        isSuccess: false,
+        message:
+          "An organization with this name or a very similar name already exists. Please choose a more distinctive name to avoid confusion."
       }
     }
 
@@ -409,7 +569,7 @@ export async function createOrganizationAction(
     if (sanitizedData.nodeOfficerId) {
       const nodeOfficerValidation = await validateNodeOfficerAssignment(
         sanitizedData.nodeOfficerId,
-        "" // Empty string for new organization
+        "" // No existing organization ID for new organization
       )
       if (!nodeOfficerValidation.isValid) {
         return {
@@ -419,59 +579,37 @@ export async function createOrganizationAction(
       }
     }
 
+    // Create the organization data ensuring required fields are present
+    const organizationData: InsertOrganization = {
+      ...organization,
+      ...sanitizedData,
+      name: sanitizedData.name || organization.name // Ensure name is always present
+    }
+
+    // Create the organization
     const [newOrganization] = await db
       .insert(organizationsTable)
-      .values(sanitizedData as InsertOrganization)
+      .values(organizationData)
       .returning()
 
-    if (!newOrganization) {
-      return { isSuccess: false, message: "Failed to create organization." }
-    }
-
-    // Invalidate relevant caches after successful creation
-    // Wrap cache invalidation in try/catch to prevent cache failures from blocking success response
-    try {
-      organizationCache.delete(CacheKeys.organization.count())
-      // Invalidate all list caches by clearing variations
-      const stats = organizationCache.getStats()
-      stats.keys
-        .filter(
-          key => key.startsWith("org:list:") || key.startsWith("org:admin:")
-        )
-        .forEach(key => organizationCache.delete(key))
-    } catch (cacheError) {
-      console.error(
-        "Cache invalidation failed after organization creation:",
-        cacheError
-      )
-      // Continue execution - cache failures should not affect the success response
-    }
-
-    // Create audit log entry
+    // Create audit log entry for organization creation
     const auditLogData: CreateAuditLogInput = {
       actionCategory: "OrganizationManagement",
       actionType: "OrganizationCreated",
       targetEntityType: "Organization",
       targetEntityId: newOrganization.id,
-      details: { name: newOrganization.name }
+      details: { organizationName: newOrganization.name }
     }
     await createAuditLogAction(auditLogData)
-    // We don't typically need to check the result of the audit log for the primary action's success,
-    // but errors in audit logging will be console logged by createAuditLogAction itself.
 
     return {
       isSuccess: true,
-      message: "Organization created successfully.",
+      message: "Organization created successfully",
       data: newOrganization
     }
   } catch (error) {
     console.error("Error creating organization:", error)
-    const errorMessage =
-      error instanceof Error ? error.message : "Unknown error"
-    return {
-      isSuccess: false,
-      message: `Failed to create organization: ${errorMessage}`
-    }
+    return { isSuccess: false, message: "Failed to create organization" }
   }
 }
 
@@ -777,7 +915,8 @@ export async function updateOrganizationAction(
       if (isDuplicate) {
         return {
           isSuccess: false,
-          message: "An organization with this name already exists."
+          message:
+            "An organization with this name or a very similar name already exists. Please choose a more distinctive name to avoid confusion."
         }
       }
     }
@@ -1075,7 +1214,7 @@ export async function getOrganizationsAdminAction(
 
     const offset = (page - 1) * limit
 
-    // Build base query for organizations - removing nodeOfficerId temporarily
+    // Build base query for organizations
     let query = db
       .select({
         id: organizationsTable.id,
@@ -1087,8 +1226,7 @@ export async function getOrganizationsAdminAction(
         websiteUrl: organizationsTable.websiteUrl,
         address: organizationsTable.address,
         logoUrl: organizationsTable.logoUrl,
-        // Temporarily remove nodeOfficerId until migration is run
-        // nodeOfficerId: organizationsTable.nodeOfficerId,
+        nodeOfficerId: organizationsTable.nodeOfficerId,
         status: organizationsTable.status,
         createdAt: organizationsTable.createdAt,
         updatedAt: organizationsTable.updatedAt,
@@ -1122,10 +1260,10 @@ export async function getOrganizationsAdminAction(
       conditions.push(eq(organizationsTable.status, status))
     }
 
-    // Comment out Node Officer filter until we have the column
-    // if (nodeOfficerId) {
-    //   conditions.push(eq(organizationsTable.nodeOfficerId, nodeOfficerId))
-    // }
+    // Node Officer filter
+    if (nodeOfficerId) {
+      conditions.push(eq(organizationsTable.nodeOfficerId, nodeOfficerId))
+    }
 
     // Apply all conditions if any exist
     if (conditions.length > 0) {
@@ -1191,9 +1329,45 @@ export async function getOrganizationsAdminAction(
       }
     }
 
-    // For now, return without node officer information
+    // Fetch Node Officer names from Clerk for organizations that have nodeOfficerId
+    const nodeOfficerIds = organizations
+      .map(org => org.nodeOfficerId)
+      .filter(Boolean) as string[]
+
+    let nodeOfficerNames: Record<string, string> = {}
+
+    if (nodeOfficerIds.length > 0) {
+      try {
+        const clerk = await clerkClient()
+        const nodeOfficers = await clerk.users.getUserList({
+          userId: nodeOfficerIds
+        })
+
+        nodeOfficerNames = nodeOfficers.data.reduce(
+          (acc: Record<string, string>, user: any) => {
+            const fullName =
+              `${user.firstName || ""} ${user.lastName || ""}`.trim()
+            const displayName =
+              fullName || user.emailAddresses[0]?.emailAddress || "Unknown User"
+            acc[user.id] = displayName
+            return acc
+          },
+          {} as Record<string, string>
+        )
+      } catch (error) {
+        console.error("Error fetching node officer names from Clerk:", error)
+        // Continue without node officer names rather than failing the entire request
+      }
+    }
+
+    // Add node officer names to organization data
     const organizationsWithExtras = organizations.map(org => {
-      return { ...org } as AdminOrganizationView
+      return {
+        ...org,
+        nodeOfficerName: org.nodeOfficerId
+          ? nodeOfficerNames[org.nodeOfficerId]
+          : undefined
+      } as AdminOrganizationView
     })
 
     return {
@@ -1223,15 +1397,6 @@ export async function assignNodeOfficerAction(
     return { isSuccess: false, message: "Unauthorized: User not logged in." }
   }
 
-  // Temporarily returning error until migration is complete
-  return {
-    isSuccess: false,
-    message:
-      "This feature is currently unavailable. Database migration required to add nodeOfficerId column."
-  }
-
-  // TODO: Uncomment and fix when migration is complete
-  /*
   const isAdmin = await hasPermission(userId, "manage", "organizations")
   if (!isAdmin) {
     return {
@@ -1241,18 +1406,81 @@ export async function assignNodeOfficerAction(
   }
 
   try {
-    // If nodeOfficerId is provided, verify the user exists and has node officer role
+    // If nodeOfficerId is provided, we'll create or update the user-organization relationship
     if (nodeOfficerId) {
-      const isNodeOfficer = await checkUserRole(nodeOfficerId, "Node Officer")
-      if (!isNodeOfficer) {
-        return {
-          isSuccess: false,
-          message: "The selected user is not a Node Officer."
+      // First, check if the user already has a Node Officer role for another organization
+      const existingAssignment = await db.query.userOrganizations.findFirst({
+        where: and(
+          eq(userOrganizationsTable.userId, nodeOfficerId),
+          eq(userOrganizationsTable.role, "Node Officer")
+        ),
+        with: {
+          organization: true
         }
+      })
+
+      // If they're already a Node Officer for a different organization, remove that assignment
+      if (
+        existingAssignment &&
+        existingAssignment.organizationId !== organizationId
+      ) {
+        await db
+          .delete(userOrganizationsTable)
+          .where(
+            and(
+              eq(userOrganizationsTable.userId, nodeOfficerId),
+              eq(
+                userOrganizationsTable.organizationId,
+                existingAssignment.organizationId
+              ),
+              eq(userOrganizationsTable.role, "Node Officer")
+            )
+          )
       }
+
+      // Check if the user already has an assignment to this organization
+      const currentAssignment = await db.query.userOrganizations.findFirst({
+        where: and(
+          eq(userOrganizationsTable.userId, nodeOfficerId),
+          eq(userOrganizationsTable.organizationId, organizationId)
+        )
+      })
+
+      if (currentAssignment) {
+        // Update existing assignment to Node Officer role
+        await db
+          .update(userOrganizationsTable)
+          .set({
+            role: "Node Officer",
+            updatedAt: new Date()
+          })
+          .where(
+            and(
+              eq(userOrganizationsTable.userId, nodeOfficerId),
+              eq(userOrganizationsTable.organizationId, organizationId)
+            )
+          )
+      } else {
+        // Create new assignment
+        await db.insert(userOrganizationsTable).values({
+          userId: nodeOfficerId,
+          organizationId,
+          role: "Node Officer"
+        })
+      }
+    } else {
+      // Remove the current Node Officer assignment
+      await db
+        .delete(userOrganizationsTable)
+        .where(
+          and(
+            eq(userOrganizationsTable.organizationId, organizationId),
+            eq(userOrganizationsTable.role, "Node Officer")
+          )
+        )
     }
 
-    // Update the organization
+    // Update the organization's nodeOfficerId field
     const [updatedOrganization] = await db
       .update(organizationsTable)
       .set({
@@ -1293,7 +1521,6 @@ export async function assignNodeOfficerAction(
       message: "Failed to update Node Officer assignment."
     }
   }
-  */
 }
 
 /**
@@ -1702,7 +1929,6 @@ interface OrganizationStatistics {
   totalMembers: number
   membersByRole: {
     "Node Officer": number
-    Member: number
     "Metadata Creator": number
     "Metadata Approver": number
   }
@@ -1809,7 +2035,6 @@ export async function getOrganizationStatisticsAction(
 
     const membersByRole = {
       "Node Officer": 0,
-      Member: 0,
       "Metadata Creator": 0,
       "Metadata Approver": 0
     }

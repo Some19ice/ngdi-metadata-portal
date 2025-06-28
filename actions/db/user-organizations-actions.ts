@@ -11,7 +11,7 @@ import {
 } from "@/db/schema"
 import { ActionState } from "@/types"
 import { auth, clerkClient } from "@clerk/nextjs/server"
-import { and, eq, inArray } from "drizzle-orm"
+import { and, eq, inArray, desc } from "drizzle-orm"
 import { checkUserRole, requiresSystemAdmin } from "@/lib/rbac"
 
 /**
@@ -1038,6 +1038,215 @@ export async function updateMultipleUserRolesAction(
     return {
       isSuccess: false,
       message: `Failed to process bulk role update: ${error instanceof Error ? error.message : "Unknown error"}`
+    }
+  }
+}
+
+/**
+ * Gets the current user's organization automatically.
+ * This is used to set the organization context on login.
+ * If user belongs to multiple organizations, returns the first one (usually their primary).
+ */
+export async function getCurrentUserOrganizationAction(): Promise<
+  ActionState<{
+    organization: SelectOrganization | null
+    userRole: "Node Officer" | "Metadata Creator" | "Metadata Approver" | null
+  }>
+> {
+  try {
+    const { userId } = await auth()
+    if (!userId) {
+      return {
+        isSuccess: false,
+        message: "User not authenticated"
+      }
+    }
+
+    // Get user's organization membership
+    const userOrg = await db.query.userOrganizations.findFirst({
+      where: eq(userOrganizationsTable.userId, userId),
+      with: {
+        organization: true
+      },
+      orderBy: [desc(userOrganizationsTable.createdAt)] // Get most recent if multiple
+    })
+
+    if (!userOrg || !userOrg.organization) {
+      return {
+        isSuccess: true,
+        message: "User is not associated with any organization",
+        data: {
+          organization: null,
+          userRole: null
+        }
+      }
+    }
+
+    return {
+      isSuccess: true,
+      message: "User organization retrieved successfully",
+      data: {
+        organization: userOrg.organization,
+        userRole: userOrg.role as
+          | "Node Officer"
+          | "Metadata Creator"
+          | "Metadata Approver"
+      }
+    }
+  } catch (error) {
+    console.error("Error getting current user organization:", error)
+    return {
+      isSuccess: false,
+      message: "Failed to retrieve user organization"
+    }
+  }
+}
+
+/**
+ * Switches the user's active organization context if they belong to multiple organizations.
+ * This is only relevant for users who might belong to multiple organizations.
+ */
+export async function switchUserOrganizationContextAction(
+  organizationId: string
+): Promise<ActionState<SelectOrganization>> {
+  try {
+    const { userId } = await auth()
+    if (!userId) {
+      return {
+        isSuccess: false,
+        message: "User not authenticated"
+      }
+    }
+
+    // Verify user belongs to this organization
+    const userOrg = await db.query.userOrganizations.findFirst({
+      where: and(
+        eq(userOrganizationsTable.userId, userId),
+        eq(userOrganizationsTable.organizationId, organizationId)
+      ),
+      with: {
+        organization: true
+      }
+    })
+
+    if (!userOrg || !userOrg.organization) {
+      return {
+        isSuccess: false,
+        message: "You do not belong to this organization"
+      }
+    }
+
+    // In a real implementation, you might store the active organization in user metadata
+    // or session. For now, we just return the organization
+    return {
+      isSuccess: true,
+      message: "Organization context switched successfully",
+      data: userOrg.organization
+    }
+  } catch (error) {
+    console.error("Error switching organization context:", error)
+    return {
+      isSuccess: false,
+      message: "Failed to switch organization context"
+    }
+  }
+}
+
+/**
+ * Gets all available users that can be assigned as Node Officers to organizations.
+ * Returns all users from Clerk, along with their current organization assignments (if any).
+ * This allows assigning Node Officers even when there are no existing Node Officers in the database.
+ *
+ * @returns Promise resolving to ActionState containing all users with their organization info
+ *
+ * @example
+ * ```typescript
+ * const result = await getAvailableNodeOfficersAction();
+ * if (result.isSuccess) {
+ *   result.data.forEach(user => {
+ *     console.log(`${user.firstName} ${user.lastName} - ${user.currentOrganization || 'Unassigned'}`);
+ *   });
+ * }
+ * ```
+ */
+export async function getAvailableNodeOfficersAction(): Promise<
+  ActionState<
+    Array<{
+      userId: string
+      firstName: string | null
+      lastName: string | null
+      emailAddress: string
+      currentOrganization: string | null
+      currentOrganizationId: string | null
+    }>
+  >
+> {
+  try {
+    const { userId } = await auth()
+    if (!userId) {
+      return { isSuccess: false, message: "Unauthorized" }
+    }
+
+    // Check if user has permission to manage organizations
+    const canManage = await checkUserRole(userId, "System Administrator")
+    if (!canManage) {
+      return {
+        isSuccess: false,
+        message: "Unauthorized. Admin privileges required."
+      }
+    }
+
+    // Get all user-organization assignments to check current assignments
+    const userOrgAssignments = await db
+      .select({
+        userId: userOrganizationsTable.userId,
+        organizationId: userOrganizationsTable.organizationId,
+        organizationName: organizationsTable.name,
+        role: userOrganizationsTable.role
+      })
+      .from(userOrganizationsTable)
+      .leftJoin(
+        organizationsTable,
+        eq(userOrganizationsTable.organizationId, organizationsTable.id)
+      )
+
+    // Get all users from Clerk
+    const client = await clerkClient()
+    const users = await client.users.getUserList({ limit: 100 }) // Adjust limit as needed
+
+    const availableUsers = []
+
+    for (const clerkUser of users.data) {
+      // Skip banned users
+      if (clerkUser.banned) {
+        continue
+      }
+
+      // Find current organization assignment for this user
+      const currentAssignment = userOrgAssignments.find(
+        assignment => assignment.userId === clerkUser.id
+      )
+
+      availableUsers.push({
+        userId: clerkUser.id,
+        firstName: clerkUser.firstName,
+        lastName: clerkUser.lastName,
+        emailAddress: clerkUser.emailAddresses[0]?.emailAddress || "",
+        currentOrganization: currentAssignment?.organizationName || null,
+        currentOrganizationId: currentAssignment?.organizationId || null
+      })
+    }
+
+    return {
+      isSuccess: true,
+      message: "Available users retrieved successfully",
+      data: availableUsers
+    }
+  } catch (error) {
+    console.error("Error fetching available users:", error)
+    return {
+      isSuccess: false,
+      message: "Failed to fetch available users"
     }
   }
 }

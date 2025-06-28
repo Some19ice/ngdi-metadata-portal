@@ -19,7 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  DialogClose // Added DialogClose for explicit cancel
+  DialogClose
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -39,6 +39,7 @@ import {
   FormLabel,
   FormMessage
 } from "@/components/ui/form"
+import { LabelWithHelp } from "@/components/ui/form-field-with-help"
 import { useToast } from "@/components/ui/use-toast"
 import { useRouter } from "next/navigation"
 
@@ -72,7 +73,7 @@ export default function CreateOrganizationDialog() {
           description: result.message
         })
         setIsOpen(false)
-        form.reset() // Reset form fields to defaultValues
+        form.reset()
         router.refresh()
       } else {
         toast({
@@ -106,7 +107,9 @@ export default function CreateOrganizationDialog() {
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Organization Name*</FormLabel>
+                  <LabelWithHelp helpKey="organizationName" required>
+                    Organization Name
+                  </LabelWithHelp>
                   <FormControl>
                     <Input
                       placeholder="e.g., National Mapping Agency"
@@ -123,7 +126,9 @@ export default function CreateOrganizationDialog() {
               name="description"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Description</FormLabel>
+                  <LabelWithHelp helpKey="organizationDescription">
+                    Description
+                  </LabelWithHelp>
                   <FormControl>
                     <Textarea
                       placeholder="Brief description of the organization"
@@ -141,7 +146,9 @@ export default function CreateOrganizationDialog() {
                 name="primaryContactName"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Contact Name</FormLabel>
+                    <LabelWithHelp helpKey="organizationContactName">
+                      Contact Name
+                    </LabelWithHelp>
                     <FormControl>
                       <Input placeholder="John Doe" {...field} />
                     </FormControl>
@@ -154,7 +161,9 @@ export default function CreateOrganizationDialog() {
                 name="primaryContactEmail"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Contact Email</FormLabel>
+                    <LabelWithHelp helpKey="organizationContactEmail">
+                      Contact Email
+                    </LabelWithHelp>
                     <FormControl>
                       <Input
                         type="email"
@@ -174,9 +183,11 @@ export default function CreateOrganizationDialog() {
                 name="primaryContactPhone"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Contact Phone</FormLabel>
+                    <LabelWithHelp helpKey="organizationContactPhone">
+                      Contact Phone
+                    </LabelWithHelp>
                     <FormControl>
-                      <Input placeholder="+1-555-123-4567" {...field} />
+                      <Input placeholder="+234-1-234-5678" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -187,7 +198,9 @@ export default function CreateOrganizationDialog() {
                 name="websiteUrl"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Website URL</FormLabel>
+                    <LabelWithHelp helpKey="organizationWebsite">
+                      Website URL
+                    </LabelWithHelp>
                     <FormControl>
                       <Input
                         type="url"
@@ -206,10 +219,12 @@ export default function CreateOrganizationDialog() {
               name="address"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Address</FormLabel>
+                  <LabelWithHelp helpKey="organizationAddress">
+                    Address
+                  </LabelWithHelp>
                   <FormControl>
                     <Textarea
-                      placeholder="123 Main St, Anytown, USA"
+                      placeholder="123 Main St, Anytown, Country"
                       {...field}
                     />
                   </FormControl>
@@ -223,7 +238,9 @@ export default function CreateOrganizationDialog() {
               name="logoUrl"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Logo URL</FormLabel>
+                  <LabelWithHelp helpKey="organizationLogo">
+                    Logo URL
+                  </LabelWithHelp>
                   <FormControl>
                     <Input
                       type="url"
@@ -241,7 +258,9 @@ export default function CreateOrganizationDialog() {
               name="status"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Status</FormLabel>
+                  <LabelWithHelp helpKey="organizationStatus">
+                    Status
+                  </LabelWithHelp>
                   <Select
                     onValueChange={field.onChange}
                     defaultValue={field.value}

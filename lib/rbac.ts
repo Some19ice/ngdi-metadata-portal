@@ -192,17 +192,21 @@ export async function isNodeOfficerForOrg(
   userId: string,
   organizationId: string
 ): Promise<boolean> {
-  if (!userId || !organizationId) return false
+  if (!userId) return false
+
+  // Validate organizationId is a valid UUID
+  if (
+    !organizationId ||
+    !organizationId.match(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    )
+  ) {
+    console.warn(`Invalid organizationId provided: ${organizationId}`)
+    return false
+  }
 
   try {
-    // 1. Check if the user has the global 'Node Officer' role.
-    const isNodeOfficerGlobally = await checkUserRole(userId, "Node Officer")
-    if (!isNodeOfficerGlobally) {
-      return false
-    }
-
-    // 2. Check if the user is associated with the specified organization in userOrganizationsTable.
-    //    And specifically ensure they are marked as a Node Officer for that org.
+    // Simply check if the user is associated with the specified organization as a Node Officer
     const association = await db
       .select({ associatedUserId: userOrganizationsTable.userId })
       .from(userOrganizationsTable)
@@ -219,6 +223,54 @@ export async function isNodeOfficerForOrg(
   } catch (error) {
     console.error(
       `Error checking if user ${userId} is Node Officer for org ${organizationId}:`,
+      error
+    )
+    return false
+  }
+}
+
+/**
+ * Checks if a user has a specific role for a specific organization.
+ * @param userId - The ID of the user.
+ * @param organizationId - The ID of the organization.
+ * @param role - The role to check for.
+ * @returns A promise that resolves to true if the user has the role for the org, false otherwise.
+ */
+export async function hasOrgRole(
+  userId: string,
+  organizationId: string,
+  role: "Node Officer" | "Metadata Creator" | "Metadata Approver"
+): Promise<boolean> {
+  if (!userId) return false
+
+  // Validate organizationId is a valid UUID
+  if (
+    !organizationId ||
+    !organizationId.match(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    )
+  ) {
+    console.warn(`Invalid organizationId provided: ${organizationId}`)
+    return false
+  }
+
+  try {
+    const association = await db
+      .select({ associatedUserId: userOrganizationsTable.userId })
+      .from(userOrganizationsTable)
+      .where(
+        and(
+          eq(userOrganizationsTable.userId, userId),
+          eq(userOrganizationsTable.organizationId, organizationId),
+          eq(userOrganizationsTable.role, role)
+        )
+      )
+      .limit(1)
+
+    return association.length > 0
+  } catch (error) {
+    console.error(
+      `Error checking if user ${userId} has role ${role} for org ${organizationId}:`,
       error
     )
     return false

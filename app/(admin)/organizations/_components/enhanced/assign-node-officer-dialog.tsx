@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   Dialog,
   DialogContent,
@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label"
 import { useToast } from "@/components/ui/use-toast"
 import { AdminOrganizationView } from "@/db/schema/organizations-schema"
 import { assignNodeOfficerAction } from "@/actions/db/organizations-actions"
+import { getAvailableNodeOfficersAction } from "@/actions/db/user-organizations-actions"
 import {
   Select,
   SelectContent,
@@ -22,163 +23,325 @@ import {
 } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { AlertCircle } from "lucide-react"
+import {
+  AlertTriangle,
+  Building2,
+  Info,
+  Loader2,
+  Mail,
+  Phone,
+  User,
+  Users
+} from "lucide-react"
 
-// We would normally fetch this from the server
-// This is a placeholder - in a real implementation, this would be a server action
-import { useEffect, useState as useReactState } from "react"
-
-interface NodeOfficerUser {
-  id: string
-  name: string
+interface NodeOfficer {
+  userId: string
+  firstName: string | null
+  lastName: string | null
+  emailAddress: string
+  currentOrganization: string | null
+  currentOrganizationId: string | null
 }
 
 interface AssignNodeOfficerDialogProps {
-  organization: AdminOrganizationView
-  isOpen: boolean
+  open: boolean
   onOpenChange: (open: boolean) => void
-  onSuccess?: () => void
+  organization: AdminOrganizationView
+  onRefresh: () => void
 }
 
 export default function AssignNodeOfficerDialog({
-  organization,
-  isOpen,
+  open,
   onOpenChange,
-  onSuccess
+  organization,
+  onRefresh
 }: AssignNodeOfficerDialogProps) {
-  const { toast } = useToast()
+  const [selectedNodeOfficerId, setSelectedNodeOfficerId] = useState<string>("")
+  const [isAssigning, setIsAssigning] = useState(false)
+  const [availableUsers, setAvailableUsers] = useState<NodeOfficer[]>([])
   const [isLoading, setIsLoading] = useState(false)
-  const [selectedOfficerId, setSelectedOfficerId] = useState<string | null>(
-    organization.nodeOfficerId || null
-  )
+  const [error, setError] = useState<string | null>(null)
+  const { toast } = useToast()
 
-  // In a real implementation, we would fetch this list from the server
-  // This is just a placeholder for demonstration purposes
-  const [nodeOfficers, setNodeOfficers] = useReactState<NodeOfficerUser[]>([
-    { id: "node_officer_1", name: "Jane Smith" },
-    { id: "node_officer_2", name: "John Doe" },
-    { id: "node_officer_3", name: "Alice Johnson" }
-  ])
-
-  // For demo purposes, if organization has a nodeOfficerId but it's not in our list,
-  // add it so we can display it
+  // Fetch available users when dialog opens
   useEffect(() => {
-    if (
-      organization.nodeOfficerId &&
-      organization.nodeOfficerName &&
-      !nodeOfficers.some(officer => officer.id === organization.nodeOfficerId)
-    ) {
-      setNodeOfficers(prev => [
-        ...prev,
-        { id: organization.nodeOfficerId!, name: organization.nodeOfficerName! }
-      ])
+    if (open) {
+      fetchAvailableUsers()
     }
-  }, [organization.nodeOfficerId, organization.nodeOfficerName, nodeOfficers])
+  }, [open])
 
-  async function handleSubmit() {
+  const fetchAvailableUsers = async () => {
     setIsLoading(true)
+    setError(null)
+
     try {
-      const result = await assignNodeOfficerAction(
-        organization.id,
-        selectedOfficerId
-      )
+      const result = await getAvailableNodeOfficersAction()
 
       if (result.isSuccess) {
-        toast({
-          title: "Success",
-          description: result.message
-        })
-        onSuccess?.()
+        setAvailableUsers(result.data)
+
+        // Pre-select current node officer if exists
+        if (organization.nodeOfficerId) {
+          setSelectedNodeOfficerId(organization.nodeOfficerId)
+        }
       } else {
-        toast({
-          title: "Error",
-          description: result.message,
-          variant: "destructive"
-        })
+        setError(result.message)
       }
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "An unexpected error occurred. Please try again.",
-        variant: "destructive"
-      })
+      console.error("Error fetching available users:", error)
+      setError("Failed to load available users")
     } finally {
       setIsLoading(false)
     }
   }
 
-  function handleRemoveNodeOfficer() {
-    setSelectedOfficerId(null)
+  const handleAssign = async () => {
+    if (!selectedNodeOfficerId) return
+
+    setIsAssigning(true)
+    try {
+      const result = await assignNodeOfficerAction(
+        organization.id,
+        selectedNodeOfficerId
+      )
+
+      if (result.isSuccess) {
+        toast({
+          title: "Node Officer Assigned",
+          description: `Node Officer has been successfully assigned to ${organization.name}.`
+        })
+        onRefresh()
+        onOpenChange(false)
+      } else {
+        toast({
+          title: "Assignment Failed",
+          description: result.message,
+          variant: "destructive"
+        })
+      }
+    } catch (error) {
+      console.error("Error assigning node officer:", error)
+      toast({
+        title: "Assignment Failed",
+        description: "An unexpected error occurred.",
+        variant: "destructive"
+      })
+    } finally {
+      setIsAssigning(false)
+    }
   }
 
+  const handleRemove = async () => {
+    setIsAssigning(true)
+    try {
+      const result = await assignNodeOfficerAction(organization.id, null)
+
+      if (result.isSuccess) {
+        toast({
+          title: "Node Officer Removed",
+          description: `Node Officer has been removed from ${organization.name}.`
+        })
+        onRefresh()
+        onOpenChange(false)
+      } else {
+        toast({
+          title: "Removal Failed",
+          description: result.message,
+          variant: "destructive"
+        })
+      }
+    } catch (error) {
+      console.error("Error removing node officer:", error)
+      toast({
+        title: "Removal Failed",
+        description: "An unexpected error occurred.",
+        variant: "destructive"
+      })
+    } finally {
+      setIsAssigning(false)
+    }
+  }
+
+  const hasChanges =
+    selectedNodeOfficerId !== (organization.nodeOfficerId || "")
+  const selectedOfficer = availableUsers.find(
+    no => no.userId === selectedNodeOfficerId
+  )
+
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>Assign Node Officer</DialogTitle>
         </DialogHeader>
 
-        <Alert variant="destructive" className="mb-4">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Feature Unavailable</AlertTitle>
-          <AlertDescription>
-            This feature requires a database migration to add the nodeOfficerId
-            column. Please run the migration before using this feature.
-          </AlertDescription>
-        </Alert>
-
-        <div className="grid gap-4 py-4">
-          <div className="mb-4">
-            <h3 className="text-sm font-medium">Organization</h3>
-            <p className="text-sm text-muted-foreground">{organization.name}</p>
+        <div className="space-y-4">
+          <div>
+            <Label className="text-sm font-medium text-gray-700">
+              Organization
+            </Label>
+            <div className="mt-1 p-2 bg-gray-50 rounded border">
+              {organization.name}
+            </div>
           </div>
 
-          <div className="grid gap-2">
-            <Label htmlFor="nodeOfficer">Select Node Officer</Label>
-            <Select
-              value={selectedOfficerId || ""}
-              onValueChange={value => setSelectedOfficerId(value || null)}
-              disabled={true}
-            >
-              <SelectTrigger id="nodeOfficer">
-                <SelectValue placeholder="Functionality temporarily unavailable" />
-              </SelectTrigger>
-              <SelectContent>
-                {nodeOfficers.map(officer => (
-                  <SelectItem key={officer.id} value={officer.id}>
-                    {officer.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
+          {/* Current Node Officer */}
           {organization.nodeOfficerId && (
-            <div className="flex items-center justify-between rounded-md border p-3">
-              <div className="flex flex-col">
-                <span className="text-sm">Current Assignment</span>
-                <span className="text-sm font-medium">
-                  {organization.nodeOfficerName || "Unknown Node Officer"}
-                </span>
+            <div>
+              <Label className="text-sm font-medium text-gray-700">
+                Current Node Officer
+              </Label>
+              <div className="mt-1 flex items-center space-x-2">
+                <Badge variant="secondary">
+                  {organization.nodeOfficerName || "Unknown"}
+                </Badge>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleRemoveNodeOfficer}
-                disabled={true}
-              >
-                Remove
-              </Button>
             </div>
           )}
+
+          {/* Loading State */}
+          {isLoading && (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin mr-2" />
+              <span>Loading available users...</span>
+            </div>
+          )}
+
+          {/* Error State */}
+          {!isLoading && error && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Error</AlertTitle>
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
+          {/* Node Officer Selection */}
+          {!isLoading && !error && (
+            <div>
+              <Label
+                htmlFor="nodeOfficer"
+                className="text-sm font-medium text-gray-700"
+              >
+                Select Node Officer
+              </Label>
+
+              {/* Info message */}
+              <div className="mt-1 mb-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                <div className="flex items-start space-x-2">
+                  <Info className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
+                  <div className="text-sm text-blue-700">
+                    <p className="font-medium">Node Officer Assignment</p>
+                    <p className="text-xs mt-1">
+                      Any user can be assigned as a Node Officer. They will
+                      automatically receive the appropriate permissions for this
+                      organization.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {availableUsers.length === 0 ? (
+                <div className="mt-1 p-3 bg-gray-50 border rounded-md text-sm text-gray-500 text-center">
+                  No users available
+                </div>
+              ) : (
+                <Select
+                  value={selectedNodeOfficerId}
+                  onValueChange={setSelectedNodeOfficerId}
+                >
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Choose a user to assign as Node Officer..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableUsers.map(officer => (
+                      <SelectItem
+                        key={officer.userId}
+                        value={officer.userId}
+                        className="flex flex-col items-start"
+                      >
+                        <div className="flex items-center space-x-2 w-full">
+                          <span className="font-medium">
+                            {officer.firstName} {officer.lastName}
+                          </span>
+                          <span className="text-sm text-gray-500">
+                            ({officer.emailAddress})
+                          </span>
+                        </div>
+                        {officer.currentOrganization &&
+                          officer.currentOrganizationId !== organization.id && (
+                            <span className="text-xs text-amber-600">
+                              Currently assigned to:{" "}
+                              {officer.currentOrganization}
+                            </span>
+                          )}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+          )}
+
+          {/* Assignment Warning */}
+          {selectedOfficer?.currentOrganization &&
+            selectedOfficer.currentOrganizationId !== organization.id && (
+              <Alert>
+                <Info className="h-4 w-4" />
+                <AlertTitle>Assignment Warning</AlertTitle>
+                <AlertDescription>
+                  This Node Officer is currently assigned to{" "}
+                  <strong>{selectedOfficer.currentOrganization}</strong>.
+                  Assigning them here will remove them from their current
+                  organization.
+                </AlertDescription>
+              </Alert>
+            )}
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Close
-          </Button>
-          <Button onClick={handleSubmit} disabled={true}>
-            Feature Unavailable
-          </Button>
+
+        <DialogFooter className="flex justify-between">
+          <div className="flex space-x-2">
+            {organization.nodeOfficerId && (
+              <Button
+                variant="outline"
+                onClick={handleRemove}
+                disabled={isAssigning || isLoading}
+              >
+                {isAssigning ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Removing...
+                  </>
+                ) : (
+                  "Remove Current"
+                )}
+              </Button>
+            )}
+          </div>
+
+          <div className="flex space-x-2">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAssign}
+              disabled={
+                !hasChanges ||
+                !selectedNodeOfficerId ||
+                isAssigning ||
+                isLoading
+              }
+            >
+              {isAssigning ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Assigning...
+                </>
+              ) : (
+                "Assign Officer"
+              )}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

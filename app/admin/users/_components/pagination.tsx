@@ -26,7 +26,7 @@ export default function Pagination({
   function createPageUrl(page: number) {
     const params = new URLSearchParams(searchParams.toString())
     params.set("page", page.toString())
-    return `/system-users?${params.toString()}`
+    return `/admin/users?${params.toString()}`
   }
 
   function goToPage(page: number) {

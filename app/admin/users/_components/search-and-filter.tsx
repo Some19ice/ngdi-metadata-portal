@@ -64,7 +64,7 @@ export default function SearchAndFilter({
       // Reset to page 1 when filtering
       params.set("page", "1")
 
-      router.push(`/system-users?${params.toString()}`)
+      router.push(`/admin/users?${params.toString()}`)
     })
   }
 
@@ -75,7 +75,7 @@ export default function SearchAndFilter({
       setRole("")
       setSortBy("createdAt")
       setSortOrder("desc")
-      router.push("/system-users")
+      router.push("/admin/users")
     })
   }
 
