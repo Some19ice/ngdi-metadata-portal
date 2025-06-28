@@ -34,7 +34,7 @@ function StagewiseComponent() {
       setError(null)
 
       const { StagewiseToolbar } = await import("@stagewise/toolbar-next")
-      setToolbarComponent(() => StagewiseToolbar)
+      setToolbarComponent(StagewiseToolbar)
     } catch (error) {
       console.warn("Failed to load Stagewise toolbar:", error)
       setError("Failed to load development toolbar")

@@ -40,6 +40,13 @@ const nextConfig = {
       type: "asset/resource"
     })
 
+    // Suppress the large string warning for known large JSON files
+    if (config.infrastructureLogging) {
+      config.infrastructureLogging.level = "error"
+    } else {
+      config.infrastructureLogging = { level: "error" }
+    }
+
     // Only apply client-side optimizations
     if (!isServer) {
       // Ensure single instance of map libraries

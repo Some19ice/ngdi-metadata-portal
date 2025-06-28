@@ -23,7 +23,10 @@ export class ErrorBoundary extends React.Component<
   },
   ErrorBoundaryState
 > {
-  constructor(props: { children: React.ReactNode }) {
+  constructor(props: {
+    children: React.ReactNode
+    fallback?: React.ComponentType<{ error: Error; reset: () => void }>
+  }) {
     super(props)
     this.state = { hasError: false }
   }
@@ -52,9 +55,9 @@ export class ErrorBoundary extends React.Component<
         this.setState({ hasError: false, error: undefined })
       }
 
-      if (this.props.fallback) {
+      if (this.props.fallback && this.state.error) {
         const FallbackComponent = this.props.fallback
-        return <FallbackComponent error={this.state.error!} reset={reset} />
+        return <FallbackComponent error={this.state.error} reset={reset} />
       }
 
       return (
@@ -116,11 +119,10 @@ export function useErrorBoundary() {
     setError(error)
   }, [])
 
-  React.useEffect(() => {
-    if (error) {
-      throw error
-    }
-  }, [error])
+  // Throw error in render phase so error boundaries can catch it
+  if (error) {
+    throw error
+  }
 
   return { captureError, resetError }
 }

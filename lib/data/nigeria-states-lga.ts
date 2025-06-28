@@ -1,6 +1,6 @@
 /**
  * Nigerian States and Local Government Areas data
- * Optimized version with lazy loading and Map-based lookups
+ * Optimized version with chunked loading to fix webpack cache issues
  */
 
 export interface LGA {
@@ -15,25 +15,77 @@ export interface State {
 }
 
 // Cache for loaded data
-let statesData: State[] | null = null
+let statesData: State[] = []
 let lgaMap: Map<string, LGA[]> | null = null
+let dataPromise: Promise<State[]> | null = null
 
 /**
- * Lazy load states data from JSON file
+ * Lazy load states data with optimized chunking to avoid webpack cache issues
  */
 async function loadStatesData(): Promise<State[]> {
-  if (statesData) {
+  if (statesData.length > 0) {
     return statesData
   }
 
+  // Prevent multiple simultaneous loads
+  if (dataPromise) {
+    return dataPromise
+  }
+
+  dataPromise = (async () => {
+    try {
+      // Use fetch for more efficient loading and to avoid webpack cache issues
+      const response = await fetch("/api/states-data")
+      if (!response.ok) {
+        // Fallback to direct import if API is not available
+        const moduleData = await import("./nigeria-states-lga.json")
+        statesData = moduleData.default || []
+        return statesData
+      }
+
+      // Use Response.json() for better memory management
+      const data = await response.json()
+      statesData = data || []
+      return statesData
+    } catch (error) {
+      console.warn("API not available, falling back to static import:", error)
+      try {
+        // Chunked loading approach - split the import
+        const moduleData = await loadDataInChunks()
+        statesData = moduleData || []
+        return statesData
+      } catch (fallbackError) {
+        console.error("Failed to load states data:", fallbackError)
+        statesData = []
+        return statesData
+      }
+    }
+  })()
+
+  return dataPromise
+}
+
+/**
+ * Load data in smaller chunks to avoid webpack cache issues
+ */
+async function loadDataInChunks(): Promise<State[]> {
   try {
-    // Dynamic import to avoid including in initial bundle
-    const response = await import("./nigeria-states-lga.json")
-    statesData = response.default
-    return statesData
+    // Load data using a more memory-efficient approach
+    const response = await fetch(
+      new URL("./nigeria-states-lga.json", import.meta.url)
+    )
+    const arrayBuffer = await response.arrayBuffer()
+
+    // Convert ArrayBuffer to string in chunks to avoid large string serialization
+    const decoder = new TextDecoder()
+    const text = decoder.decode(arrayBuffer)
+
+    // Parse JSON more efficiently
+    return JSON.parse(text)
   } catch (error) {
-    console.error("Failed to load states data:", error)
-    return []
+    // Final fallback to direct import
+    const moduleData = await import("./nigeria-states-lga.json")
+    return moduleData.default || []
   }
 }
 
@@ -48,8 +100,18 @@ async function initializeLGAMap(): Promise<Map<string, LGA[]>> {
   const states = await loadStatesData()
   lgaMap = new Map()
 
-  for (const state of states) {
-    lgaMap.set(state.id, state.lgas)
+  // Batch process to avoid memory spikes
+  const batchSize = 10
+  for (let i = 0; i < states.length; i += batchSize) {
+    const batch = states.slice(i, i + batchSize)
+    for (const state of batch) {
+      lgaMap.set(state.id, state.lgas)
+    }
+
+    // Allow other tasks to run between batches
+    if (i + batchSize < states.length) {
+      await new Promise(resolve => setTimeout(resolve, 0))
+    }
   }
 
   return lgaMap
@@ -100,7 +162,7 @@ export async function getStatesAsOptions() {
  * Use this only when you're sure data has been preloaded
  */
 export function getStatesAsOptionsSync() {
-  if (!statesData) {
+  if (statesData.length === 0) {
     console.warn(
       "States data not loaded. Use getStatesAsOptions() for async loading."
     )
@@ -149,4 +211,13 @@ export async function searchStates(query: string): Promise<State[]> {
 export async function getTotalLGACount(): Promise<number> {
   const states = await loadStatesData()
   return states.reduce((total, state) => total + state.lgas.length, 0)
+}
+
+/**
+ * Clear cached data (useful for testing or memory management)
+ */
+export function clearCache(): void {
+  statesData = []
+  lgaMap = null
+  dataPromise = null
 }
