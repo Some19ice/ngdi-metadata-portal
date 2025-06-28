@@ -152,10 +152,9 @@ const STATE_COORDINATES: Record<string, [number, number]> = {
 
 async function searchNigerianLocations(query: string, limit: number = 10) {
   try {
-    // Import the Nigerian states/LGA data
-    const { default: statesData } = await import(
-      "@/lib/data/nigeria-states-lga.json"
-    )
+    // Use the optimized data loading function instead of direct import
+    const { getNigerianStates } = await import("@/lib/data/nigeria-states-lga")
+    const statesData = await getNigerianStates()
 
     const normalizedQuery = query.toLowerCase().trim()
     const matches: any[] = []
