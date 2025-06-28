@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { geocodeLocationAction } from "@/actions/map-actions"
+import { searchMetadataSuggestionsAction } from "@/actions/db/metadata-records-actions"
 import { GeocodingFeature } from "@/types"
 import {
   Select,
@@ -210,8 +211,8 @@ export default function GlobalSearchBar() {
         return "metadata"
       }
 
-      // If scores are close or both are low, default to auto
-      return "auto"
+      // If scores are close or both are low, default to metadata
+      return "metadata"
     },
     []
   )

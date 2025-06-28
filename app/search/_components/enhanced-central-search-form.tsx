@@ -272,19 +272,17 @@ export function EnhancedCentralSearchForm({
     }
 
     // Location suggestions
-    if (locationSearch.data?.features && currentQuery.length >= 2) {
-      locationSearch.data.features
-        .slice(0, 3)
-        .forEach((feature: any, index: number) => {
-          allSuggestions.push({
-            id: `location-${index}`,
-            type: "location",
-            query: feature.properties?.display_name || feature.properties?.name,
-            title: feature.properties?.display_name || feature.properties?.name,
-            subtitle: `Location • ${feature.properties?.state || "Nigeria"}`,
-            count: 1
-          })
+    if (locationSearch.data && currentQuery.length >= 2) {
+      locationSearch.data.slice(0, 3).forEach((feature: any, index: number) => {
+        allSuggestions.push({
+          id: `location-${index}`,
+          type: "location",
+          query: feature.properties?.display_name || feature.properties?.name,
+          title: feature.properties?.display_name || feature.properties?.name,
+          subtitle: `Location • ${feature.properties?.state || "Nigeria"}`,
+          count: 1
         })
+      })
     }
 
     // Cached suggestions
@@ -392,9 +390,13 @@ export function EnhancedCentralSearchForm({
                       <div className="relative">
                         <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                         <Input
-                          ref={inputRef}
                           placeholder={getSearchTypePlaceholder(currentType)}
                           {...field}
+                          ref={element => {
+                            // Merge the form ref with our custom ref
+                            field.ref(element)
+                            inputRef.current = element
+                          }}
                           className={cn(
                             "pl-10 pr-10",
                             getSizeClasses(),
@@ -585,14 +587,13 @@ export function EnhancedCentralSearchForm({
           {/* Search Stats */}
           {(metadataSearch.data || locationSearch.data) && (
             <div className="flex items-center gap-4 text-sm text-muted-foreground">
-              {metadataSearch.data?.pagination && (
+              {metadataSearch.data && (
                 <span>
-                  {metadataSearch.data.pagination.total.toLocaleString()}{" "}
-                  datasets
+                  {metadataSearch.data.totalRecords.toLocaleString()} datasets
                 </span>
               )}
-              {locationSearch.data?.features && (
-                <span>{locationSearch.data.features.length} locations</span>
+              {locationSearch.data && (
+                <span>{locationSearch.data.length} locations</span>
               )}
               {metadataSearch.isCached && (
                 <Badge variant="outline" className="text-xs">

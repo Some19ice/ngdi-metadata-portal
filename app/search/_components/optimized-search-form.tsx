@@ -142,7 +142,7 @@ export function OptimizedSearchForm({
             id: `metadata-${record.id}`,
             type: "metadata",
             title: record.title,
-            subtitle: record.organization || "Dataset",
+            subtitle: record.organization?.name || "Dataset",
             icon: <FileText className="h-4 w-4" />
           })
         })
@@ -154,7 +154,7 @@ export function OptimizedSearchForm({
           newSuggestions.push({
             id: `location-${index}`,
             type: "location",
-            title: location.display_name || location.name || "Location",
+            title: location.place_name || location.text || "Location",
             subtitle: "Nigeria",
             icon: <MapPin className="h-4 w-4" />
           })
@@ -234,6 +234,9 @@ export function OptimizedSearchForm({
   const currentSize = sizeClasses[size]
   const isLoading = metadataSearch.isLoading || locationSearch.isLoading
 
+  // Map size to valid Button sizes
+  const buttonSize = size === "md" ? "default" : size === "lg" ? "lg" : "sm"
+
   return (
     <div
       className={cn("relative w-full", currentSize.container, className)}
@@ -246,7 +249,6 @@ export function OptimizedSearchForm({
             <div className="relative flex-1">
               <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                ref={inputRef}
                 {...form.register("query")}
                 placeholder="Search datasets, locations, or explore Nigeria's geospatial data..."
                 className={cn(
@@ -281,7 +283,11 @@ export function OptimizedSearchForm({
             </Select>
 
             {/* Search Button */}
-            <Button type="submit" size={size} className={currentSize.button}>
+            <Button
+              type="submit"
+              size={buttonSize}
+              className={currentSize.button}
+            >
               <SearchIcon className="h-4 w-4" />
               <span className="sr-only">Search</span>
             </Button>

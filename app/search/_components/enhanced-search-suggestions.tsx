@@ -100,7 +100,7 @@ export default function EnhancedSearchSuggestions({
             id: `location-${index}`,
             type: "location",
             title: location.place_name || location.text || "Unknown Location",
-            subtitle: location.context?.map(c => c.text).join(", ") || "",
+            subtitle: location.place_type?.join(", ") || "Location",
             icon: <MapPin className="h-4 w-4 text-blue-500" />,
             metadata: {
               coordinates: location.center as [number, number],
@@ -113,9 +113,11 @@ export default function EnhancedSearchSuggestions({
       // Process metadata suggestions
       if (
         metadataResults.status === "fulfilled" &&
-        metadataResults.value.isSuccess
+        metadataResults.value.isSuccess &&
+        metadataResults.value.data
       ) {
-        metadataResults.value.data.records.forEach((record, index) => {
+        const metadataData = metadataResults.value.data
+        metadataData.records.forEach((record, index) => {
           newSuggestions.push({
             id: `metadata-${index}`,
             type: "metadata",
@@ -124,7 +126,7 @@ export default function EnhancedSearchSuggestions({
             icon: <FileText className="h-4 w-4 text-green-500" />,
             metadata: {
               category: record.dataType || "Dataset",
-              count: metadataResults.value.data.totalRecords
+              count: metadataData.totalRecords
             }
           })
         })

@@ -138,8 +138,8 @@ export function useOptimizedSearch<T>(
 
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const debounceRef = useRef<NodeJS.Timeout>()
-  const abortControllerRef = useRef<AbortController>()
+  const debounceRef = useRef<NodeJS.Timeout | undefined>(undefined)
+  const abortControllerRef = useRef<AbortController | undefined>(undefined)
 
   const { getCachedData, setCachedData } = useSearchCache<T>(cacheOptions)
 
