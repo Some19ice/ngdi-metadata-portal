@@ -15,6 +15,7 @@ import { PostHogUserIdentify } from "@/components/utilities/posthog/posthog-user
 import { Providers } from "@/components/utilities/providers"
 import { TailwindIndicator } from "@/components/utilities/tailwind-indicator"
 import { StagewiseToolbar } from "@/components/utilities/stagewise-toolbar"
+import { ErrorBoundary } from "@/components/utilities/error-boundary"
 import { cn } from "@/lib/utils"
 import { ClerkProvider } from "@clerk/nextjs"
 import { auth } from "@clerk/nextjs/server"
@@ -53,39 +54,43 @@ export default async function RootLayout({
             // inter.className
           )}
         >
-          <Providers
-            attribute="class"
-            defaultTheme="light"
-            enableSystem={false}
-            disableTransitionOnChange
-          >
-            <PostHogUserIdentify />
-            <PostHogPageview />
+          <ErrorBoundary>
+            <Providers
+              attribute="class"
+              defaultTheme="light"
+              enableSystem={false}
+              disableTransitionOnChange
+            >
+              <PostHogUserIdentify />
+              <PostHogPageview />
 
-            <SidebarProvider>
-              <div className="flex flex-col min-h-screen w-full">
-                <div className="flex flex-1 w-full">
-                  <AppSidebar />
-                  <div className="flex flex-1 flex-col w-full">
-                    <MainHeader />
-                    <SidebarInset className="flex flex-1 flex-col w-full">
-                      <main className="flex-1 overflow-auto p-4 md:p-6 w-full">
-                        {children}
-                      </main>
-                    </SidebarInset>
+              <SidebarProvider>
+                <div className="flex flex-col min-h-screen w-full">
+                  <div className="flex flex-1 w-full">
+                    <AppSidebar />
+                    <div className="flex flex-1 flex-col w-full">
+                      <MainHeader />
+                      <SidebarInset className="flex flex-1 flex-col w-full">
+                        <main className="flex-1 overflow-auto p-4 md:p-6 w-full">
+                          <ErrorBoundary>
+                            <div suppressHydrationWarning>{children}</div>
+                          </ErrorBoundary>
+                        </main>
+                      </SidebarInset>
+                    </div>
                   </div>
+                  <Footer className="w-full" />
                 </div>
-                <Footer className="w-full" />
-              </div>
-            </SidebarProvider>
+              </SidebarProvider>
 
-            <TailwindIndicator />
+              <TailwindIndicator />
 
-            <Toaster />
+              <Toaster />
 
-            {/* Stagewise Toolbar - Development Only */}
-            <StagewiseToolbar />
-          </Providers>
+              {/* Stagewise Toolbar - Development Only */}
+              <StagewiseToolbar />
+            </Providers>
+          </ErrorBoundary>
         </body>
       </html>
     </ClerkProvider>

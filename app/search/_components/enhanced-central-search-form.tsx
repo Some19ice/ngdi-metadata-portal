@@ -395,7 +395,11 @@ export function EnhancedCentralSearchForm({
                           ref={element => {
                             // Merge the form ref with our custom ref
                             field.ref(element)
-                            inputRef.current = element
+                            if (inputRef.current !== element) {
+                              ;(
+                                inputRef as React.MutableRefObject<HTMLInputElement | null>
+                              ).current = element
+                            }
                           }}
                           className={cn(
                             "pl-10 pr-10",

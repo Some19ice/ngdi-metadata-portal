@@ -1,79 +1,102 @@
 "use client"
 
-import React, { Component, ErrorInfo, ReactNode } from "react"
-import { AlertTriangle, RefreshCw } from "lucide-react"
+import React from "react"
+import { AlertTriangle, RefreshCcw } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle
+} from "@/components/ui/card"
 
-interface Props {
-  children: ReactNode
-  fallback?: ReactNode
-  onError?: (error: Error, errorInfo: ErrorInfo) => void
-}
-
-interface State {
+interface ErrorBoundaryState {
   hasError: boolean
   error?: Error
 }
 
-export class ErrorBoundary extends Component<Props, State> {
-  public state: State = {
-    hasError: false
+export class ErrorBoundary extends React.Component<
+  {
+    children: React.ReactNode
+    fallback?: React.ComponentType<{ error: Error; reset: () => void }>
+  },
+  ErrorBoundaryState
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props)
+    this.state = { hasError: false }
   }
 
-  public static getDerivedStateFromError(error: Error): State {
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     return { hasError: true, error }
   }
 
-  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error("Uncaught error:", error, errorInfo)
-    this.props.onError?.(error, errorInfo)
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error("Error Boundary caught an error:", error, errorInfo)
+
+    // Log to external service in production
+    if (process.env.NODE_ENV === "production") {
+      // You could send this to your error tracking service
+      console.error("Production error:", {
+        error: error.message,
+        stack: error.stack,
+        componentStack: errorInfo.componentStack
+      })
+    }
   }
 
-  private handleRetry = () => {
-    this.setState({ hasError: false, error: undefined })
-  }
-
-  public render() {
+  render() {
     if (this.state.hasError) {
+      const reset = () => {
+        this.setState({ hasError: false, error: undefined })
+      }
+
       if (this.props.fallback) {
-        return this.props.fallback
+        const FallbackComponent = this.props.fallback
+        return <FallbackComponent error={this.state.error!} reset={reset} />
       }
 
       return (
-        <Card className="max-w-md mx-auto mt-8">
-          <CardHeader className="text-center">
-            <div className="mx-auto mb-4 p-3 bg-destructive/10 rounded-full w-fit">
-              <AlertTriangle className="h-8 w-8 text-destructive" />
-            </div>
-            <CardTitle className="text-lg">Something went wrong</CardTitle>
-          </CardHeader>
-          <CardContent className="text-center space-y-4">
-            <p className="text-muted-foreground">
-              We encountered an unexpected error. Please try refreshing the
-              page.
-            </p>
-            {process.env.NODE_ENV === "development" && this.state.error && (
-              <details className="text-left bg-muted p-2 rounded text-xs">
-                <summary className="cursor-pointer font-semibold mb-2">
-                  Error Details
-                </summary>
-                <pre className="whitespace-pre-wrap break-words">
-                  {this.state.error.message}
-                </pre>
-              </details>
-            )}
-            <div className="flex gap-2 justify-center">
-              <Button onClick={this.handleRetry} variant="outline">
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Try Again
-              </Button>
-              <Button onClick={() => window.location.reload()}>
-                Refresh Page
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="flex items-center justify-center min-h-[400px] p-4">
+          <Card className="w-full max-w-md">
+            <CardHeader className="text-center">
+              <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-destructive/10">
+                <AlertTriangle className="size-6 text-destructive" />
+              </div>
+              <CardTitle>Something went wrong</CardTitle>
+              <CardDescription>
+                An error occurred while loading this component. This might be a
+                temporary issue.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {process.env.NODE_ENV === "development" && this.state.error && (
+                <div className="rounded bg-muted p-3 text-sm font-mono">
+                  <div className="font-semibold text-destructive mb-2">
+                    Error Details:
+                  </div>
+                  <div className="text-muted-foreground">
+                    {this.state.error.message}
+                  </div>
+                </div>
+              )}
+              <div className="flex flex-col gap-2">
+                <Button onClick={reset} className="w-full">
+                  <RefreshCcw className="size-4 mr-2" />
+                  Try Again
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => window.location.reload()}
+                  className="w-full"
+                >
+                  Reload Page
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       )
     }
 
@@ -81,16 +104,23 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 }
 
-// Hook-based error boundary for functional components
-export function withErrorBoundary<P extends object>(
-  Component: React.ComponentType<P>,
-  fallback?: ReactNode
-) {
-  return function ComponentWithErrorBoundary(props: P) {
-    return (
-      <ErrorBoundary fallback={fallback}>
-        <Component {...props} />
-      </ErrorBoundary>
-    )
-  }
+// Hook version for functional components
+export function useErrorBoundary() {
+  const [error, setError] = React.useState<Error | null>(null)
+
+  const resetError = React.useCallback(() => {
+    setError(null)
+  }, [])
+
+  const captureError = React.useCallback((error: Error) => {
+    setError(error)
+  }, [])
+
+  React.useEffect(() => {
+    if (error) {
+      throw error
+    }
+  }, [error])
+
+  return { captureError, resetError }
 }

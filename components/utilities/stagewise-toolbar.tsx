@@ -1,51 +1,73 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 
 export function StagewiseToolbar() {
   const [showToolbar, setShowToolbar] = useState(false)
+  const [isClient, setIsClient] = useState(false)
 
   useEffect(() => {
+    setIsClient(true)
     // Only show in development mode and client-side
-    if (
-      process.env.NODE_ENV === "development" &&
-      typeof window !== "undefined"
-    ) {
+    if (process.env.NODE_ENV === "development") {
       setShowToolbar(true)
     }
   }, [])
 
-  if (!showToolbar) {
+  // Don't render anything on server or if not in development
+  if (!isClient || !showToolbar) {
     return null
   }
 
-  // Dynamic import and render the component
-  const StagewiseComponent = () => {
-    const [ToolbarComponent, setToolbarComponent] = useState<any>(null)
+  return <StagewiseComponent />
+}
 
-    useEffect(() => {
-      const loadToolbar = async () => {
-        try {
-          const { StagewiseToolbar } = await import("@stagewise/toolbar-next")
-          setToolbarComponent(() => StagewiseToolbar)
-        } catch (error) {
-          console.warn("Failed to load Stagewise toolbar:", error)
-        }
-      }
+// Separate component to handle the dynamic import
+function StagewiseComponent() {
+  const [ToolbarComponent, setToolbarComponent] = useState<any>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
+  const loadToolbar = useCallback(async () => {
+    try {
+      setIsLoading(true)
+      setError(null)
+
+      const { StagewiseToolbar } = await import("@stagewise/toolbar-next")
+      setToolbarComponent(() => StagewiseToolbar)
+    } catch (error) {
+      console.warn("Failed to load Stagewise toolbar:", error)
+      setError("Failed to load development toolbar")
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    // Add a small delay to ensure the component is fully mounted
+    const timer = setTimeout(() => {
       loadToolbar()
-    }, [])
+    }, 100)
 
-    if (!ToolbarComponent) {
-      return null
-    }
+    return () => clearTimeout(timer)
+  }, [loadToolbar])
 
-    const stagewiseConfig = {
-      plugins: []
-    }
-
-    return <ToolbarComponent config={stagewiseConfig} />
+  if (isLoading) {
+    return null // Don't show loading state for dev toolbar
   }
 
-  return <StagewiseComponent />
-} 
+  if (error || !ToolbarComponent) {
+    return null // Silently fail for dev toolbar
+  }
+
+  const stagewiseConfig = {
+    plugins: []
+  }
+
+  try {
+    return <ToolbarComponent config={stagewiseConfig} />
+  } catch (error) {
+    console.warn("Error rendering Stagewise toolbar:", error)
+    return null
+  }
+}

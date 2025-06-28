@@ -1,27 +1,31 @@
 /*
 <ai_context>
-This client component identifies the user in PostHog.
+This client component identifies users with PostHog.
 </ai_context>
 */
 
 "use client"
 
 import { useUser } from "@clerk/nextjs"
-import posthog from "posthog-js"
+import { usePostHog } from "posthog-js/react"
 import { useEffect } from "react"
 
-export function PostHogUserIdentify() {
-  const { user } = useUser()
+export function PostHogUserIdentify(): null {
+  const { user, isLoaded } = useUser()
+  const posthog = usePostHog()
 
   useEffect(() => {
-    if (user?.id) {
-      // Identify the user in PostHog
-      posthog.identify(user.id)
-    } else {
-      // If no user is signed in, reset any previously identified user
-      posthog.reset()
+    if (isLoaded && posthog) {
+      if (user) {
+        posthog.identify(user.id, {
+          email: user.emailAddresses[0]?.emailAddress,
+          name: user.fullName
+        })
+      } else {
+        posthog.reset()
+      }
     }
-  }, [user?.id])
+  }, [user, isLoaded, posthog])
 
   return null
 }

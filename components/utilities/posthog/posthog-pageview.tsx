@@ -1,24 +1,39 @@
 /*
 <ai_context>
-This client component tracks pageviews in PostHog.
+This client component tracks pageviews with PostHog.
 </ai_context>
 */
 
 "use client"
 
-import { usePathname } from "next/navigation"
-import posthog from "posthog-js"
-import { useEffect } from "react"
+import { usePathname, useSearchParams } from "next/navigation"
+import { useEffect, Suspense } from "react"
+import { usePostHog } from "posthog-js/react"
 
-export function PostHogPageview() {
+function PostHogPageviewInner(): null {
   const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const posthog = usePostHog()
 
   useEffect(() => {
-    // Track a pageview whenever the pathname changes
-    if (pathname) {
-      posthog.capture("$pageview", { path: pathname })
+    if (pathname && posthog) {
+      let url = window.origin + pathname
+      if (searchParams && searchParams.toString()) {
+        url = url + `?${searchParams.toString()}`
+      }
+      posthog.capture("$pageview", {
+        $current_url: url
+      })
     }
-  }, [pathname])
+  }, [pathname, searchParams, posthog])
 
   return null
+}
+
+export function PostHogPageview(): JSX.Element {
+  return (
+    <Suspense fallback={null}>
+      <PostHogPageviewInner />
+    </Suspense>
+  )
 }

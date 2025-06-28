@@ -1,51 +1,53 @@
 "use client"
 
-import Image from "next/image"
+import Image, { ImageProps } from "next/image"
 import { useState } from "react"
+import { cn } from "@/lib/utils"
 
-interface ImageWithFallbackProps {
-  src: string
-  alt: string
-  fill?: boolean
+interface ImageWithFallbackProps extends Omit<ImageProps, "onError"> {
+  fallbackSrc?: string
   className?: string
-  fallbackContent?: React.ReactNode
 }
 
 export function ImageWithFallback({
   src,
+  fallbackSrc = "/img/placeholder.png",
   alt,
-  fill = false,
-  className = "",
-  fallbackContent
+  className,
+  ...props
 }: ImageWithFallbackProps) {
-  const [imageError, setImageError] = useState(false)
+  const [imageSrc, setImageSrc] = useState(src)
+  const [isLoading, setIsLoading] = useState(true)
+  const [hasError, setHasError] = useState(false)
 
-  const defaultFallback = (
-    <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center">
-      <svg
-        className="h-12 w-12 text-muted-foreground"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-      >
-        <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
-        <path d="M3 5v14a9 3 0 0 0 18 0V5"></path>
-      </svg>
-    </div>
-  )
+  const handleError = () => {
+    if (imageSrc !== fallbackSrc) {
+      setImageSrc(fallbackSrc)
+      setHasError(true)
+    }
+  }
 
-  if (imageError) {
-    return fallbackContent || defaultFallback
+  const handleLoad = () => {
+    setIsLoading(false)
   }
 
   return (
-    <Image
-      src={src}
-      alt={alt}
-      fill={fill}
-      className={className}
-      onError={() => setImageError(true)}
-    />
+    <div className={cn("relative overflow-hidden", className)}>
+      {isLoading && <div className="absolute inset-0 bg-muted animate-pulse" />}
+      <Image
+        {...props}
+        src={imageSrc}
+        alt={alt}
+        className={cn(
+          "transition-opacity duration-300",
+          isLoading ? "opacity-0" : "opacity-100",
+          hasError && "grayscale",
+          className
+        )}
+        onError={handleError}
+        onLoad={handleLoad}
+        suppressHydrationWarning
+      />
+    </div>
   )
 }

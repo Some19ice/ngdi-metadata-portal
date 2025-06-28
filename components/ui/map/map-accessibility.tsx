@@ -346,7 +346,7 @@ const MapAccessibility = memo(function MapAccessibility({
                     <Slider
                       id="text-size"
                       value={[settings.textSize]}
-                      onValueChange={([value]) =>
+                      onValueChange={([value]: number[]) =>
                         updateSetting("textSize", value)
                       }
                       min={75}

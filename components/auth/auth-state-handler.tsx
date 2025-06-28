@@ -20,10 +20,10 @@ export function AuthStateHandler() {
     setMounted(true)
   }, [])
 
-  // Show loading state during hydration
+  // Show loading state during hydration and while Clerk is loading
   if (!mounted || !isLoaded) {
     return (
-      <div className="flex items-center space-x-2">
+      <div className="flex items-center space-x-2" suppressHydrationWarning>
         <Skeleton className="h-8 w-16" />
         <Skeleton className="h-8 w-20" />
       </div>
@@ -31,21 +31,30 @@ export function AuthStateHandler() {
   }
 
   return (
-    <>
+    <div suppressHydrationWarning>
       <SignedOut>
-        <SignInButton>
-          <Button variant="outline" size="sm">
-            Login
-          </Button>
-        </SignInButton>
-        <SignUpButton>
-          <Button size="sm">Sign Up</Button>
-        </SignUpButton>
+        <div className="flex items-center space-x-2">
+          <SignInButton>
+            <Button variant="outline" size="sm">
+              Login
+            </Button>
+          </SignInButton>
+          <SignUpButton>
+            <Button size="sm">Sign Up</Button>
+          </SignUpButton>
+        </div>
       </SignedOut>
 
       <SignedIn>
-        <UserButton afterSignOutUrl="/" />
+        <UserButton
+          afterSignOutUrl="/"
+          appearance={{
+            elements: {
+              avatarBox: "size-8"
+            }
+          }}
+        />
       </SignedIn>
-    </>
+    </div>
   )
 }

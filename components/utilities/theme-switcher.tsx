@@ -25,25 +25,28 @@ export const ThemeSwitcher = ({
   showLabel = false,
   ...props
 }: ThemeSwitcherProps) => {
-  const { setTheme, theme } = useTheme()
+  const { setTheme, theme, resolvedTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
 
-  useEffect(() => setMounted(true), [])
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   const handleChange = (newTheme: "dark" | "light") => {
-    localStorage.setItem("theme", newTheme)
     setTheme(newTheme)
   }
 
+  // Show consistent skeleton during hydration
   if (!mounted) {
     return (
-      <div className={cn("size-6 p-1", props.className)}>
-        <Skeleton className="w-full h-full rounded" />
+      <div className={cn("flex items-center justify-center", props.className)}>
+        <Skeleton className="size-5 rounded" />
       </div>
     )
   }
 
-  const isDark = theme === "dark"
+  // Use resolvedTheme for more reliable theme detection
+  const isDark = resolvedTheme === "dark"
   const toggleTheme = () => handleChange(isDark ? "light" : "dark")
 
   if (variant === "button") {
@@ -54,6 +57,7 @@ export const ThemeSwitcher = ({
         onClick={toggleTheme}
         className={cn("gap-2", props.className)}
         title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+        suppressHydrationWarning
       >
         {isDark ? <Sun className="size-4" /> : <Moon className="size-4" />}
         {showLabel && (isDark ? "Light" : "Dark")}
@@ -80,6 +84,7 @@ export const ThemeSwitcher = ({
           }
         }}
         title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+        suppressHydrationWarning
       >
         <span
           className={cn(
@@ -117,6 +122,7 @@ export const ThemeSwitcher = ({
         }
       }}
       title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+      suppressHydrationWarning
     >
       <div className="relative size-5">
         <Sun
