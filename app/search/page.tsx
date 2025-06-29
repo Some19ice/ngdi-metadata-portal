@@ -18,7 +18,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
-import SearchPageSearchBar from "./_components/search-page-search-bar"
+import SearchPageSearchBarWrapper from "./_components/search-page-search-bar-wrapper"
 import InlineMetadataResults from "./_components/inline-metadata-results"
 import InlineLocationResults from "./_components/inline-location-results"
 import { MetadataResultsSkeleton } from "./_components/metadata-results-skeleton"
@@ -49,7 +49,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
         <div className="space-y-8">
           {/* Enhanced Search Form */}
           <div className="mb-8">
-            <SearchPageSearchBar
+            <SearchPageSearchBarWrapper
               initialQuery={query}
               initialType={type}
               size="md"
@@ -85,7 +85,7 @@ function EmptySearchState() {
 
         {/* Enhanced Search Form */}
         <div className="mb-12">
-          <SearchPageSearchBar size="lg" showTypeSelector={true} />
+          <SearchPageSearchBarWrapper size="lg" showTypeSelector={true} />
         </div>
 
         {/* Search Suggestions */}

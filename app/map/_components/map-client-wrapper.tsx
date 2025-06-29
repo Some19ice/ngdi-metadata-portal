@@ -37,6 +37,16 @@ async function fetchGeocode(
       cache: "no-store"
     })
 
+    if (res.status === 429) {
+      // Too many requests: show a user-friendly message
+      if (typeof window !== "undefined") {
+        window.alert(
+          "You are searching too quickly. Please wait and try again."
+        )
+      }
+      return []
+    }
+
     if (!res.ok) {
       console.error(`Geocoding API error: ${res.status} ${res.statusText}`)
       return []

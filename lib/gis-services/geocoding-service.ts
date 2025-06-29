@@ -1,9 +1,3 @@
-"use server"
-
-import { NextRequest, NextResponse } from "next/server"
-import { applyRateLimit, RATE_LIMIT_CONFIGS } from "@/lib/rate-limiter"
-import { geocodeLocationShared } from "@/lib/gis-services/geocoding-service"
-
 // Try multiple environment variable names for the API key
 const MAPTILER_API_KEY =
   process.env.MAPTILER_API_KEY_SERVER ||
@@ -279,100 +273,85 @@ async function searchNigerianLocations(query: string, limit: number = 10) {
   }
 }
 
-export async function GET(request: NextRequest) {
-  // ---------- Rate limiting ----------
-  // Apply a lightweight rate-limit for search endpoints to protect MapTiler quota.
-  const rateLimitResponse = await applyRateLimit(
-    request,
-    RATE_LIMIT_CONFIGS.search
-  )
-  if (rateLimitResponse) return rateLimitResponse
+export async function geocodeLocationShared({
+  searchText,
+  autocomplete = true,
+  limit = 5,
+  offset = 0,
+  country,
+  bbox,
+  proximity
+}: {
+  searchText: string
+  autocomplete?: boolean
+  limit?: number
+  offset?: number
+  country?: string
+  bbox?: string
+  proximity?: string
+}) {
+  if (!searchText || searchText.trim().length < 1) {
+    return {
+      type: "FeatureCollection",
+      query: [searchText],
+      features: [],
+      attribution: "No search term provided"
+    }
+  }
+
+  // If no API key, return enhanced Nigerian location results immediately
+  if (!MAPTILER_API_KEY) {
+    return await searchNigerianLocations(searchText, limit)
+  }
+
+  // Build query parameters for MapTiler
+  const queryParams = new URLSearchParams({
+    key: MAPTILER_API_KEY,
+    autocomplete: String(autocomplete),
+    limit: String(limit)
+  })
+  if (country) queryParams.append("country", country)
+  if (bbox) queryParams.append("bbox", bbox)
+  if (proximity) queryParams.append("proximity", proximity)
+
+  const maptilerUrl = `${MAPTILER_GEOCODING_API_URL}/${encodeURIComponent(searchText)}.json?${queryParams.toString()}`
+
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 5000)
 
   try {
-    // Log the API key status for debugging (without exposing the key)
-    if (process.env.NODE_ENV !== "production") {
-      console.log("MapTiler API Key present?", !!MAPTILER_API_KEY)
-    }
-
-    const searchParams = request.nextUrl.searchParams
-    const searchText = searchParams.get("q")
-
-    // Removed the 2-character minimum restriction to allow single character searches
-    if (!searchText || searchText.trim().length < 1) {
-      return NextResponse.json(
-        {
-          error: "Search term is required",
-          features: []
-        },
-        { status: 400 }
-      )
-    }
-
-    // Use the shared geocoding logic
-    const autocomplete =
-      searchParams.get("autocomplete") === "false" ? false : true
-    const limit = parseInt(searchParams.get("limit") || "10")
-    const offset = parseInt(searchParams.get("offset") || "0")
-    const country = searchParams.get("country") || undefined
-    const bbox = searchParams.get("bbox") || undefined
-    const proximity = searchParams.get("proximity") || undefined
-
-    try {
-      const data = await geocodeLocationShared({
-        searchText,
-        autocomplete,
-        limit,
-        offset,
-        country,
-        bbox,
-        proximity
-      })
-      return NextResponse.json(data, {
-        headers: {
-          "Cache-Control": "public, s-maxage=1800, stale-while-revalidate=3600"
-        }
-      })
-    } catch (error) {
-      console.error("Geocoding proxy error:", error)
-      return NextResponse.json(
-        {
-          error: "Internal server error",
-          features: []
-        },
-        { status: 500 }
-      )
-    }
-  } catch (error) {
-    console.error("Geocoding proxy error:", error)
-
-    // Even on complete failure, try to return Nigerian location results
-    const searchText = request.nextUrl.searchParams.get("q") || ""
-    if (searchText.length >= 1) {
-      try {
-        const fallbackResult = await searchNigerianLocations(searchText, 10)
-        return NextResponse.json(
-          {
-            ...fallbackResult,
-            error: "Geocoding service error, using Nigerian location data"
-          },
-          {
-            status: 200,
-            headers: {
-              "Cache-Control": "no-cache"
-            }
-          }
-        )
-      } catch (fallbackError) {
-        console.error("Even fallback search failed:", fallbackError)
+    const response = await fetch(maptilerUrl, {
+      signal: controller.signal,
+      headers: {
+        "User-Agent": "NGDI-Portal/1.0"
       }
+    })
+    clearTimeout(timeoutId)
+    if (!response.ok) {
+      // If API fails, return enhanced Nigerian location results
+      return await searchNigerianLocations(searchText, limit)
     }
-
-    return NextResponse.json(
-      {
-        error: "Internal server error",
-        features: []
-      },
-      { status: 500 }
-    )
+    const data = await response.json()
+    if (!data.features) data.features = []
+    // If MapTiler returns few or no results for Nigerian locations, supplement with local data
+    if (data.features.length < 3 && country === "NG") {
+      try {
+        const nigerianResults = await searchNigerianLocations(searchText, 10)
+        const existingNames = new Set(
+          data.features.map((f: any) => f.place_name?.toLowerCase())
+        )
+        const additionalResults = nigerianResults.features.filter(
+          (feature: any) =>
+            !existingNames.has(feature.place_name?.toLowerCase())
+        )
+        data.features = [...data.features, ...additionalResults].slice(0, limit)
+        data.attribution = `${data.attribution || "MapTiler"} + Enhanced Nigerian location data`
+      } catch {}
+    }
+    return data
+  } catch (fetchError) {
+    clearTimeout(timeoutId)
+    // Return enhanced Nigerian location results on any fetch error
+    return await searchNigerianLocations(searchText, limit)
   }
 }

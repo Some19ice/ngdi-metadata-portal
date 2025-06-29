@@ -1,7 +1,7 @@
 "use server"
 
-import { ActionState, GeocodingResponse, GeocodingFeature } from "@/types"
-import { getBaseUrl } from "@/lib/utils"
+import { ActionState, GeocodingFeature } from "@/types"
+import { geocodeLocationShared } from "@/lib/gis-services/geocoding-service"
 
 interface GeocodeParams {
   searchText: string
@@ -38,90 +38,19 @@ export async function geocodeLocationAction(
   }
 
   try {
-    // Build query parameters for our proxy
-    const queryParams = new URLSearchParams({
-      q: searchText,
-      autocomplete: String(autocomplete),
-      limit: String(actualLimit), // Use actualLimit
-      offset: String(offset) // Add offset
+    const data = await geocodeLocationShared({
+      searchText,
+      autocomplete,
+      limit: actualLimit,
+      offset,
+      country: otherParams.country,
+      bbox: Array.isArray(otherParams.bbox)
+        ? otherParams.bbox.join(",")
+        : otherParams.bbox,
+      proximity: Array.isArray(otherParams.proximity)
+        ? otherParams.proximity.join(",")
+        : otherParams.proximity
     })
-
-    Object.entries(otherParams).forEach(([key, value]) => {
-      if (value !== undefined) {
-        if (Array.isArray(value)) {
-          queryParams.append(key, value.join(","))
-        } else {
-          queryParams.append(key, String(value))
-        }
-      }
-    })
-
-    // Use the helper to get the base URL
-    const baseUrl = getBaseUrl()
-    const url = `${baseUrl}/api/map/geocode?${queryParams.toString()}`
-
-    console.log("Geocoding action:", {
-      searchText: searchText.substring(0, 50),
-      baseUrl,
-      fullUrl: url,
-      timestamp: new Date().toISOString()
-    })
-
-    const response = await fetch(url, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      // Don't cache server-side requests
-      cache: "no-store"
-    })
-
-    console.log("Geocoding response status:", {
-      status: response.status,
-      statusText: response.statusText,
-      ok: response.ok,
-      url: response.url
-    })
-
-    if (!response.ok) {
-      const errorData = await response
-        .json()
-        .catch(() => ({ error: "Unknown error" }))
-      console.error("Geocoding API Error:", {
-        status: response.status,
-        statusText: response.statusText,
-        errorData,
-        url: response.url
-      })
-
-      // If we get a response with fallback data, still return success
-      if (errorData.features && Array.isArray(errorData.features)) {
-        return {
-          isSuccess: true,
-          message:
-            errorData.warning ||
-            errorData.error ||
-            "Using enhanced Nigerian location data",
-          data: errorData.features
-        }
-      }
-
-      throw new Error(
-        errorData.error ||
-          `Failed to fetch geocoding data: ${response.status} ${response.statusText}`
-      )
-    }
-
-    const data: GeocodingResponse = await response.json()
-
-    console.log("Geocoding success:", {
-      featuresCount: data.features?.length || 0,
-      hasFeatures: !!data.features,
-      query: data.query,
-      attribution: data.attribution,
-      warning: data.warning
-    })
-
     return {
       isSuccess: true,
       message:
@@ -138,10 +67,8 @@ export async function geocodeLocationAction(
       timestamp: new Date().toISOString(),
       stack: error instanceof Error ? error.stack : undefined
     })
-
     const errorMessage =
       error instanceof Error ? error.message : "An unknown error occurred"
-
     return {
       isSuccess: false,
       message: `Geocoding failed: ${errorMessage}`
