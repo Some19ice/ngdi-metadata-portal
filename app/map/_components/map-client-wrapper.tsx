@@ -37,8 +37,10 @@ async function fetchGeocode(
       cache: "no-store"
     })
 
-    if (!res.ok) return []
-
+    if (!res.ok) {
+      console.error(`Geocoding API error: ${res.status} ${res.statusText}`)
+      return []
+    }
     const data = await res.json()
     return Array.isArray(data?.features)
       ? (data.features as GeocodingFeature[])

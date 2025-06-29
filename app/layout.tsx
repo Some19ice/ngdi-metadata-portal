@@ -26,6 +26,7 @@ import "./globals.css"
 import Footer from "@/components/footer"
 import { AppSidebar } from "@/components/sidebar/app-sidebar"
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
+import { Suspense } from "react"
 
 // Temporarily disable Google font
 // const inter = Inter({ subsets: ["latin"] })
@@ -36,6 +37,16 @@ export const metadata: Metadata = {
 }
 
 // ... existing imports
+
+// Simple skeleton fallback for MainHeader during suspense/hydration
+function MainHeaderFallback() {
+  return (
+    <div
+      className="h-[calc(var(--banner-height)+var(--header-height))] w-full bg-background/60 border-b border-border/40 animate-pulse"
+      aria-hidden="true"
+    />
+  )
+}
 
 export default async function RootLayout({
   children
@@ -69,7 +80,9 @@ export default async function RootLayout({
                   <div className="flex flex-1 w-full">
                     <AppSidebar />
                     <div className="flex flex-1 flex-col w-full">
-                      <MainHeader />
+                      <Suspense fallback={<MainHeaderFallback />}>
+                        <MainHeader />
+                      </Suspense>
                       <SidebarInset className="flex flex-1 flex-col w-full">
                         <main className="flex-1 overflow-auto p-4 md:p-6 w-full">
                           <ErrorBoundary>

@@ -5,7 +5,6 @@ import { Search, Loader2 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { GeocodingFeature } from "@/types"
-import { geocodeLocationAction } from "@/actions/map-actions"
 import { sanitizeSearchInput } from "@/lib/validators/map-validators"
 import { toast } from "sonner"
 import { useDebounce } from "@/lib/hooks/use-debounce"
@@ -65,28 +64,36 @@ export default function MapSearchInput({
       try {
         console.log("Map search: searching for", query)
 
-        const result = await geocodeLocationAction({
-          searchText: query,
-          autocomplete: true,
-          limit: 5,
-          country: "NG" // Bias towards Nigeria
+        const params = new URLSearchParams({
+          q: query,
+          autocomplete: "true",
+          limit: "5",
+          country: "NG"
         })
 
-        console.log("Map search result:", {
-          isSuccess: result.isSuccess,
-          message: result.message,
-          dataLength: result.data?.length || 0
+        const res = await fetch(`/api/map/geocode?${params.toString()}`, {
+          method: "GET",
+          signal: abortControllerRef.current.signal,
+          cache: "no-store"
         })
 
-        if (result.isSuccess) {
-          return result.data
-        } else {
-          console.error("Map geocoding error:", result.message)
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}))
+          console.error(
+            "Map geocoding error:",
+            errorData?.error || res.statusText
+          )
           if (!abortControllerRef.current.signal.aborted) {
-            toast.error(result.message || "Search failed. Please try again.")
+            toast.error(
+              errorData?.warning || "Search failed. Please try again."
+            )
           }
-          return []
+          return errorData.features || []
         }
+
+        const data = await res.json()
+        console.log("Map search result features:", data.features?.length || 0)
+        return data.features as GeocodingFeature[]
       } catch (error) {
         if (error instanceof Error && error.name === "AbortError") {
           // Request was cancelled, ignore

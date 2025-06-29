@@ -16,7 +16,7 @@ import {
   History
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { geocodeLocationAction } from "@/actions/map-actions"
+import type { GeocodingFeature } from "@/types"
 import { searchMetadataRecordsAction } from "@/actions/db/metadata-records-actions"
 
 interface SearchSuggestion {
@@ -77,12 +77,32 @@ export default function EnhancedSearchSuggestions({
     try {
       // Parallel fetch for better performance
       const [locationResults, metadataResults] = await Promise.allSettled([
-        geocodeLocationAction({
-          searchText: searchQuery,
-          limit: 3,
-          autocomplete: true,
-          country: "NG"
-        }),
+        (async () => {
+          // Client-side fetch to internal API
+          const params = new URLSearchParams({
+            q: searchQuery,
+            autocomplete: "true",
+            limit: "3",
+            country: "NG"
+          })
+          const res = await fetch(`/api/map/geocode?${params.toString()}`, {
+            method: "GET",
+            cache: "no-store"
+          })
+          if (!res.ok) {
+            const errorData = await res.json().catch(() => ({}))
+            console.error(
+              "Geocoding API error:",
+              errorData?.error || res.statusText
+            )
+            return {
+              features: [] as GeocodingFeature[],
+              warning: errorData?.warning
+            }
+          }
+          const data = await res.json()
+          return data
+        })(),
         searchMetadataRecordsAction({
           query: searchQuery,
           page: 1,
@@ -93,21 +113,23 @@ export default function EnhancedSearchSuggestions({
       // Process location suggestions
       if (
         locationResults.status === "fulfilled" &&
-        locationResults.value.isSuccess
+        Array.isArray(locationResults.value.features)
       ) {
-        locationResults.value.data.forEach((location, index) => {
-          newSuggestions.push({
-            id: `location-${index}`,
-            type: "location",
-            title: location.place_name || location.text || "Unknown Location",
-            subtitle: location.place_type?.join(", ") || "Location",
-            icon: <MapPin className="h-4 w-4 text-blue-500" />,
-            metadata: {
-              coordinates: location.center as [number, number],
-              category: "Location"
-            }
-          })
-        })
+        ;(locationResults.value.features as GeocodingFeature[]).forEach(
+          (location, index) => {
+            newSuggestions.push({
+              id: `location-${index}`,
+              type: "location",
+              title: location.place_name || location.text || "Unknown Location",
+              subtitle: location.place_type?.join(", ") || "Location",
+              icon: <MapPin className="h-4 w-4 text-blue-500" />,
+              metadata: {
+                coordinates: location.center as [number, number],
+                category: "Location"
+              }
+            })
+          }
+        )
       }
 
       // Process metadata suggestions

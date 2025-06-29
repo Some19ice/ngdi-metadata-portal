@@ -19,7 +19,13 @@ import Link from "next/link"
  */
 export default function MainHeader() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
-  const [isScrolled, setIsScrolled] = useState(false)
+  // Initialize scroll state during initial render to avoid className mismatch after hydration
+  const [isScrolled, setIsScrolled] = useState(() => {
+    if (typeof window !== "undefined") {
+      return window.scrollY > 0
+    }
+    return false
+  })
 
   const toggleMenu = () => {
     setIsMenuOpen(!isMenuOpen)
@@ -31,16 +37,10 @@ export default function MainHeader() {
       setIsScrolled(window.scrollY > 0)
     }
 
-    // Set initial scroll state
-    if (typeof window !== "undefined") {
-      setIsScrolled(window.scrollY > 0)
-      window.addEventListener("scroll", handleScroll)
-    }
+    window.addEventListener("scroll", handleScroll)
 
     return () => {
-      if (typeof window !== "undefined") {
-        window.removeEventListener("scroll", handleScroll)
-      }
+      window.removeEventListener("scroll", handleScroll)
     }
   }, [])
 

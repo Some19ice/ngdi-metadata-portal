@@ -19,6 +19,7 @@ export function getBaseUrl(): string {
     return `https://${process.env.VERCEL_URL}`
   }
 
-  // Local development
-  return `http://localhost:${process.env.PORT || 3000}`
+  // Default to relative URL. Next.js server-side fetch can resolve internal routes without absolute URL.
+  // This avoids connection issues when the server is not listening on the specified port (e.g., during serverless execution).
+  return ""
 }

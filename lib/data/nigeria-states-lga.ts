@@ -49,20 +49,6 @@ async function loadStatesData(): Promise<State[]> {
 }
 
 /**
- * Load data in smaller chunks to avoid webpack cache issues
- */
-async function loadDataInChunks(): Promise<State[]> {
-  try {
-    // Direct import is more reliable than fetch for static data
-    const moduleData = await import("./nigeria-states-lga.json")
-    return moduleData.default || []
-  } catch (error) {
-    console.error("Failed to load states data in chunks:", error)
-    return []
-  }
-}
-
-/**
  * Initialize the LGA Map for O(1) lookups
  */
 async function initializeLGAMap(): Promise<Map<string, LGA[]>> {

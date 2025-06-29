@@ -2,7 +2,6 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import {
   NavigationMenu,
@@ -139,24 +138,6 @@ export default function NavigationLinks() {
                   )}
                 </Link>
               )}
-
-              {/* Subtle animation delay for staggered effect */}
-              <style jsx>{`
-                @keyframes fadeInUp {
-                  from {
-                    opacity: 0;
-                    transform: translateY(10px);
-                  }
-                  to {
-                    opacity: 1;
-                    transform: translateY(0);
-                  }
-                }
-
-                .navigation-item-${index} {
-                  animation: fadeInUp 0.3s ease-out ${index * 0.05}s both;
-                }
-              `}</style>
             </NavigationMenuItem>
           )
         })}
