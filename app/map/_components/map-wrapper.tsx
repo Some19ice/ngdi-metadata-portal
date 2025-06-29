@@ -303,8 +303,32 @@ function MapWrapper({
 
   // Update search results when prop changes
   useEffect(() => {
-    setCurrentSearchResults(searchResults || [])
-  }, [searchResults])
+    if (searchResults !== currentSearchResults) {
+      setCurrentSearchResults(searchResults || [])
+      // Auto-fly to the first result if it's a new search
+      if (searchResults && searchResults.length > 0 && map && isLoaded) {
+        const firstResult = searchResults[0]
+        map.flyTo({
+          center: firstResult.center,
+          zoom: 13,
+          duration: 1500,
+          essential: true,
+          easing: t => t * t * (3 - 2 * t)
+        })
+      }
+    }
+  }, [searchResults, currentSearchResults, map, isLoaded])
+
+  // Handle initial center and zoom when map loads
+  useEffect(() => {
+    if (map && isLoaded && initialCenter) {
+      map.flyTo({
+        center: initialCenter,
+        zoom: initialZoom || 6,
+        duration: 1000
+      })
+    }
+  }, [map, isLoaded, initialCenter, initialZoom])
 
   const handleMapLoad = useCallback((mapInstance: Map) => {
     setMap(mapInstance)
@@ -390,17 +414,15 @@ function MapWrapper({
       // Clear any existing user location markers when searching for new locations
       clearUserLocationMarkers()
 
+      // Always show only the selected location
       setCurrentSearchResults([location])
       if (map) {
         map.flyTo({
           center: location.center,
           zoom: 13,
-          duration: 3500,
+          duration: 1500,
           essential: true,
-          easing: t => {
-            // Gentler ease-in-out animation
-            return t * t * (3 - 2 * t)
-          }
+          easing: t => t * t * (3 - 2 * t)
         })
       }
     },
@@ -497,26 +519,6 @@ function MapWrapper({
           }
         )
       })
-
-      // Fit bounds to show all search results when there are multiple
-      if (
-        currentSearchResults.length > 1 &&
-        typeof LngLatBounds !== "undefined"
-      ) {
-        const bounds = new LngLatBounds()
-        currentSearchResults.forEach(location => {
-          bounds.extend(location.center)
-        })
-        map.fitBounds(bounds, {
-          padding: 50,
-          duration: 2000,
-          essential: true,
-          easing: t => {
-            // Gentle ease-in-out for bounds fitting
-            return t * t * (3 - 2 * t)
-          }
-        })
-      }
     }
   }, [map, isLoaded, currentSearchResults, highlightedLocation])
 

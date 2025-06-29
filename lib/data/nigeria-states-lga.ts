@@ -34,31 +34,14 @@ async function loadStatesData(): Promise<State[]> {
 
   dataPromise = (async () => {
     try {
-      // Use fetch for more efficient loading and to avoid webpack cache issues
-      const response = await fetch("/api/states-data")
-      if (!response.ok) {
-        // Fallback to direct import if API is not available
-        const moduleData = await import("./nigeria-states-lga.json")
-        statesData = moduleData.default || []
-        return statesData
-      }
-
-      // Use Response.json() for better memory management
-      const data = await response.json()
-      statesData = data || []
+      // Direct import is more reliable for static data
+      const moduleData = await import("./nigeria-states-lga.json")
+      statesData = moduleData.default || []
       return statesData
     } catch (error) {
-      console.warn("API not available, falling back to static import:", error)
-      try {
-        // Chunked loading approach - split the import
-        const moduleData = await loadDataInChunks()
-        statesData = moduleData || []
-        return statesData
-      } catch (fallbackError) {
-        console.error("Failed to load states data:", fallbackError)
-        statesData = []
-        return statesData
-      }
+      console.error("Failed to load states data:", error)
+      statesData = []
+      return statesData
     }
   })()
 
@@ -70,22 +53,12 @@ async function loadStatesData(): Promise<State[]> {
  */
 async function loadDataInChunks(): Promise<State[]> {
   try {
-    // Load data using a more memory-efficient approach
-    const response = await fetch(
-      new URL("./nigeria-states-lga.json", import.meta.url)
-    )
-    const arrayBuffer = await response.arrayBuffer()
-
-    // Convert ArrayBuffer to string in chunks to avoid large string serialization
-    const decoder = new TextDecoder()
-    const text = decoder.decode(arrayBuffer)
-
-    // Parse JSON more efficiently
-    return JSON.parse(text)
-  } catch (error) {
-    // Final fallback to direct import
+    // Direct import is more reliable than fetch for static data
     const moduleData = await import("./nigeria-states-lga.json")
     return moduleData.default || []
+  } catch (error) {
+    console.error("Failed to load states data in chunks:", error)
+    return []
   }
 }
 

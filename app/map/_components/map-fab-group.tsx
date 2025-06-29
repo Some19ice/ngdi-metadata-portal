@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import {
   Crosshair,
   Copy,
@@ -243,71 +243,77 @@ export default function MapFabGroup({
   const secondaryFabClass =
     "w-10 h-10 rounded-full backdrop-blur-md bg-white/80 hover:bg-white/90 shadow-md hover:shadow-lg ring-1 ring-black/5 hover:ring-black/10 transition-all duration-200 transform hover:scale-105"
 
-  const primaryTools = [
-    {
-      icon: locating ? (
-        <Loader2 className="h-5 w-5 animate-spin" />
-      ) : (
-        <Crosshair className="h-5 w-5" />
-      ),
-      onClick: locateUser,
-      tooltip: "Locate me",
-      disabled: locating,
-      variant: "primary" as const
-    },
-    {
-      icon: isGroupExpanded ? (
-        <Minimize className="h-4 w-4" />
-      ) : (
-        <Layers className="h-4 w-4" />
-      ),
-      onClick: () => setIsGroupExpanded(!isGroupExpanded),
-      tooltip: isGroupExpanded ? "Show less tools" : "Show more tools",
-      variant: "primary" as const
-    }
-  ]
+  const primaryTools = useMemo(
+    () => [
+      {
+        icon: locating ? (
+          <Loader2 className="h-5 w-5 animate-spin" />
+        ) : (
+          <Crosshair className="h-5 w-5" />
+        ),
+        onClick: locateUser,
+        tooltip: "Locate me",
+        disabled: locating,
+        variant: "primary" as const
+      },
+      {
+        icon: isGroupExpanded ? (
+          <Minimize className="h-4 w-4" />
+        ) : (
+          <Layers className="h-4 w-4" />
+        ),
+        onClick: () => setIsGroupExpanded(!isGroupExpanded),
+        tooltip: isGroupExpanded ? "Show less tools" : "Show more tools",
+        variant: "primary" as const
+      }
+    ],
+    [locating, isGroupExpanded]
+  )
 
-  const secondaryTools = [
-    {
-      icon: <Copy className="h-4 w-4" />,
-      onClick: copyCenter,
-      tooltip: "Copy coordinates"
-    },
-    {
-      icon: isFullscreen ? (
-        <Minimize className="h-4 w-4" />
-      ) : (
-        <Expand className="h-4 w-4" />
-      ),
-      onClick: toggleFullscreen,
-      tooltip: isFullscreen ? "Exit full screen" : "Full screen"
-    },
-    {
-      icon: (
-        <Compass
-          className="h-4 w-4"
-          style={{ transform: `rotate(${bearingNorth}deg)` }}
-        />
-      ),
-      onClick: resetMapBearing,
-      tooltip: bearingNorth === 0 ? "North aligned" : "Reset to north"
-    },
-    {
-      icon: <RotateCcw className="h-4 w-4" />,
-      onClick: refreshMap,
-      tooltip: "Refresh map"
-    },
-    {
-      icon: <Share2 className="h-4 w-4" />,
-      onClick: shareLocation,
-      tooltip: "Share location"
-    },
-    {
-      icon: <Download className="h-4 w-4" />,
-      onClick: downloadMapView,
-      tooltip: "Download screenshot"
-    }
-  ]
+  const secondaryTools = useMemo(
+    () => [
+      {
+        icon: <Copy className="h-4 w-4" />,
+        onClick: copyCenter,
+        tooltip: "Copy coordinates"
+      },
+      {
+        icon: isFullscreen ? (
+          <Minimize className="h-4 w-4" />
+        ) : (
+          <Expand className="h-4 w-4" />
+        ),
+        onClick: toggleFullscreen,
+        tooltip: isFullscreen ? "Exit full screen" : "Full screen"
+      },
+      {
+        icon: (
+          <Compass
+            className="h-4 w-4"
+            style={{ transform: `rotate(${bearingNorth}deg)` }}
+          />
+        ),
+        onClick: resetMapBearing,
+        tooltip: bearingNorth === 0 ? "North aligned" : "Reset to north"
+      },
+      {
+        icon: <RotateCcw className="h-4 w-4" />,
+        onClick: refreshMap,
+        tooltip: "Refresh map"
+      },
+      {
+        icon: <Share2 className="h-4 w-4" />,
+        onClick: shareLocation,
+        tooltip: "Share location"
+      },
+      {
+        icon: <Download className="h-4 w-4" />,
+        onClick: downloadMapView,
+        tooltip: "Download screenshot"
+      }
+    ],
+    [isFullscreen, bearingNorth]
+  )
 
   return (
     <div
@@ -318,7 +324,7 @@ export default function MapFabGroup({
       {isGroupExpanded && (
         <div className="flex flex-col gap-2 mb-3 animate-in slide-in-from-bottom-2 duration-300">
           {secondaryTools.map((tool, index) => (
-            <Tooltip key={index} delayDuration={300}>
+            <Tooltip key={`secondary-tool-${index}`} delayDuration={300}>
               <TooltipTrigger asChild>
                 <Button
                   size="icon"
@@ -342,7 +348,7 @@ export default function MapFabGroup({
       <div className="flex flex-col gap-3">
         {/* Mobile Drawer Toggle */}
         {onToggleDrawer && isMobile && (
-          <Tooltip delayDuration={300}>
+          <Tooltip key="mobile-drawer-toggle" delayDuration={300}>
             <TooltipTrigger asChild>
               <Button
                 size="icon"
@@ -365,7 +371,7 @@ export default function MapFabGroup({
 
         {/* Desktop Sidebar Toggle */}
         {onToggleSidebar && !isMobile && sidebarCollapsed && (
-          <Tooltip delayDuration={300}>
+          <Tooltip key="desktop-sidebar-toggle" delayDuration={300}>
             <TooltipTrigger asChild>
               <Button
                 size="icon"
@@ -382,7 +388,10 @@ export default function MapFabGroup({
 
         {/* Primary action buttons */}
         {primaryTools.map((tool, index) => (
-          <Tooltip key={index} delayDuration={300}>
+          <Tooltip
+            key={`primary-tool-${index}-${tool.tooltip}`}
+            delayDuration={300}
+          >
             <TooltipTrigger asChild>
               <Button
                 size="icon"

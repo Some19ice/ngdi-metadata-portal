@@ -9,6 +9,7 @@ import { geocodeLocationAction } from "@/actions/map-actions"
 import { sanitizeSearchInput } from "@/lib/validators/map-validators"
 import { toast } from "sonner"
 import { useDebounce } from "@/lib/hooks/use-debounce"
+import { useRouter, usePathname } from "next/navigation"
 
 interface MapSearchInputProps {
   onSearch: (searchTerm: string) => void
@@ -27,6 +28,8 @@ export default function MapSearchInput({
   const [showSuggestions, setShowSuggestions] = useState(false)
   const searchRef = useRef<HTMLDivElement>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
+  const router = useRouter()
+  const pathname = usePathname()
 
   // Debounce search term
   const debouncedSearchTerm = useDebounce(searchTerm, 300)
@@ -169,9 +172,27 @@ export default function MapSearchInput({
 
   const handleSuggestionClick = (suggestion: GeocodingFeature) => {
     setSearchTerm(suggestion.place_name)
-    onLocationSelect(suggestion)
     setShowSuggestions(false)
     toast.success(`Selected: ${suggestion.place_name}`)
+
+    // Update the URL so the map page can react
+    const [lng, lat] = suggestion.center
+    const params = new URLSearchParams({
+      search: suggestion.place_name,
+      location: suggestion.place_name,
+      center: `${lng},${lat}`,
+      zoom: "13"
+    })
+
+    if (pathname !== "/map") {
+      router.push(`/map?${params.toString()}`)
+    } else {
+      // Update the URL without triggering a full route reload
+      window.history.replaceState(null, "", `/map?${params.toString()}`)
+    }
+
+    // Still call the callback for in-map state update
+    onLocationSelect(suggestion)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
