@@ -6,7 +6,7 @@ import { ThemeSwitcher } from "@/components/utilities/theme-switcher"
 import { AuthStateHandler } from "@/components/auth"
 import { Button } from "@/components/ui/button"
 import { Menu, X } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 import Image from "next/image"
 import Link from "next/link"
@@ -19,32 +19,43 @@ import Link from "next/link"
  */
 export default function MainHeader() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
-  // Initialize scroll state during initial render to avoid className mismatch after hydration
-  const [isScrolled, setIsScrolled] = useState(() => {
-    if (typeof window !== "undefined") {
-      return window.scrollY > 0
-    }
-    return false
-  })
+  // Always start with `false` on the server to avoid hydration mismatches.
+  const [isScrolled, setIsScrolled] = useState(false)
 
   const toggleMenu = () => {
     setIsMenuOpen(!isMenuOpen)
   }
 
-  // Handle scroll detection for header styling
-  useEffect(() => {
-    const handleScroll = () => {
-      setIsScrolled(window.scrollY > 0)
-    }
-
-    window.addEventListener("scroll", handleScroll)
-
-    return () => {
-      window.removeEventListener("scroll", handleScroll)
-    }
+  // ----- Handle scroll detection for header styling (throttled) -----
+  const handleScroll = useCallback(() => {
+    const next = window.scrollY > 0
+    // Only update state when value actually changes to avoid extra renders
+    setIsScrolled(prev => (prev === next ? prev : next))
   }, [])
 
+  useEffect(() => {
+    let ticking = false
+
+    const onScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          handleScroll()
+          ticking = false
+        })
+        ticking = true
+      }
+    }
+
+    // Run once on mount in case we load the page already scrolled
+    onScroll()
+
+    window.addEventListener("scroll", onScroll)
+    return () => window.removeEventListener("scroll", onScroll)
+  }, [handleScroll])
+
   // Close mobile menu when clicking outside and manage body scroll
+  const previousOverflow = useRef<string | null>(null)
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -57,14 +68,25 @@ export default function MainHeader() {
 
     if (isMenuOpen) {
       document.addEventListener("click", handleClickOutside)
+
+      // Preserve existing overflow style so we can restore it later
+      previousOverflow.current = document.body.style.overflow
       document.body.style.overflow = "hidden"
     } else {
-      document.body.style.overflow = "unset"
+      if (previousOverflow.current !== null) {
+        document.body.style.overflow = previousOverflow.current
+        previousOverflow.current = null
+      }
     }
 
     return () => {
       document.removeEventListener("click", handleClickOutside)
-      document.body.style.overflow = "unset"
+
+      // Ensure overflow is always restored on unmount
+      if (previousOverflow.current !== null) {
+        document.body.style.overflow = previousOverflow.current
+        previousOverflow.current = null
+      }
     }
   }, [isMenuOpen])
 
@@ -160,6 +182,7 @@ export default function MainHeader() {
                   "relative overflow-hidden transition-all duration-200 hover:bg-accent/80 hover:scale-105",
                   isMenuOpen && "bg-accent text-accent-foreground"
                 )}
+                data-mobile-menu
               >
                 <div className="relative z-10">
                   {isMenuOpen ? (
@@ -184,6 +207,7 @@ export default function MainHeader() {
             )}
             id="mobile-menu"
             role="dialog"
+            aria-modal="true"
             aria-label="Mobile navigation menu"
             data-mobile-menu
           >

@@ -14,6 +14,21 @@ const config = {
     "./app/**/*.{ts,tsx}",
     "./src/**/*.{ts,tsx}"
   ],
+  safelist: [
+    // Preserve gradient utilities used in the banner / header that might not be
+    // present in every rendered page at build-time, preventing PurgeCSS from
+    // stripping them in production.
+    "bg-gradient-to-r",
+    "from-slate-900",
+    "via-slate-800",
+    "to-slate-900",
+    "from-blue-400/20",
+    "to-green-400/20",
+    // Arbitrary value gradients (radial) used for animated background
+    {
+      pattern: /bg-\[radial-gradient\(.+\)\]/
+    }
+  ],
   prefix: "",
   theme: {
     container: {
