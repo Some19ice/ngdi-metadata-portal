@@ -34,7 +34,7 @@ function StagewiseComponent() {
       setError(null)
 
       const { StagewiseToolbar } = await import("@stagewise/toolbar-next")
-      setToolbarComponent(StagewiseToolbar)
+      setToolbarComponent(() => StagewiseToolbar)
     } catch (error) {
       console.warn("Failed to load Stagewise toolbar:", error)
       setError("Failed to load development toolbar")
@@ -60,14 +60,29 @@ function StagewiseComponent() {
     return null // Silently fail for dev toolbar
   }
 
+  // Create a more comprehensive config
   const stagewiseConfig = {
-    plugins: []
+    plugins: [],
+    environment: process.env.NODE_ENV,
+    enabled: true
   }
 
   try {
-    return <ToolbarComponent config={stagewiseConfig} />
-  } catch (error) {
-    console.warn("Error rendering Stagewise toolbar:", error)
+    // Wrap the component in an error boundary-like try-catch
+    return (
+      <div style={{ position: "fixed", zIndex: 999999 }}>
+        <ToolbarComponent
+          config={stagewiseConfig}
+          onError={(err: any) => {
+            console.warn("Stagewise toolbar error:", err)
+            setError("Toolbar error")
+          }}
+        />
+      </div>
+    )
+  } catch (renderError) {
+    console.warn("Error rendering Stagewise toolbar:", renderError)
+    // Return null instead of crashing the app
     return null
   }
 }

@@ -2422,3 +2422,40 @@ export async function getSystemOrganizationStatisticsAction(): Promise<
 }
 
 // ====== END ORGANIZATION STATISTICS AND ANALYTICS ======
+
+/**
+ * Get public-facing organizations for display on the landing page
+ * This doesn't require authentication and only returns active/approved organizations
+ * with basic information (name, logo, website) for public display
+ */
+export async function getPublicOrganizationsAction(): Promise<
+  ActionState<
+    Pick<SelectOrganization, "id" | "name" | "logoUrl" | "websiteUrl">[]
+  >
+> {
+  try {
+    const organizations = await db
+      .select({
+        id: organizationsTable.id,
+        name: organizationsTable.name,
+        logoUrl: organizationsTable.logoUrl,
+        websiteUrl: organizationsTable.websiteUrl
+      })
+      .from(organizationsTable)
+      .where(eq(organizationsTable.status, "active"))
+      .orderBy(asc(organizationsTable.name))
+      .limit(12) // Limit to 12 organizations for the landing page
+
+    return {
+      isSuccess: true,
+      message: "Public organizations retrieved successfully",
+      data: organizations
+    }
+  } catch (error) {
+    console.error("Error getting public organizations:", error)
+    return {
+      isSuccess: false,
+      message: "Failed to get public organizations"
+    }
+  }
+}

@@ -12,6 +12,11 @@ import Image from "next/image"
 import Link from "next/link"
 // import Link from "next/link"; // Not strictly needed if no brand link in header
 
+/**
+ * Unified Header Component that includes both banner and navigation sections
+ * - Banner: Contains the NGDI logo and branding
+ * - Header: Contains navigation, search, and user controls
+ */
 export default function MainHeader() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isScrolled, setIsScrolled] = useState(false)
@@ -20,6 +25,7 @@ export default function MainHeader() {
     setIsMenuOpen(!isMenuOpen)
   }
 
+  // Handle scroll detection for header styling
   useEffect(() => {
     const handleScroll = () => {
       setIsScrolled(window.scrollY > 0)
@@ -28,7 +34,7 @@ export default function MainHeader() {
     return () => window.removeEventListener("scroll", handleScroll)
   }, [])
 
-  // Close mobile menu when clicking outside
+  // Close mobile menu when clicking outside and manage body scroll
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -41,7 +47,6 @@ export default function MainHeader() {
 
     if (isMenuOpen) {
       document.addEventListener("click", handleClickOutside)
-      // Prevent body scroll when menu is open
       document.body.style.overflow = "hidden"
     } else {
       document.body.style.overflow = "unset"
@@ -55,15 +60,16 @@ export default function MainHeader() {
 
   return (
     <div className="sticky top-0 z-40 flex flex-col">
-      {/* Banner Section */}
+      {/* ===== BANNER SECTION ===== */}
       <div
         className="bg-gradient-to-r from-slate-800 to-slate-600 h-[var(--banner-height)] flex items-center text-white"
         role="banner"
+        aria-label="NGDI Portal Banner"
       >
-        <div className="container mx-auto flex items-center justify-center">
+        <div className="container mx-auto flex items-center justify-center px-4">
           <Link
             href="/"
-            className="flex items-center"
+            className="flex items-center hover:opacity-90 transition-opacity"
             aria-label="NGDI Portal - Go to homepage"
           >
             <Image
@@ -78,29 +84,31 @@ export default function MainHeader() {
         </div>
       </div>
 
-      {/* Header Section */}
+      {/* ===== NAVIGATION HEADER ===== */}
       <header
         className={cn(
-          "w-full h-[var(--header-height)] border-b transition-colors",
+          "w-full h-[var(--header-height)] border-b transition-all duration-200",
           isScrolled
-            ? "bg-gradient-to-r from-background/90 to-background/70 shadow-sm backdrop-blur-sm"
-            : "bg-gradient-to-r from-background/95 to-background/85"
+            ? "bg-gradient-to-r from-background/95 to-background/90 shadow-md backdrop-blur-sm"
+            : "bg-gradient-to-r from-background to-background/95"
         )}
         role="navigation"
         aria-label="Main navigation"
       >
         <div className="container mx-auto flex h-full items-center justify-between space-x-4 px-4 sm:justify-between sm:space-x-0">
+          {/* Desktop Navigation Links */}
           <div className="hidden flex-1 items-center justify-center md:flex">
             <NavigationLinks />
           </div>
 
+          {/* Right Side Controls */}
           <div className="flex items-center justify-end space-x-2 md:flex-1 md:justify-end">
             <GlobalSearchBar />
             <ThemeSwitcher />
             <AuthStateHandler />
 
+            {/* Mobile Menu Toggle */}
             <div className="md:hidden" data-mobile-menu>
-              {/* Hamburger menu toggle */}
               <Button
                 variant="ghost"
                 size="icon"
@@ -110,6 +118,7 @@ export default function MainHeader() {
                 }
                 aria-expanded={isMenuOpen}
                 aria-controls="mobile-menu"
+                className="hover:bg-accent"
               >
                 {isMenuOpen ? (
                   <X className="size-6" />
@@ -121,10 +130,10 @@ export default function MainHeader() {
           </div>
         </div>
 
-        {/* Mobile Menu */}
+        {/* Mobile Navigation Menu */}
         {isMenuOpen && (
           <div
-            className="bg-background border-t md:hidden shadow-lg"
+            className="bg-background border-t md:hidden shadow-lg backdrop-blur-sm"
             id="mobile-menu"
             role="dialog"
             aria-label="Mobile navigation menu"

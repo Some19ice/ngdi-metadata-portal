@@ -14,25 +14,39 @@ import { OrganizationProvider } from "@/contexts/organization-context"
 import { useState, useEffect } from "react"
 
 export const Providers = ({ children, ...props }: ThemeProviderProps) => {
-  const [isClient, setIsClient] = useState(false)
+  const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
-    setIsClient(true)
+    setMounted(true)
   }, [])
 
-  // Provide a consistent loading state during hydration
-  if (!isClient) {
+  // During hydration, render a consistent skeleton to prevent mismatches
+  if (!mounted) {
     return (
-      <NextThemesProvider {...props}>
-        <TooltipProvider>
-          <div suppressHydrationWarning>{children}</div>
-        </TooltipProvider>
-      </NextThemesProvider>
+      <div suppressHydrationWarning>
+        <NextThemesProvider
+          {...props}
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+        >
+          <TooltipProvider>
+            <div className="min-h-screen bg-background text-foreground">
+              {children}
+            </div>
+          </TooltipProvider>
+        </NextThemesProvider>
+      </div>
     )
   }
 
   return (
-    <NextThemesProvider {...props}>
+    <NextThemesProvider
+      {...props}
+      attribute="class"
+      defaultTheme="system"
+      enableSystem
+    >
       <TooltipProvider>
         <CSPostHogProvider>
           <OrganizationProvider>{children}</OrganizationProvider>

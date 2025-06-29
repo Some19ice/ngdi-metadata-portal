@@ -33,6 +33,22 @@ interface SearchSuggestion {
   icon: React.ReactNode
 }
 
+// Hydration-safe skeleton component
+function SearchBarSkeleton() {
+  return (
+    <div className="relative w-full max-w-lg">
+      <div className="flex rounded-lg border border-input bg-background">
+        <div className="hidden sm:flex w-24 border-r">
+          <Skeleton className="h-10 w-full rounded-l-lg rounded-r-none" />
+        </div>
+        <div className="flex-1 relative">
+          <Skeleton className="h-10 w-full border-0 sm:rounded-none rounded-lg" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function GlobalSearchBar() {
   const [query, setQuery] = useState("")
   const [searchType, setSearchType] = useState<
@@ -42,9 +58,15 @@ export default function GlobalSearchBar() {
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false)
+  const [mounted, setMounted] = useState(false)
   const router = useRouter()
   const inputRef = useRef<HTMLInputElement>(null)
   const suggestionsRef = useRef<HTMLDivElement>(null)
+
+  // Hydration safety - mount detection
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   // Intelligent search type detection (memoized)
   const detectSearchType = useCallback(
@@ -177,49 +199,32 @@ export default function GlobalSearchBar() {
 
       const lowerQuery = searchQuery.toLowerCase()
 
+      // Count matches for each category
+      const locationMatches = locationKeywords.filter(keyword =>
+        lowerQuery.includes(keyword)
+      ).length
+      const metadataMatches = metadataKeywords.filter(keyword =>
+        lowerQuery.includes(keyword)
+      ).length
+
       // Check for coordinate patterns
-      if (/^-?\d+\.?\d*\s*,\s*-?\d+\.?\d*$/.test(searchQuery.trim())) {
+      const coordinatePattern = /^-?\d+\.?\d*\s*,\s*-?\d+\.?\d*$/
+      const bboxPattern =
+        /^-?\d+\.?\d*\s*,\s*-?\d+\.?\d*\s*,\s*-?\d+\.?\d*\s*,\s*-?\d+\.?\d*$/
+
+      if (coordinatePattern.test(lowerQuery) || bboxPattern.test(lowerQuery)) {
         return "location"
       }
 
-      // Check for bbox pattern
-      if (
-        /^-?\d+\.?\d*\s*,\s*-?\d+\.?\d*\s*,\s*-?\d+\.?\d*\s*,\s*-?\d+\.?\d*$/.test(
-          searchQuery.trim()
-        )
-      ) {
-        return "location"
-      }
-
-      // Score based on keyword presence
-      const locationScore = locationKeywords.filter(keyword =>
-        lowerQuery.includes(keyword)
-      ).length
-
-      const metadataScore = metadataKeywords.filter(keyword =>
-        lowerQuery.includes(keyword)
-      ).length
-
-      // If query contains location-specific terms, prefer location search
-      // If one score is significantly higher, return that type
-      if (locationScore > metadataScore + 2) {
-        // Location has at least 2 more relevant keywords
-        return "location"
-      }
-      if (metadataScore > locationScore + 2) {
-        // Metadata has at least 2 more relevant keywords
-        return "metadata"
-      }
-
-      // If scores are close or both are low, default to metadata
-      return "metadata"
+      // Default to metadata if no clear winner
+      return locationMatches > metadataMatches ? "location" : "metadata"
     },
     []
   )
 
-  // Fetch suggestions based on query
+  // Fetch suggestions based on search type and query
   const fetchSuggestions = async (searchQuery: string) => {
-    if (searchQuery.length < 2) {
+    if (!searchQuery.trim() || searchQuery.length < 2) {
       setSuggestions([])
       return
     }
@@ -228,84 +233,81 @@ export default function GlobalSearchBar() {
     const suggestions: SearchSuggestion[] = []
 
     try {
-      // Get location suggestions
-      if (searchType === "auto" || searchType === "location") {
-        console.log("Fetching location suggestions for:", searchQuery)
+      // Determine search types to query
+      const actualSearchType =
+        searchType === "auto" ? detectSearchType(searchQuery) : searchType
+      const shouldQueryLocation =
+        searchType === "auto" || searchType === "location"
+      const shouldQueryMetadata =
+        searchType === "auto" || searchType === "metadata"
 
-        const locationResult = await geocodeLocationAction({
-          searchText: searchQuery,
-          autocomplete: true,
-          limit: 3,
-          country: "NG"
-        })
-
-        console.log("Location suggestion result:", {
-          isSuccess: locationResult.isSuccess,
-          message: locationResult.message,
-          dataLength: locationResult.data?.length || 0
-        })
-
-        if (locationResult.isSuccess && locationResult.data) {
-          const locationSuggestions = locationResult.data
-            .slice(0, 3)
-            .map(feature => ({
-              type: "location" as const,
-              data: feature,
-              displayText: feature.place_name,
-              icon: <MapPin className="h-4 w-4 text-blue-600" />
-            }))
-          suggestions.push(...locationSuggestions)
-        } else if (!locationResult.isSuccess) {
-          console.error("Location suggestions failed:", locationResult.message)
-          // Still try to show metadata suggestions
+      // Fetch location suggestions
+      if (shouldQueryLocation) {
+        try {
+          const locationResult = await geocodeLocationAction({
+            searchText: searchQuery,
+            limit: 3
+          })
+          if (locationResult.isSuccess && locationResult.data) {
+            const locationSuggestions = locationResult.data
+              .slice(0, 3)
+              .map((feature: GeocodingFeature) => ({
+                type: "location" as const,
+                data: feature,
+                displayText: feature.place_name,
+                icon: <MapPin className="h-4 w-4 text-blue-600" />
+              }))
+            suggestions.push(...locationSuggestions)
+          }
+        } catch (error) {
+          console.warn("Location suggestions failed:", error)
         }
       }
 
-      // Get metadata suggestions
-      if (searchType === "auto" || searchType === "metadata") {
-        console.log("Fetching metadata suggestions for:", searchQuery)
-        const metadataResult = await searchMetadataSuggestionsAction({
-          query: searchQuery,
-          limit: 3
-        })
-
-        console.log("Metadata suggestion result:", {
-          isSuccess: metadataResult.isSuccess,
-          message: metadataResult.message,
-          dataLength: metadataResult.data?.length || 0
-        })
-
-        if (metadataResult.isSuccess && metadataResult.data) {
-          const metadataSuggestions = metadataResult.data.map(item => ({
-            type: "metadata" as const,
-            data: { title: item.title, query: item.title }, // Use title as query for now
-            displayText: item.title,
-            icon: <FileText className="h-4 w-4 text-green-600" />
-          }))
-          suggestions.push(...metadataSuggestions)
-        } else if (!metadataResult.isSuccess) {
-          console.error("Metadata suggestions failed:", metadataResult.message)
+      // Fetch metadata suggestions
+      if (shouldQueryMetadata) {
+        try {
+          const metadataResult = await searchMetadataSuggestionsAction({
+            query: searchQuery,
+            limit: 4
+          })
+          if (metadataResult.isSuccess && metadataResult.data) {
+            const metadataSuggestions = metadataResult.data
+              .slice(0, 4)
+              .map(item => ({
+                type: "metadata" as const,
+                data: { title: item.title || "", query: searchQuery },
+                displayText: item.title || "",
+                icon: <FileText className="h-4 w-4 text-green-600" />
+              }))
+            suggestions.push(...metadataSuggestions)
+          }
+        } catch (error) {
+          console.warn("Metadata suggestions failed:", error)
         }
+      }
+
+      // Sort suggestions: prioritize the detected/selected type first
+      if (searchType === "auto") {
+        suggestions.sort((a, b) => {
+          if (a.type === actualSearchType && b.type !== actualSearchType)
+            return -1
+          if (b.type === actualSearchType && a.type !== actualSearchType)
+            return 1
+          return 0
+        })
       }
 
       setSuggestions(suggestions)
     } catch (error) {
-      console.error("Error fetching suggestions:", error)
+      console.error("Failed to fetch suggestions:", error)
       setSuggestions([])
-
-      // Show user-friendly error message
-      if (typeof window !== "undefined" && window.posthog) {
-        window.posthog.capture("search_suggestions_error", {
-          error_message: error instanceof Error ? error.message : String(error),
-          search_query: searchQuery.substring(0, 50)
-        })
-      }
+    } finally {
+      setIsLoadingSuggestions(false)
     }
-
-    setIsLoadingSuggestions(false)
   }
 
-  // Handle search submission
+  // Search handling with PostHog analytics
   const handleSearch = async (
     searchQuery: string = query,
     selectedSuggestion?: SearchSuggestion
@@ -315,46 +317,67 @@ export default function GlobalSearchBar() {
     setIsLoading(true)
     setShowSuggestions(false)
 
-    // Determine final search type
-    let finalSearchType = searchType
-    if (searchType === "auto") {
-      finalSearchType =
-        selectedSuggestion?.type || detectSearchType(searchQuery)
-    }
-
     // Track search analytics
     if (typeof window !== "undefined" && window.posthog) {
-      window.posthog.capture("global_search_initiated", {
-        search_type: finalSearchType,
-        query_length: searchQuery.length,
+      window.posthog.capture("search_initiated", {
+        query: searchQuery.substring(0, 100),
+        search_type: searchType,
         has_suggestion: !!selectedSuggestion,
-        suggestion_type: selectedSuggestion?.type,
-        search_interface: "global_header",
-        query_preview: searchQuery.substring(0, 50) // First 50 chars for privacy
+        search_interface: "global_header"
       })
     }
 
-    // Route based on search type
-    if (
-      finalSearchType === "location" ||
-      selectedSuggestion?.type === "location"
-    ) {
-      if (selectedSuggestion?.type === "location") {
+    // If a suggestion was selected, handle it accordingly
+    if (selectedSuggestion) {
+      if (selectedSuggestion.type === "location") {
         const locationData = selectedSuggestion.data as GeocodingFeature
         const [longitude, latitude] = locationData.center
         router.push(
           `/map?location=${encodeURIComponent(locationData.place_name)}&center=${longitude},${latitude}&zoom=12`
         )
       } else {
-        // Try to geocode the query
+        router.push(
+          `/search?q=${encodeURIComponent(selectedSuggestion.displayText)}&type=metadata`
+        )
+      }
+    } else {
+      // Determine search behavior based on type and query content
+      const actualSearchType =
+        searchType === "auto" ? detectSearchType(searchQuery) : searchType
+
+      if (actualSearchType === "location") {
+        // Handle coordinate search
+        const coordinateMatch = searchQuery.match(
+          /^(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)$/
+        )
+        if (coordinateMatch) {
+          const [, longitude, latitude] = coordinateMatch
+          router.push(
+            `/map?center=${longitude},${latitude}&zoom=12&search=${encodeURIComponent(searchQuery)}`
+          )
+          setIsLoading(false)
+          return
+        }
+
+        // Handle bbox search
+        const bboxMatch = searchQuery.match(
+          /^(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)$/
+        )
+        if (bboxMatch) {
+          const [, minLng, minLat, maxLng, maxLat] = bboxMatch
+          router.push(
+            `/map?bbox=${minLng},${minLat},${maxLng},${maxLat}&search=${encodeURIComponent(searchQuery)}`
+          )
+          setIsLoading(false)
+          return
+        }
+
+        // For location names, try geocoding then fallback
         try {
           const result = await geocodeLocationAction({
-            searchText: searchQuery,
-            autocomplete: false,
-            limit: 1,
-            country: "NG"
+            searchText: searchQuery
           })
-          if (result.isSuccess && result.data && result.data.length > 0) {
+          if (result.isSuccess && result.data?.length > 0) {
             const firstResult = result.data[0]
             const [longitude, latitude] = firstResult.center
             router.push(
@@ -371,10 +394,12 @@ export default function GlobalSearchBar() {
             `/search?q=${encodeURIComponent(searchQuery)}&type=location`
           )
         }
+      } else {
+        // Metadata search
+        router.push(
+          `/search?q=${encodeURIComponent(searchQuery)}&type=metadata`
+        )
       }
-    } else {
-      // Metadata search
-      router.push(`/search?q=${encodeURIComponent(searchQuery)}&type=metadata`)
     }
 
     setIsLoading(false)
@@ -383,7 +408,7 @@ export default function GlobalSearchBar() {
   // Handle input change with debounced suggestions
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (query && showSuggestions) {
+      if (query && showSuggestions && mounted) {
         fetchSuggestions(query)
       } else {
         setSuggestions([])
@@ -391,10 +416,12 @@ export default function GlobalSearchBar() {
     }, 300)
 
     return () => clearTimeout(timer)
-  }, [query, searchType, showSuggestions])
+  }, [query, searchType, showSuggestions, mounted, detectSearchType])
 
   // Handle click outside to close suggestions and keyboard shortcuts
   useEffect(() => {
+    if (!mounted) return
+
     const handleClickOutside = (event: MouseEvent) => {
       if (
         suggestionsRef.current &&
@@ -407,150 +434,156 @@ export default function GlobalSearchBar() {
     }
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      // Ctrl/Cmd + K to focus search
-      if ((event.ctrlKey || event.metaKey) && event.key === "k") {
+      // Global search shortcut: Ctrl/Cmd + K
+      if ((event.metaKey || event.ctrlKey) && event.key === "k") {
         event.preventDefault()
         inputRef.current?.focus()
-      }
-      // Escape to close suggestions
-      if (event.key === "Escape") {
-        setShowSuggestions(false)
-        inputRef.current?.blur()
+        setShowSuggestions(true)
       }
     }
 
     document.addEventListener("mousedown", handleClickOutside)
     document.addEventListener("keydown", handleKeyDown)
+
     return () => {
       document.removeEventListener("mousedown", handleClickOutside)
       document.removeEventListener("keydown", handleKeyDown)
     }
-  }, [])
+  }, [mounted])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    handleSearch()
+    handleSearch(query)
   }
 
   const handleSuggestionClick = (suggestion: SearchSuggestion) => {
-    // Track suggestion click analytics
-    if (typeof window !== "undefined" && window.posthog) {
-      window.posthog.capture("search_suggestion_clicked", {
-        suggestion_type: suggestion.type,
-        suggestion_text: suggestion.displayText.substring(0, 50),
-        search_interface: "global_header"
-      })
-    }
+    setQuery(suggestion.displayText)
+    handleSearch(suggestion.displayText, suggestion)
+  }
 
-    const queryText =
-      suggestion.type === "location"
-        ? (suggestion.data as GeocodingFeature).place_name
-        : suggestion.displayText
-    setQuery(queryText)
-    handleSearch(queryText, suggestion)
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value
+    setQuery(value)
+
+    // Show suggestions when typing if we have at least 2 characters
+    if (value.length >= 2) {
+      setShowSuggestions(true)
+    } else {
+      setShowSuggestions(false)
+    }
   }
 
   const handleInputFocus = () => {
-    setShowSuggestions(true)
-    if (query) {
+    if (query.length >= 2) {
+      setShowSuggestions(true)
+    }
+  }
+
+  const handleSearchTypeChange = (value: "auto" | "metadata" | "location") => {
+    setSearchType(value)
+    // Refresh suggestions with new search type if we have a query
+    if (query.length >= 2 && showSuggestions) {
       fetchSuggestions(query)
     }
   }
 
-  return (
-    <div className="relative w-full max-w-lg">
-      <form onSubmit={handleSubmit} className="relative">
-        <div className="flex rounded-lg border border-input bg-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
-          {/* Search Type Selector - Hidden on mobile */}
-          <Select
-            value={searchType}
-            onValueChange={(value: "auto" | "metadata" | "location") =>
-              setSearchType(value)
-            }
-          >
-            <SelectTrigger className="hidden sm:flex w-24 border-0 border-r focus:ring-0 rounded-l-lg rounded-r-none">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="auto">Auto</SelectItem>
-              <SelectItem value="metadata">Data</SelectItem>
-              <SelectItem value="location">Places</SelectItem>
-            </SelectContent>
-          </Select>
+  // Show skeleton during hydration
+  if (!mounted) {
+    return <SearchBarSkeleton />
+  }
 
-          {/* Search Input */}
+  return (
+    <div className="relative w-full max-w-lg" suppressHydrationWarning>
+      <form onSubmit={handleSubmit} className="relative">
+        <div className="flex rounded-lg border border-input bg-background">
+          {/* Search Type Selector - Hidden on mobile */}
+          <div className="hidden sm:flex w-24 border-r">
+            <Select
+              value={searchType}
+              onValueChange={handleSearchTypeChange}
+              disabled={isLoading}
+            >
+              <SelectTrigger className="h-10 border-0 rounded-l-lg rounded-r-none text-xs px-2">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto">Auto</SelectItem>
+                <SelectItem value="metadata">Data</SelectItem>
+                <SelectItem value="location">Place</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Main Search Input */}
           <div className="flex-1 relative">
             <Input
               ref={inputRef}
               type="text"
-              placeholder={
-                searchType === "location"
-                  ? "Search locations, coordinates..."
-                  : searchType === "metadata"
-                    ? "Search datasets, keywords..."
-                    : "Search data, locations, or enter coordinates..."
-              }
+              placeholder="Search datasets, locations, or coordinates..."
               value={query}
-              onChange={e => setQuery(e.target.value)}
+              onChange={handleInputChange}
               onFocus={handleInputFocus}
-              className="border-0 focus-visible:ring-0 sm:rounded-none rounded-lg pr-20"
-            />
-
-            {/* Keyboard shortcut hint */}
-            {!query && !showSuggestions && (
-              <div className="absolute right-12 top-1/2 -translate-y-1/2 hidden sm:flex items-center gap-1 text-xs text-muted-foreground">
-                <kbd className="px-1.5 py-0.5 bg-muted rounded text-xs">⌘</kbd>
-                <kbd className="px-1.5 py-0.5 bg-muted rounded text-xs">K</kbd>
-              </div>
-            )}
-
-            {/* Search Button */}
-            <button
-              type="submit"
               disabled={isLoading}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-accent rounded-sm disabled:opacity-50"
-            >
+              className="h-10 border-0 sm:rounded-none rounded-lg pl-3 sm:pl-3 pr-10"
+            />
+            <div className="absolute inset-y-0 right-0 flex items-center pr-3">
               {isLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
               ) : (
-                <SearchIcon className="h-4 w-4" />
+                <SearchIcon className="h-4 w-4 text-muted-foreground" />
               )}
-            </button>
+            </div>
           </div>
+        </div>
+
+        {/* Mobile Search Type Indicator */}
+        <div className="sm:hidden mt-1 text-xs text-muted-foreground">
+          Mode: {searchType === "auto" ? "Auto-detect" : searchType}
         </div>
       </form>
 
       {/* Suggestions Dropdown */}
-      {showSuggestions && (suggestions.length > 0 || isLoadingSuggestions) && (
+      {showSuggestions && mounted && (
         <div
           ref={suggestionsRef}
-          className="absolute top-full left-0 right-0 mt-1 bg-background border border-border rounded-md shadow-lg z-50 max-h-64 overflow-y-auto"
+          className="absolute top-full left-0 right-0 mt-2 bg-background border rounded-lg shadow-lg z-50 max-h-80 overflow-y-auto"
         >
           {isLoadingSuggestions ? (
-            <div className="p-3">
-              <div className="space-y-2">
-                <Skeleton className="h-4 w-3/4" />
-                <Skeleton className="h-4 w-1/2" />
-                <Skeleton className="h-4 w-2/3" />
-              </div>
+            <div className="p-4 text-center">
+              <Loader2 className="h-4 w-4 animate-spin mx-auto" />
+              <p className="text-sm text-muted-foreground mt-2">Searching...</p>
             </div>
-          ) : (
-            <div className="py-1">
+          ) : suggestions.length > 0 ? (
+            <div className="py-2">
               {suggestions.map((suggestion, index) => (
                 <button
                   key={index}
-                  className="w-full px-3 py-2 text-left hover:bg-accent flex items-center gap-2 text-sm"
                   onClick={() => handleSuggestionClick(suggestion)}
+                  className="w-full text-left px-4 py-2 hover:bg-muted flex items-center gap-3 text-sm"
+                  type="button"
                 >
                   {suggestion.icon}
-                  <span className="truncate">{suggestion.displayText}</span>
-                  <span className="ml-auto text-xs text-muted-foreground capitalize">
-                    {suggestion.type}
+                  <span className="flex-1 truncate">
+                    {suggestion.displayText}
+                  </span>
+                  <span
+                    className={cn(
+                      "text-xs px-2 py-1 rounded",
+                      suggestion.type === "location"
+                        ? "bg-blue-100 text-blue-700"
+                        : "bg-green-100 text-green-700"
+                    )}
+                  >
+                    {suggestion.type === "location" ? "Place" : "Dataset"}
                   </span>
                 </button>
               ))}
             </div>
-          )}
+          ) : query.length >= 2 ? (
+            <div className="p-4 text-center text-sm text-muted-foreground">
+              No suggestions found. Press Enter to search.
+            </div>
+          ) : null}
         </div>
       )}
     </div>

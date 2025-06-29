@@ -1,6 +1,7 @@
 "use server"
 
 import Link from "next/link"
+import { Suspense } from "react"
 import {
   Card,
   CardContent,
@@ -25,6 +26,8 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ImageWithFallback } from "@/components/ui/image-with-fallback"
+import { ContributingOrganizationsFetcher } from "./_components/contributing-organizations-fetcher"
+import { ContributingOrganizationsSkeleton } from "./_components/contributing-organizations-skeleton"
 
 export default async function LandingPage() {
   // Placeholder data for featured datasets
@@ -340,46 +343,9 @@ export default async function LandingPage() {
         </section>
 
         {/* Organizations/Contributors Section */}
-        <section
-          className="py-16 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800"
-          aria-labelledby="contributing-orgs"
-        >
-          <div className="container mx-auto px-4">
-            <div className="text-center mb-12">
-              <h2 id="contributing-orgs" className="text-3xl font-bold mb-3">
-                Contributing Organizations
-              </h2>
-              <p className="text-muted-foreground max-w-2xl mx-auto">
-                The NGDI Portal is made possible by the contributions of
-                numerous organizations dedicated to improving access to
-                geospatial data.
-              </p>
-            </div>
-
-            {/* Placeholder for organization logos */}
-            <div className="flex flex-wrap justify-center items-center gap-8">
-              {[1, 2, 3, 4, 5, 6].map(org => (
-                <div
-                  key={org}
-                  className="h-16 w-32 rounded-md bg-background shadow-sm flex items-center justify-center hover:shadow-md transition-all duration-300 hover:scale-105 border"
-                  role="img"
-                  aria-label={`Organization ${org} logo placeholder`}
-                >
-                  <div className="bg-gradient-to-r from-muted to-muted-foreground/20 h-8 w-20 rounded" />
-                </div>
-              ))}
-            </div>
-
-            <div className="text-center mt-10">
-              <Link href="/committee">
-                <Button variant="outline" className="group">
-                  View All Organizations
-                  <ArrowRight className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-1" />
-                </Button>
-              </Link>
-            </div>
-          </div>
-        </section>
+        <Suspense fallback={<ContributingOrganizationsSkeleton />}>
+          <ContributingOrganizationsFetcher />
+        </Suspense>
 
         {/* Latest Updates Section */}
         <section
