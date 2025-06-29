@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import {
   Crosshair,
   Copy,
@@ -22,7 +22,8 @@ import { Button } from "@/components/ui/button"
 import {
   Tooltip,
   TooltipContent,
-  TooltipTrigger
+  TooltipTrigger,
+  TooltipProvider
 } from "@/components/ui/tooltip"
 import { toast } from "sonner"
 import { Map, Marker } from "maplibre-gl"
@@ -60,17 +61,35 @@ export default function MapFabGroup({
     return () => document.removeEventListener("fullscreenchange", handler)
   }, [])
 
-  // Track map bearing for compass
+  // Track map bearing for compass with throttling
+  const bearingUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  const updateBearing = useCallback(() => {
+    if (!map) return
+    // Throttle bearing updates to prevent excessive re-renders
+    if (bearingUpdateTimeoutRef.current) {
+      clearTimeout(bearingUpdateTimeoutRef.current)
+    }
+    bearingUpdateTimeoutRef.current = setTimeout(() => {
+      const bearing = Math.round(map.getBearing())
+      setBearingNorth(prev => (prev !== bearing ? bearing : prev))
+    }, 100) // Update at most every 100ms
+  }, [map])
+
   useEffect(() => {
     if (!map) return
-    const updateBearing = () => setBearingNorth(map.getBearing())
     map.on("rotate", updateBearing)
+    // Set initial bearing
+    updateBearing()
     return () => {
       map.off("rotate", updateBearing)
+      if (bearingUpdateTimeoutRef.current) {
+        clearTimeout(bearingUpdateTimeoutRef.current)
+      }
     }
   }, [map])
 
-  const copyCenter = () => {
+  const copyCenter = useCallback(() => {
     if (!map) return
     const center = map.getCenter()
     const zoom = map.getZoom()
@@ -79,9 +98,9 @@ export default function MapFabGroup({
     toast.success("Coordinates copied", {
       description: `📍 ${coords} (zoom: ${zoom.toFixed(1)})`
     })
-  }
+  }, [map])
 
-  const locateUser = () => {
+  const locateUser = useCallback(() => {
     if (!map || locating) return
 
     setLocating(true)
@@ -172,9 +191,9 @@ export default function MapFabGroup({
         maximumAge: 300000
       }
     )
-  }
+  }, [map, locating, onClearSearchResults])
 
-  const toggleFullscreen = () => {
+  const toggleFullscreen = useCallback(() => {
     if (!map) return
     const container = map.getContainer()
     if (!document.fullscreenElement) {
@@ -186,9 +205,9 @@ export default function MapFabGroup({
         toast.error("Failed to exit full screen")
       })
     }
-  }
+  }, [map])
 
-  const resetMapBearing = () => {
+  const resetMapBearing = useCallback(() => {
     if (!map) return
     map.easeTo({
       bearing: 0,
@@ -196,15 +215,15 @@ export default function MapFabGroup({
       duration: 1000
     })
     toast.success("Map reset to north")
-  }
+  }, [map])
 
-  const refreshMap = () => {
+  const refreshMap = useCallback(() => {
     if (!map) return
     map.getStyle()
     toast.success("Map refreshed")
-  }
+  }, [map])
 
-  const shareLocation = () => {
+  const shareLocation = useCallback(() => {
     if (!map) return
     const center = map.getCenter()
     const zoom = map.getZoom()
@@ -225,9 +244,9 @@ export default function MapFabGroup({
       navigator.clipboard.writeText(url)
       toast.success("Location URL copied to clipboard")
     }
-  }
+  }, [map])
 
-  const downloadMapView = () => {
+  const downloadMapView = useCallback(() => {
     if (!map) return
     const canvas = map.getCanvas()
     const link = document.createElement("a")
@@ -235,13 +254,19 @@ export default function MapFabGroup({
     link.href = canvas.toDataURL()
     link.click()
     toast.success("Map screenshot downloaded")
-  }
+  }, [map])
 
   // Enhanced FAB styling with glass morphism effect
   const primaryFabClass =
     "w-12 h-12 rounded-full backdrop-blur-md bg-white/90 hover:bg-white shadow-lg hover:shadow-xl ring-1 ring-black/10 hover:ring-black/20 transition-all duration-200 transform hover:scale-105"
   const secondaryFabClass =
     "w-10 h-10 rounded-full backdrop-blur-md bg-white/80 hover:bg-white/90 shadow-md hover:shadow-lg ring-1 ring-black/5 hover:ring-black/10 transition-all duration-200 transform hover:scale-105"
+
+  // Stable toggler to avoid triggering re-renders when spread into memoized arrays
+  const toggleGroupExpanded = useCallback(() => {
+    // Functional update ensures we always toggle based on latest state
+    setIsGroupExpanded(prev => !prev)
+  }, [])
 
   const primaryTools = useMemo(
     () => [
@@ -262,7 +287,7 @@ export default function MapFabGroup({
         ) : (
           <Layers className="h-4 w-4" />
         ),
-        onClick: () => setIsGroupExpanded(!isGroupExpanded),
+        onClick: toggleGroupExpanded,
         tooltip: isGroupExpanded ? "Show less tools" : "Show more tools",
         variant: "primary" as const
       }
@@ -316,24 +341,91 @@ export default function MapFabGroup({
   )
 
   return (
-    <div
-      className="absolute z-20"
-      style={{ bottom: isMobile ? "4rem" : "1rem", right: "1rem" }}
-    >
-      {/* Expanded secondary tools */}
-      {isGroupExpanded && (
-        <div className="flex flex-col gap-2 mb-3 animate-in slide-in-from-bottom-2 duration-300">
-          {secondaryTools.map((tool, index) => (
-            <Tooltip key={`secondary-tool-${index}`} delayDuration={300}>
+    <TooltipProvider delayDuration={300} skipDelayDuration={0}>
+      <div
+        className="absolute z-20"
+        style={{ bottom: isMobile ? "4rem" : "1rem", right: "1rem" }}
+      >
+        {/* Expanded secondary tools */}
+        {isGroupExpanded && (
+          <div className="flex flex-col gap-2 mb-3 animate-in slide-in-from-bottom-2 duration-300">
+            {secondaryTools.map((tool, index) => (
+              <Tooltip key={`secondary-${index}`} delayDuration={300}>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className={secondaryFabClass}
+                    onClick={tool.onClick}
+                    style={{
+                      animationDelay: `${index * 50}ms`
+                    }}
+                  >
+                    {tool.icon}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="left">{tool.tooltip}</TooltipContent>
+              </Tooltip>
+            ))}
+          </div>
+        )}
+
+        {/* Primary tools always visible */}
+        <div className="flex flex-col gap-3">
+          {/* Mobile Drawer Toggle */}
+          {onToggleDrawer && isMobile && (
+            <Tooltip delayDuration={300}>
               <TooltipTrigger asChild>
                 <Button
                   size="icon"
                   variant="ghost"
-                  className={secondaryFabClass}
+                  className={primaryFabClass}
+                  onClick={onToggleDrawer}
+                >
+                  {drawerOpen ? (
+                    <PanelLeftClose className="h-5 w-5" />
+                  ) : (
+                    <PanelLeftOpen className="h-5 w-5" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="left">
+                {drawerOpen ? "Close controls" : "Open controls"}
+              </TooltipContent>
+            </Tooltip>
+          )}
+
+          {/* Desktop Sidebar Toggle */}
+          {onToggleSidebar && !isMobile && sidebarCollapsed && (
+            <Tooltip delayDuration={300}>
+              <TooltipTrigger asChild>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className={primaryFabClass}
+                  onClick={onToggleSidebar}
+                >
+                  <PanelLeftOpen className="h-5 w-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="left">Show sidebar</TooltipContent>
+            </Tooltip>
+          )}
+
+          {/* Primary action buttons */}
+          {primaryTools.map((tool, index) => (
+            <Tooltip key={`primary-${index}`} delayDuration={300}>
+              <TooltipTrigger asChild>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className={
+                    tool.variant === "primary"
+                      ? primaryFabClass
+                      : secondaryFabClass
+                  }
                   onClick={tool.onClick}
-                  style={{
-                    animationDelay: `${index * 50}ms`
-                  }}
+                  disabled={tool.disabled}
                 >
                   {tool.icon}
                 </Button>
@@ -342,75 +434,7 @@ export default function MapFabGroup({
             </Tooltip>
           ))}
         </div>
-      )}
-
-      {/* Primary tools always visible */}
-      <div className="flex flex-col gap-3">
-        {/* Mobile Drawer Toggle */}
-        {onToggleDrawer && isMobile && (
-          <Tooltip key="mobile-drawer-toggle" delayDuration={300}>
-            <TooltipTrigger asChild>
-              <Button
-                size="icon"
-                variant="ghost"
-                className={primaryFabClass}
-                onClick={onToggleDrawer}
-              >
-                {drawerOpen ? (
-                  <PanelLeftClose className="h-5 w-5" />
-                ) : (
-                  <PanelLeftOpen className="h-5 w-5" />
-                )}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="left">
-              {drawerOpen ? "Close controls" : "Open controls"}
-            </TooltipContent>
-          </Tooltip>
-        )}
-
-        {/* Desktop Sidebar Toggle */}
-        {onToggleSidebar && !isMobile && sidebarCollapsed && (
-          <Tooltip key="desktop-sidebar-toggle" delayDuration={300}>
-            <TooltipTrigger asChild>
-              <Button
-                size="icon"
-                variant="ghost"
-                className={primaryFabClass}
-                onClick={onToggleSidebar}
-              >
-                <PanelLeftOpen className="h-5 w-5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="left">Show sidebar</TooltipContent>
-          </Tooltip>
-        )}
-
-        {/* Primary action buttons */}
-        {primaryTools.map((tool, index) => (
-          <Tooltip
-            key={`primary-tool-${index}-${tool.tooltip}`}
-            delayDuration={300}
-          >
-            <TooltipTrigger asChild>
-              <Button
-                size="icon"
-                variant="ghost"
-                className={
-                  tool.variant === "primary"
-                    ? primaryFabClass
-                    : secondaryFabClass
-                }
-                onClick={tool.onClick}
-                disabled={tool.disabled}
-              >
-                {tool.icon}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="left">{tool.tooltip}</TooltipContent>
-          </Tooltip>
-        ))}
       </div>
-    </div>
+    </TooltipProvider>
   )
 }

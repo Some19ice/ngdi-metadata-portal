@@ -24,10 +24,8 @@ const config = {
     "to-slate-900",
     "from-blue-400/20",
     "to-green-400/20",
-    // Arbitrary value gradients (radial) used for animated background
-    {
-      pattern: /bg-\[radial-gradient\(.+\)\]/
-    }
+    // Radial gradient utility used in MainHeader background
+    "bg-[radial-gradient(circle_at_20%_50%,rgba(120,119,198,0.3),transparent_50%),radial-gradient(circle_at_80%_50%,rgba(255,119,198,0.3),transparent_50%)]"
   ],
   prefix: "",
   theme: {

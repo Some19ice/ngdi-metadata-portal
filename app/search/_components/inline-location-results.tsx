@@ -296,7 +296,9 @@ function LocationFeatureCard({ feature }: { feature: GeocodingFeature }) {
           {coordinates && (
             <Button asChild size="sm" variant="outline">
               <Link
-                href={`/map?center=${longitude},${latitude}&location=${encodeURIComponent(
+                href={`/map?search=${encodeURIComponent(
+                  feature.place_name || feature.text || "Location"
+                )}&center=${longitude},${latitude}&location=${encodeURIComponent(
                   feature.place_name || feature.text || "Location"
                 )}&zoom=12`}
               >

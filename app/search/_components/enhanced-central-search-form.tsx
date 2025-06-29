@@ -47,8 +47,26 @@ import { toast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 
 import { useSearchOptimization } from "@/lib/hooks/use-search-optimization"
-import { searchMetadataRecordsAction } from "@/actions/db/metadata-records-actions"
+import {
+  searchMetadataRecordsAction,
+  PaginatedMetadataRecords,
+  MetadataRecordWithOrganization
+} from "@/actions/db/metadata-records-actions"
 import { geocodeLocationAction } from "@/actions/map-actions"
+
+// Import correct types from schema
+import type { SelectOrganization } from "@/db/schema"
+
+// Types for better type safety - using correct schema types
+interface LocationFeature {
+  properties?: {
+    display_name?: string
+    name?: string
+    state?: string
+    [key: string]: any
+  }
+  [key: string]: any
+}
 
 const searchFormSchema = z.object({
   q: z
@@ -113,15 +131,20 @@ export function EnhancedCentralSearchForm({
   const currentQuery = form.watch("q")
   const currentType = form.watch("type")
 
-  // Search optimization hooks
-  const metadataSearch = useSearchOptimization(
+  // Search optimization hooks with correct typing
+  const metadataSearch = useSearchOptimization<PaginatedMetadataRecords | null>(
     async (query: string) => {
-      const result = await searchMetadataRecordsAction({
-        query,
-        page: 1,
-        pageSize: 5
-      })
-      return result.isSuccess ? result.data : null
+      try {
+        const result = await searchMetadataRecordsAction({
+          query,
+          page: 1,
+          pageSize: 5
+        })
+        return result.isSuccess ? result.data : null
+      } catch (error) {
+        console.error("Metadata search error:", error)
+        return null
+      }
     },
     {
       debounceDelay: 300,
@@ -130,15 +153,20 @@ export function EnhancedCentralSearchForm({
     }
   )
 
-  const locationSearch = useSearchOptimization(
+  const locationSearch = useSearchOptimization<LocationFeature[] | null>(
     async (query: string) => {
-      const result = await geocodeLocationAction({
-        searchText: query,
-        limit: 5,
-        autocomplete: true,
-        country: "NG"
-      })
-      return result.isSuccess ? result.data : null
+      try {
+        const result = await geocodeLocationAction({
+          searchText: query,
+          limit: 5,
+          autocomplete: true,
+          country: "NG"
+        })
+        return result.isSuccess ? result.data : null
+      } catch (error) {
+        console.error("Location search error:", error)
+        return null
+      }
     },
     {
       debounceDelay: 300,
@@ -237,79 +265,103 @@ export function EnhancedCentralSearchForm({
     }
   }
 
-  // Generate intelligent suggestions
+  // Generate intelligent suggestions with proper null checking
   const suggestions = useMemo(() => {
     const allSuggestions: SearchSuggestion[] = []
 
-    // Recent searches
-    if (currentQuery.length === 0) {
-      recentSearches.slice(0, 5).forEach((search, index) => {
-        allSuggestions.push({
-          id: `recent-${index}`,
-          type: "recent",
-          query: search,
-          title: search,
-          subtitle: "Recent search",
-          timestamp: Date.now() - index * 60000 // Mock timestamps
-        })
-      })
-    }
-
-    // Metadata suggestions
-    if (metadataSearch.data?.records && currentQuery.length >= 2) {
-      metadataSearch.data.records
-        .slice(0, 3)
-        .forEach((record: any, index: number) => {
+    try {
+      // Recent searches
+      if (currentQuery.length === 0) {
+        recentSearches.slice(0, 5).forEach((search, index) => {
           allSuggestions.push({
-            id: `metadata-${index}`,
-            type: "metadata",
-            query: record.title,
-            title: record.title,
-            subtitle: `Dataset • ${record.organization || "Unknown"}`,
-            count: 1
+            id: `recent-${index}`,
+            type: "recent",
+            query: search,
+            title: search,
+            subtitle: "Recent search",
+            timestamp: Date.now() - index * 60000 // Mock timestamps
           })
         })
-    }
+      }
 
-    // Location suggestions
-    if (locationSearch.data && currentQuery.length >= 2) {
-      locationSearch.data.slice(0, 3).forEach((feature: any, index: number) => {
-        allSuggestions.push({
-          id: `location-${index}`,
-          type: "location",
-          query: feature.properties?.display_name || feature.properties?.name,
-          title: feature.properties?.display_name || feature.properties?.name,
-          subtitle: `Location • ${feature.properties?.state || "Nigeria"}`,
-          count: 1
-        })
-      })
-    }
+      // Metadata suggestions with proper null checking
+      if (
+        metadataSearch.data &&
+        metadataSearch.data.records &&
+        Array.isArray(metadataSearch.data.records) &&
+        currentQuery.length >= 2
+      ) {
+        metadataSearch.data.records
+          .slice(0, 3)
+          .forEach((record: MetadataRecordWithOrganization, index: number) => {
+            if (record && record.title) {
+              allSuggestions.push({
+                id: `metadata-${index}`,
+                type: "metadata",
+                query: record.title,
+                title: record.title,
+                subtitle: `Dataset • ${record.organization?.name || "Unknown"}`,
+                count: 1
+              })
+            }
+          })
+      }
 
-    // Cached suggestions
-    if (currentQuery.length >= 1) {
-      const cachedSuggestions = metadataSearch.getSearchSuggestions(
-        currentQuery,
-        3
-      )
-      cachedSuggestions.forEach((suggestion, index) => {
-        allSuggestions.push({
-          id: `cached-${index}`,
-          type: "suggestion",
-          query: suggestion,
-          title: suggestion,
-          subtitle: "Suggestion"
-        })
-      })
-    }
+      // Location suggestions with proper null checking
+      if (
+        locationSearch.data &&
+        Array.isArray(locationSearch.data) &&
+        currentQuery.length >= 2
+      ) {
+        locationSearch.data
+          .slice(0, 3)
+          .forEach((feature: LocationFeature, index: number) => {
+            const displayName =
+              feature.properties?.display_name || feature.properties?.name
+            if (displayName) {
+              allSuggestions.push({
+                id: `location-${index}`,
+                type: "location",
+                query: displayName,
+                title: displayName,
+                subtitle: `Location • ${feature.properties?.state || "Nigeria"}`,
+                count: 1
+              })
+            }
+          })
+      }
 
-    return allSuggestions.slice(0, 8)
-  }, [
-    currentQuery,
-    metadataSearch.data,
-    locationSearch.data,
-    recentSearches,
-    metadataSearch
-  ])
+      // Cached suggestions with error handling
+      if (currentQuery.length >= 1) {
+        try {
+          const cachedSuggestions = metadataSearch.getSearchSuggestions(
+            currentQuery,
+            3
+          )
+          if (Array.isArray(cachedSuggestions)) {
+            cachedSuggestions.forEach((suggestion, index) => {
+              if (suggestion && typeof suggestion === "string") {
+                allSuggestions.push({
+                  id: `cached-${index}`,
+                  type: "suggestion",
+                  query: suggestion,
+                  title: suggestion,
+                  subtitle: "Suggestion"
+                })
+              }
+            })
+          }
+        } catch (error) {
+          console.debug("Error getting cached suggestions:", error)
+        }
+      }
+
+      return allSuggestions.slice(0, 8)
+    } catch (error) {
+      console.error("Error generating suggestions:", error)
+      return []
+    }
+  }, [currentQuery, metadataSearch.data, locationSearch.data, recentSearches])
 
   // Get form size classes
   const getSizeClasses = () => {
@@ -396,23 +448,22 @@ export function EnhancedCentralSearchForm({
                             // Merge the form ref with our custom ref
                             field.ref(element)
                             if (inputRef.current !== element) {
-                              ;(
-                                inputRef as React.MutableRefObject<HTMLInputElement | null>
-                              ).current = element
+                              ;(inputRef as any).current = element
                             }
                           }}
                           className={cn(
-                            "pl-10 pr-10",
+                            "pl-10",
                             getSizeClasses(),
                             size === "lg" && "h-12",
                             size === "md" && "h-10",
                             size === "sm" && "h-9"
                           )}
-                          disabled={isSearching}
-                          autoComplete="off"
-                          spellCheck="false"
-                          onFocus={() => setShowSuggestionPanel(true)}
-                          onBlur={e => {
+                          onFocus={() => {
+                            if (showSuggestions) {
+                              setShowSuggestionPanel(true)
+                            }
+                          }}
+                          onBlur={() => {
                             // Delay hiding to allow clicking suggestions
                             setTimeout(() => {
                               if (
@@ -492,6 +543,11 @@ export function EnhancedCentralSearchForm({
                       <div className="p-4 text-center text-muted-foreground">
                         <SearchIcon className="h-8 w-8 mx-auto mb-2 opacity-50" />
                         <p>No suggestions found</p>
+                        {(metadataSearch.error || locationSearch.error) && (
+                          <p className="text-xs mt-1 text-red-500">
+                            {metadataSearch.error || locationSearch.error}
+                          </p>
+                        )}
                       </div>
                     ) : (
                       <div className="p-4 text-center text-muted-foreground">
@@ -588,15 +644,16 @@ export function EnhancedCentralSearchForm({
             </Button>
           </div>
 
-          {/* Search Stats */}
+          {/* Search Stats with proper null checking */}
           {(metadataSearch.data || locationSearch.data) && (
             <div className="flex items-center gap-4 text-sm text-muted-foreground">
-              {metadataSearch.data && (
-                <span>
-                  {metadataSearch.data.totalRecords.toLocaleString()} datasets
-                </span>
-              )}
-              {locationSearch.data && (
+              {metadataSearch.data &&
+                typeof metadataSearch.data.totalRecords === "number" && (
+                  <span>
+                    {metadataSearch.data.totalRecords.toLocaleString()} datasets
+                  </span>
+                )}
+              {locationSearch.data && Array.isArray(locationSearch.data) && (
                 <span>{locationSearch.data.length} locations</span>
               )}
               {metadataSearch.isCached && (
