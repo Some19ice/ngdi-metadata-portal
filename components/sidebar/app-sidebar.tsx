@@ -62,11 +62,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       url: "/map",
       icon: Map,
       isActive: pathname.includes("/map"),
-      items: [
-        { title: "Main Map", url: "/map" },
-        { title: "Metadata Map", url: "/map/metadata-demo" },
-        { title: "GIS Services", url: "/map/gis-services" }
-      ]
+      items: [{ title: "Main Map", url: "/map" }]
     }
   ]
 
