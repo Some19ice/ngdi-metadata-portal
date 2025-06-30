@@ -119,21 +119,24 @@ export default function Footer({ className }: FooterProps) {
             <ul className="space-y-2 text-slate-300">
               <li className="flex items-center">
                 <MapPin className="h-4 w-4 mr-2" />
-                <span>1234 Mapping Drive, Suite 100</span>
+                <span>
+                  NASRDA Obasanjo Space Center, Umaru Musa Yar'Adua Expressway,
+                  Abuja, FCT, Nigeria
+                </span>
               </li>
               <li className="flex items-center">
                 <Mail className="h-4 w-4 mr-2" />
                 <a
-                  href="mailto:info@ngdiportal.gov"
+                  href="mailto:contact@nasrda.gov.ng"
                   className="hover:text-white"
                 >
-                  info@ngdiportal.gov
+                  contact@nasrda.gov.ng
                 </a>
               </li>
               <li className="flex items-center">
                 <Phone className="h-4 w-4 mr-2" />
-                <a href="tel:+11234567890" className="hover:text-white">
-                  (123) 456-7890
+                <a href="tel:+2348092079000" className="hover:text-white">
+                  +234 809 207 9000
                 </a>
               </li>
             </ul>
