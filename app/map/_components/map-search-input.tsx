@@ -194,8 +194,8 @@ export default function MapSearchInput({
     if (pathname !== "/map") {
       router.push(`/map?${params.toString()}`)
     } else {
-      // Update the URL without triggering a full route reload
-      window.history.replaceState(null, "", `/map?${params.toString()}`)
+      // Update the URL via Next.js router without full reload but with state update
+      router.replace(`/map?${params.toString()}`)
     }
 
     // Still call the callback for in-map state update

@@ -29,6 +29,7 @@ import {
   MapPin
 } from "lucide-react"
 import MapFabGroup from "./map-fab-group"
+import { useRouter, usePathname } from "next/navigation"
 
 // Lazy load heavy components
 const MapView = dynamic(() => import("@/components/ui/map/map-view"), {
@@ -307,6 +308,8 @@ function MapWrapper({
   >(searchResults || [])
   const validatedStyles = getAvailableMapStyles()
   const eventManagerRef = useRef<MapEventManager>(new MapEventManager())
+  const router = useRouter()
+  const pathname = usePathname()
 
   // Responsive detection (mobile screens under 1024px)
   const [isMobile, setIsMobile] = useState(false)
@@ -438,6 +441,25 @@ function MapWrapper({
     }
   }, [map])
 
+  // Helper to update URL params without full page refresh
+  const updateUrlParams = useCallback(
+    (params: Record<string, string | undefined>) => {
+      const url = new URL(window.location.href)
+      Object.entries(params).forEach(([key, value]) => {
+        if (value === undefined) {
+          url.searchParams.delete(key)
+        } else {
+          url.searchParams.set(key, value)
+        }
+      })
+
+      router.replace(`${pathname}?${url.searchParams.toString()}`, {
+        scroll: false
+      })
+    },
+    [router, pathname]
+  )
+
   // Handle search from MapSearchInput component
   const handleLocationSelect = useCallback(
     (location: GeocodingFeature) => {
@@ -455,8 +477,17 @@ function MapWrapper({
           easing: t => t * t * (3 - 2 * t)
         })
       }
+
+      // Update URL params so other components react without refresh
+      const [lng, lat] = location.center
+      updateUrlParams({
+        location: location.place_name,
+        center: `${lng},${lat}`,
+        search: location.place_name,
+        zoom: "13"
+      })
     },
-    [map, clearUserLocationMarkers]
+    [map, clearUserLocationMarkers, updateUrlParams]
   )
 
   // Handle search query from MapSearchInput
