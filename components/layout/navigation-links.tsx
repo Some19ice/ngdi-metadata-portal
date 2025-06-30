@@ -13,14 +13,16 @@ import {
   navigationMenuTriggerStyle
 } from "@/components/ui/navigation-menu"
 
-const navLinks = [
+type NavLink = {
+  href: string
+  label: string
+  subLinks?: { href: string; label: string }[]
+}
+
+const navLinks: NavLink[] = [
   { href: "/", label: "Home" },
   { href: "/search", label: "Search" },
-  {
-    href: "/map",
-    label: "Map",
-    subLinks: [{ href: "/map", label: "Main Map" }]
-  },
+  { href: "/map", label: "Map" },
   { href: "/about", label: "About" },
   { href: "/committee", label: "Committee" },
   { href: "/publications", label: "Publications" },
@@ -40,7 +42,8 @@ export default function NavigationLinks() {
           // Check if current path matches this link or any of its sublinks
           const isActive = hasSubLinks
             ? pathname === link.href ||
-              link.subLinks.some(subLink => pathname === subLink.href)
+              (link.subLinks?.some(subLink => pathname === subLink.href) ??
+                false)
             : pathname === link.href
 
           return (
@@ -71,7 +74,7 @@ export default function NavigationLinks() {
                   <NavigationMenuContent className="overflow-hidden">
                     <div className="bg-gradient-to-b from-background to-background/95 backdrop-blur-md border border-border/50 rounded-lg shadow-xl">
                       <ul className="grid w-[220px] gap-1 p-3">
-                        {link.subLinks.map((subLink, subIndex) => (
+                        {link.subLinks!.map((subLink, subIndex) => (
                           <li key={subLink.href}>
                             <NavigationMenuLink asChild>
                               <Link
