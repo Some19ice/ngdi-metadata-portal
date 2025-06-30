@@ -518,6 +518,20 @@ function MapWrapper({
             }
           }
         )
+
+        // Auto-show popup for highlighted location (with delay for proper loading)
+        if (
+          highlightedLocation &&
+          location.place_name === highlightedLocation &&
+          index === 0
+        ) {
+          // Delay popup showing to ensure map and sidebar are fully rendered
+          setTimeout(() => {
+            if (map && map.loaded()) {
+              showPopup()
+            }
+          }, 1000) // 1 second delay to ensure everything is loaded
+        }
       })
     }
   }, [map, isLoaded, currentSearchResults, highlightedLocation])

@@ -1,7 +1,11 @@
 "use client"
 
-import SearchPageSearchBar from "./search-page-search-bar"
+import SearchPageSearchBar, {
+  SearchPageSearchBarProps
+} from "./search-page-search-bar"
 
-export default function SearchPageSearchBarWrapper(props: any) {
+export default function SearchPageSearchBarWrapper(
+  props: SearchPageSearchBarProps
+) {
   return <SearchPageSearchBar {...props} />
 }

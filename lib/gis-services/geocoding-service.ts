@@ -198,11 +198,24 @@ async function searchNigerianLocations(query: string, limit: number = 10) {
           lgaName.includes(normalizedQuery) ||
           lgaId.includes(normalizedQuery)
         ) {
-          // Use state coordinates with slight offset for LGAs
+          // Use state coordinates with deterministic offset for LGAs
           const stateCoords = STATE_COORDINATES[state.id] || [7.0, 9.0]
+          // Deterministic offset based on LGA id hash
+          function hashString(str: string) {
+            let hash = 0
+            for (let i = 0; i < str.length; i++) {
+              hash = (hash << 5) - hash + str.charCodeAt(i)
+              hash |= 0 // Convert to 32bit integer
+            }
+            return hash
+          }
+          const hash = hashString(lga.id)
+          // Offset in range [-0.25, 0.25]
+          const offsetLng = ((hash % 1000) / 1000 - 0.5) * 0.5
+          const offsetLat = (((hash >> 8) % 1000) / 1000 - 0.5) * 0.5
           const lgaCoords: [number, number] = [
-            stateCoords[0] + (Math.random() - 0.5) * 0.5, // Random offset within state
-            stateCoords[1] + (Math.random() - 0.5) * 0.5
+            stateCoords[0] + offsetLng,
+            stateCoords[1] + offsetLat
           ]
 
           matches.push({
@@ -346,7 +359,12 @@ export async function geocodeLocationShared({
         )
         data.features = [...data.features, ...additionalResults].slice(0, limit)
         data.attribution = `${data.attribution || "MapTiler"} + Enhanced Nigerian location data`
-      } catch {}
+      } catch (error) {
+        console.warn(
+          "Error supplementing MapTiler results with Nigerian data:",
+          error
+        )
+      }
     }
     return data
   } catch (fetchError) {

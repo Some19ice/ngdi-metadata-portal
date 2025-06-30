@@ -27,7 +27,7 @@ interface MetadataSuggestion {
   description?: string
 }
 
-interface SearchPageSearchBarProps {
+export interface SearchPageSearchBarProps {
   initialQuery?: string
   initialType?: string
   size?: "sm" | "md" | "lg"

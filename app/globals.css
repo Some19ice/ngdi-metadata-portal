@@ -701,3 +701,181 @@ Global styles for the app.
 .safe-search-marker:focus {
   z-index: 40;
 }
+
+/* MapLibre GL Popup Styles */
+.maplibregl-popup {
+  z-index: 50 !important;
+}
+
+.maplibregl-popup-content {
+  padding: 0 !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: var(--shadow-lg) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  background-color: hsl(var(--card)) !important;
+  max-width: 300px !important;
+}
+
+.maplibregl-popup-tip {
+  border-top-color: hsl(var(--card)) !important;
+  border-bottom-color: hsl(var(--card)) !important;
+}
+
+/* Safe Popup Content Styles */
+.safe-popup-content {
+  padding: 1rem;
+  font-family: inherit;
+  color: hsl(var(--card-foreground));
+  min-width: 200px;
+  max-width: 280px;
+}
+
+.popup-title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 0.5rem 0;
+  color: hsl(var(--foreground));
+  line-height: 1.4;
+}
+
+.popup-description {
+  font-size: 0.875rem;
+  color: hsl(var(--muted-foreground));
+  margin: 0 0 0.75rem 0;
+  line-height: 1.4;
+}
+
+.popup-coordinates {
+  font-size: 0.75rem;
+  font-family:
+    ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo,
+    monospace;
+  color: hsl(var(--muted-foreground));
+  background-color: hsl(var(--muted));
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-sm);
+  margin: 0 0 0.75rem 0;
+  border: 1px solid hsl(var(--border));
+}
+
+.popup-metadata {
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid hsl(var(--border));
+  padding-top: 0.75rem;
+}
+
+.popup-metadata-key {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: hsl(var(--muted-foreground));
+  margin: 0 0 0.25rem 0;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+
+.popup-metadata-value {
+  font-size: 0.875rem;
+  color: hsl(var(--foreground));
+  margin: 0 0 0.75rem 0;
+  line-height: 1.4;
+  word-wrap: break-word;
+}
+
+.popup-metadata-value:last-child {
+  margin-bottom: 0;
+}
+
+/* Dark mode popup styles */
+.dark .maplibregl-popup-content {
+  background-color: hsl(var(--card)) !important;
+  border-color: hsl(var(--border)) !important;
+}
+
+.dark .maplibregl-popup-tip {
+  border-top-color: hsl(var(--card)) !important;
+  border-bottom-color: hsl(var(--card)) !important;
+}
+
+/* Close button styling */
+.maplibregl-popup-close-button {
+  color: hsl(var(--muted-foreground)) !important;
+  font-size: 1.25rem !important;
+  padding: 0.25rem !important;
+  background: none !important;
+  border: none !important;
+  border-radius: var(--radius) !important;
+  transition: all 0.2s ease !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 2rem !important;
+  height: 2rem !important;
+  position: absolute !important;
+  top: 0.5rem !important;
+  right: 0.5rem !important;
+}
+
+.maplibregl-popup-close-button:hover {
+  color: hsl(var(--foreground)) !important;
+  background-color: hsl(var(--muted)) !important;
+}
+
+.maplibregl-popup-close-button:focus {
+  outline: 2px solid hsl(var(--ring)) !important;
+  outline-offset: 2px !important;
+}
+
+/* Ensure popups appear above all map elements including sidebar */
+.maplibregl-popup-anchor-top .maplibregl-popup-tip,
+.maplibregl-popup-anchor-top-left .maplibregl-popup-tip,
+.maplibregl-popup-anchor-top-right .maplibregl-popup-tip,
+.maplibregl-popup-anchor-bottom .maplibregl-popup-tip,
+.maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip,
+.maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip,
+.maplibregl-popup-anchor-left .maplibregl-popup-tip,
+.maplibregl-popup-anchor-right .maplibregl-popup-tip {
+  z-index: 50;
+}
+
+/* Map Header Overlay Animations */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slide-in-from-top {
+  from {
+    transform: translateY(-8px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-in {
+  animation-fill-mode: both;
+}
+
+.fade-in-0 {
+  animation-name: fade-in;
+}
+
+.slide-in-from-top-2 {
+  animation-name: slide-in-from-top;
+}
+
+/* Timing utilities */
+.duration-500 {
+  animation-duration: 500ms;
+}
+
+.delay-700 {
+  animation-delay: 700ms;
+}

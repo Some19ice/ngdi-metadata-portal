@@ -17,6 +17,24 @@ interface MapPageProps {
   searchParams: Promise<SearchParams>
 }
 
+// Create a separate component for the header overlay with proper timing
+function MapHeaderOverlay({
+  locationParam,
+  searchParam
+}: {
+  locationParam?: string
+  searchParam?: string
+}) {
+  return (
+    <div className="absolute top-4 left-4 z-30 flex items-center gap-2 rounded-md bg-background/90 backdrop-blur-sm px-3 py-2 text-sm shadow-lg border border-gray-200/50 animate-in fade-in-0 slide-in-from-top-2 duration-500 delay-700">
+      <MapPin className="h-4 w-4 text-primary" />
+      <span className="font-medium">
+        {locationParam ? locationParam : `Search: ${searchParam}`}
+      </span>
+    </div>
+  )
+}
+
 export default async function MapPage({
   searchParams: searchParamsPromise
 }: MapPageProps) {
@@ -65,17 +83,7 @@ export default async function MapPage({
 
   return (
     <div className="relative w-full h-full">
-      {/* Header overlay (kept minimal, disappears on mobile if needed) */}
-      {(locationParam || searchParam) && (
-        <div className="absolute top-4 left-4 z-20 flex items-center gap-2 rounded-md bg-background/80 backdrop-blur-sm px-3 py-1 text-sm shadow">
-          <MapPin className="h-4 w-4 text-primary" />
-          <span>
-            {locationParam ? locationParam : `Search: ${searchParam}`}
-          </span>
-        </div>
-      )}
-
-      {/* Map */}
+      {/* Map - render first for proper loading order */}
       <Suspense fallback={<MapLoadingSkeleton />}>
         <MapClientWrapper
           initialCenter={initialCenter}
@@ -84,6 +92,14 @@ export default async function MapPage({
           highlightedLocation={locationParam}
         />
       </Suspense>
+
+      {/* Header overlay - render after map with delay and proper z-index */}
+      {(locationParam || searchParam) && (
+        <MapHeaderOverlay
+          locationParam={locationParam}
+          searchParam={searchParam}
+        />
+      )}
     </div>
   )
 }
