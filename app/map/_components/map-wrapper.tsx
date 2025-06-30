@@ -25,7 +25,8 @@ import {
   ZoomIn,
   ZoomOut,
   Compass,
-  Home
+  Home,
+  MapPin
 } from "lucide-react"
 import MapFabGroup from "./map-fab-group"
 
@@ -47,6 +48,35 @@ interface MapWrapperProps {
   searchResults?: GeocodingFeature[] | null
   highlightedLocation?: string
 }
+
+// Location Header Overlay Component
+const MapHeaderOverlay = memo(
+  ({
+    currentSearchResults,
+    highlightedLocation
+  }: {
+    currentSearchResults: GeocodingFeature[]
+    highlightedLocation?: string
+  }) => {
+    // Determine the display title from current search results or highlighted location
+    const displayTitle =
+      currentSearchResults && currentSearchResults.length > 0
+        ? currentSearchResults[0].place_name
+        : highlightedLocation
+
+    // Only show if there's something to display
+    if (!displayTitle) return null
+
+    return (
+      <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-30 flex items-center gap-2 rounded-md bg-background/90 backdrop-blur-sm px-3 py-2 text-sm shadow-lg border border-gray-200/50 animate-in fade-in-0 slide-in-from-top-2 duration-500 delay-700">
+        <MapPin className="h-4 w-4 text-primary" />
+        <span className="font-medium">{displayTitle}</span>
+      </div>
+    )
+  }
+)
+
+MapHeaderOverlay.displayName = "MapHeaderOverlay"
 
 // Memoized control panel component
 const MapControlPanel = memo(
@@ -577,6 +607,12 @@ function MapWrapper({
 
   return (
     <div className="flex h-full bg-gray-50 gap-4">
+      {/* Location Header Overlay */}
+      <MapHeaderOverlay
+        currentSearchResults={currentSearchResults}
+        highlightedLocation={highlightedLocation}
+      />
+
       {/* Desktop Sidebar */}
       <div
         className={`hidden lg:flex lg:flex-col bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden relative z-10 transition-all duration-300 ${sidebarCollapsed ? "w-0 opacity-0" : "w-80"}`}
