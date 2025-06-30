@@ -334,12 +334,18 @@ function MapWrapper({
     return false
   })
 
-  // Update search results when prop changes
+  // Sync incoming `searchResults` prop to local state **only** when it changes in
+  // a meaningful way. This prevents an infinite state update loop that occurred
+  // when `searchResults` was `undefined` (no search) – the previous logic kept
+  // writing a new empty array (`[]`) to state on every render, triggering the
+  // "Maximum update depth exceeded" error.
   useEffect(() => {
-    if (searchResults !== currentSearchResults) {
-      setCurrentSearchResults(searchResults || [])
-      // Auto-fly to the first result if it's a new search
-      if (searchResults && searchResults.length > 0 && map && isLoaded) {
+    // Case 1: new search results provided
+    if (searchResults && searchResults !== currentSearchResults) {
+      setCurrentSearchResults(searchResults)
+
+      // Auto-fly to the first result for a fresh search
+      if (map && isLoaded && searchResults.length > 0) {
         const firstResult = searchResults[0]
         map.flyTo({
           center: firstResult.center,
@@ -349,6 +355,12 @@ function MapWrapper({
           easing: t => t * t * (3 - 2 * t)
         })
       }
+      return
+    }
+
+    // Case 2: search cleared – only reset when we currently have results
+    if (!searchResults && currentSearchResults.length > 0) {
+      setCurrentSearchResults([])
     }
   }, [searchResults, currentSearchResults, map, isLoaded])
 

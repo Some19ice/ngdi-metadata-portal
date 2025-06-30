@@ -25,10 +25,10 @@ export const Providers = ({ children, ...props }: ThemeProviderProps) => {
     return (
       <div suppressHydrationWarning>
         <NextThemesProvider
-          {...props}
           attribute="class"
-          defaultTheme="system"
+          defaultTheme="light"
           enableSystem
+          {...props}
         >
           <TooltipProvider>
             <div className="min-h-screen bg-background text-foreground">
@@ -42,10 +42,10 @@ export const Providers = ({ children, ...props }: ThemeProviderProps) => {
 
   return (
     <NextThemesProvider
-      {...props}
       attribute="class"
-      defaultTheme="system"
+      defaultTheme="light"
       enableSystem
+      {...props}
     >
       <TooltipProvider>
         <CSPostHogProvider>
