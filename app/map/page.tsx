@@ -20,17 +20,23 @@ interface MapPageProps {
 // Create a separate component for the header overlay with proper timing
 function MapHeaderOverlay({
   locationParam,
-  searchParam
+  searchParam,
+  searchResults
 }: {
   locationParam?: string
   searchParam?: string
+  searchResults?: any[]
 }) {
+  // Determine the display title
+  const displayTitle =
+    searchResults && searchResults.length > 0
+      ? searchResults[0].place_name
+      : locationParam || searchParam
+
   return (
-    <div className="absolute top-4 left-4 z-30 flex items-center gap-2 rounded-md bg-background/90 backdrop-blur-sm px-3 py-2 text-sm shadow-lg border border-gray-200/50 animate-in fade-in-0 slide-in-from-top-2 duration-500 delay-700">
+    <div className="absolute top-4 right-4 z-30 flex items-center gap-2 rounded-md bg-background/90 backdrop-blur-sm px-3 py-2 text-sm shadow-lg border border-gray-200/50 animate-in fade-in-0 slide-in-from-top-2 duration-500 delay-700">
       <MapPin className="h-4 w-4 text-primary" />
-      <span className="font-medium">
-        {locationParam ? locationParam : `Search: ${searchParam}`}
-      </span>
+      <span className="font-medium">{displayTitle}</span>
     </div>
   )
 }
@@ -98,6 +104,7 @@ export default async function MapPage({
         <MapHeaderOverlay
           locationParam={locationParam}
           searchParam={searchParam}
+          searchResults={searchResults || undefined}
         />
       )}
     </div>
