@@ -1,13 +1,14 @@
 /*
 <ai_context>
-This client component provides a team switcher for the sidebar.
+This client component provides a team/organization switcher for the sidebar.
 </ai_context>
 */
 
 "use client"
 
-import { Building2, ChevronsUpDown, Plus } from "lucide-react"
 import * as React from "react"
+import { Building2, ChevronsUpDown, Check, Plus, MapPin } from "lucide-react"
+import { useUser } from "@clerk/nextjs"
 
 import {
   DropdownMenu,
@@ -15,7 +16,6 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
-  DropdownMenuShortcut,
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu"
 import {
@@ -24,27 +24,74 @@ import {
   SidebarMenuItem,
   useSidebar
 } from "@/components/ui/sidebar"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
 
-// Default NGDI Portal organizations
-const defaultOrganizations = [
-  {
-    name: "NGDI Portal",
-    logo: Building2,
-    role: "System Administrator"
-  }
-]
+// Hook to safely get organization context
+function useSafeOrganization() {
+  const [organizationData, setOrganizationData] = React.useState<{
+    organization: any | null
+    userRole: string | null
+    isLoading: boolean
+    error: string | null
+  }>({
+    organization: null,
+    userRole: null,
+    isLoading: false,
+    error: null
+  })
 
-export function TeamSwitcher({
-  organizations = defaultOrganizations
-}: {
-  organizations?: {
-    name: string
-    logo: React.ElementType
-    role: string
-  }[]
-}) {
+  React.useEffect(() => {
+    // For now, we'll handle organization context loading here
+    // In a real implementation, this would connect to the organization provider
+    // For now, we'll just set default values to prevent errors
+    setOrganizationData({
+      organization: null,
+      userRole: null,
+      isLoading: false,
+      error: null
+    })
+  }, [])
+
+  return organizationData
+}
+
+export function TeamSwitcher() {
   const { isMobile } = useSidebar()
-  const [activeOrg, setActiveOrg] = React.useState(organizations[0])
+  const { user } = useUser()
+  const { organization, userRole, isLoading, error } = useSafeOrganization()
+
+  if (isLoading) {
+    return (
+      <SidebarMenu>
+        <SidebarMenuItem>
+          <Skeleton className="h-8 w-full" />
+        </SidebarMenuItem>
+      </SidebarMenu>
+    )
+  }
+
+  if (error) {
+    return (
+      <SidebarMenu>
+        <SidebarMenuItem>
+          <SidebarMenuButton
+            size="lg"
+            className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+          >
+            <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+              <Building2 className="size-4" />
+            </div>
+            <div className="grid flex-1 text-left text-sm leading-tight">
+              <span className="truncate font-semibold">Personal</span>
+              <span className="truncate text-xs">Individual Account</span>
+            </div>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+      </SidebarMenu>
+    )
+  }
 
   return (
     <SidebarMenu>
@@ -55,45 +102,79 @@ export function TeamSwitcher({
               size="lg"
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
-              <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
-                <activeOrg.logo className="size-4" />
+              <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+                <Building2 className="size-4" />
               </div>
               <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-semibold">{activeOrg.name}</span>
-                <span className="truncate text-xs">{activeOrg.role}</span>
+                <span className="truncate font-semibold">
+                  {organization?.name || user?.firstName || "Personal"}
+                </span>
+                <span className="truncate text-xs">
+                  {organization?.name
+                    ? `${userRole || "Member"}`
+                    : "Individual Account"}
+                </span>
               </div>
-              <ChevronsUpDown className="ml-auto" />
+              <ChevronsUpDown className="ml-auto size-4" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent
             className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
-            align="start"
             side={isMobile ? "bottom" : "right"}
+            align="start"
             sideOffset={4}
           >
-            <DropdownMenuLabel className="text-muted-foreground text-xs">
-              Organizations
+            <DropdownMenuLabel className="text-xs text-muted-foreground">
+              Current Context
             </DropdownMenuLabel>
-            {organizations.map((org, index) => (
-              <DropdownMenuItem
-                key={org.name}
-                onClick={() => setActiveOrg(org)}
-                className="gap-2 p-2"
-              >
-                <div className="flex size-6 items-center justify-center rounded-sm border">
-                  <org.logo className="size-4 shrink-0" />
-                </div>
-                {org.name}
-                <DropdownMenuShortcut>⌘{index + 1}</DropdownMenuShortcut>
-              </DropdownMenuItem>
-            ))}
+            <DropdownMenuItem className="gap-2 p-2">
+              <div className="flex size-6 items-center justify-center rounded-sm border">
+                <Building2 className="size-4 shrink-0" />
+              </div>
+              <div className="grid flex-1 text-left text-sm leading-tight">
+                <span className="truncate font-semibold">
+                  {organization?.name || user?.firstName || "Personal"}
+                </span>
+                <span className="truncate text-xs">
+                  {organization?.name
+                    ? `${userRole || "Member"}`
+                    : "Individual Account"}
+                </span>
+              </div>
+              <Check className="ml-auto size-4" />
+            </DropdownMenuItem>
+
+            {organization && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="gap-2 p-2">
+                  <div className="flex size-6 items-center justify-center rounded-sm border bg-background">
+                    <MapPin className="size-4" />
+                  </div>
+                  <div className="grid flex-1 text-left text-sm leading-tight">
+                    <span className="truncate font-semibold">
+                      Organization Details
+                    </span>
+                    <span className="truncate text-xs text-muted-foreground">
+                      View organization info
+                    </span>
+                  </div>
+                </DropdownMenuItem>
+              </>
+            )}
+
             <DropdownMenuSeparator />
             <DropdownMenuItem className="gap-2 p-2">
-              <div className="bg-background flex size-6 items-center justify-center rounded-md border">
+              <div className="flex size-6 items-center justify-center rounded-sm border bg-background">
                 <Plus className="size-4" />
               </div>
-              <div className="text-muted-foreground font-medium">
-                Add Organization
+              <div className="grid flex-1 text-left text-sm leading-tight">
+                <span className="truncate font-semibold">
+                  Join Organization
+                </span>
+                <span className="truncate text-xs text-muted-foreground">
+                  Request to join an organization
+                </span>
               </div>
             </DropdownMenuItem>
           </DropdownMenuContent>

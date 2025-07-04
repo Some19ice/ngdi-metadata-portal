@@ -36,8 +36,6 @@ export const metadata: Metadata = {
   description: "National Geospatial Data Infrastructure Portal"
 }
 
-// ... existing imports
-
 // Simple skeleton fallback for MainHeader during suspense/hydration
 function MainHeaderFallback() {
   return (
@@ -53,8 +51,6 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode
 }) {
-  // ... existing code
-
   return (
     <ClerkProvider>
       <html lang="en" suppressHydrationWarning>
