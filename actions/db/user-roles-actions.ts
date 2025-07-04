@@ -182,3 +182,44 @@ export async function getRoleByNameAction(
     return { isSuccess: false, message: "Failed to retrieve role by name." }
   }
 }
+
+export async function getUserRoles(
+  userId: string
+): Promise<ActionState<Array<(typeof roleEnum.enumValues)[number]>>> {
+  const authResult = await auth()
+  if (!authResult.userId) {
+    return { isSuccess: false, message: "User not authenticated." }
+  }
+
+  // Users can only get their own roles, or admins can get any user's roles
+  if (userId !== authResult.userId) {
+    const adminCheck = await requiresSystemAdmin()
+    if (!adminCheck.isAllowed) {
+      return {
+        isSuccess: false,
+        message: "User does not have permission to view other users' roles."
+      }
+    }
+  }
+
+  try {
+    const userRoleEntries = await db
+      .select({
+        roleName: rolesTable.name
+      })
+      .from(userRolesTable)
+      .innerJoin(rolesTable, eq(userRolesTable.roleId, rolesTable.id))
+      .where(eq(userRolesTable.userId, userId))
+
+    const roles = userRoleEntries.map(entry => entry.roleName)
+
+    return {
+      isSuccess: true,
+      message: "User roles retrieved successfully.",
+      data: roles
+    }
+  } catch (error) {
+    console.error("Error fetching user roles:", error)
+    return { isSuccess: false, message: "Failed to retrieve user roles." }
+  }
+}

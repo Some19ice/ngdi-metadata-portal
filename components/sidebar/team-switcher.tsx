@@ -27,42 +27,80 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
+import { SelectOrganization } from "@/db/schema"
+import { getCurrentUserOrganizationAction } from "@/actions/db/user-organizations-actions"
+
+// Define the user role type based on the organization context
+type UserRole = "Node Officer" | "Metadata Creator" | "Metadata Approver" | null
+
+// Define the return type for the hook
+interface SafeOrganizationData {
+  organization: SelectOrganization | null
+  userRole: UserRole
+  isLoading: boolean
+  error: string | null
+  isInitialized: boolean
+}
 
 // Hook to safely get organization context
-function useSafeOrganization() {
-  const [organizationData, setOrganizationData] = React.useState<{
-    organization: any | null
-    userRole: string | null
-    isLoading: boolean
-    error: string | null
-  }>({
+function useSafeOrganization(): SafeOrganizationData {
+  const [safeData, setSafeData] = React.useState<SafeOrganizationData>({
     organization: null,
     userRole: null,
-    isLoading: false,
-    error: null
+    isLoading: true,
+    error: null,
+    isInitialized: false
   })
 
   React.useEffect(() => {
-    // For now, we'll handle organization context loading here
-    // In a real implementation, this would connect to the organization provider
-    // For now, we'll just set default values to prevent errors
-    setOrganizationData({
-      organization: null,
-      userRole: null,
-      isLoading: false,
-      error: null
-    })
+    const fetchOrganizationData = async () => {
+      try {
+        setSafeData(prev => ({ ...prev, isLoading: true, error: null }))
+
+        const result = await getCurrentUserOrganizationAction()
+
+        if (result.isSuccess) {
+          setSafeData({
+            organization: result.data.organization,
+            userRole: result.data.userRole,
+            isLoading: false,
+            error: null,
+            isInitialized: true
+          })
+        } else {
+          setSafeData({
+            organization: null,
+            userRole: null,
+            isLoading: false,
+            error: result.message,
+            isInitialized: true
+          })
+        }
+      } catch (error) {
+        console.error("Error fetching organization data:", error)
+        setSafeData({
+          organization: null,
+          userRole: null,
+          isLoading: false,
+          error: "Failed to load organization data",
+          isInitialized: true
+        })
+      }
+    }
+
+    fetchOrganizationData()
   }, [])
 
-  return organizationData
+  return safeData
 }
 
 export function TeamSwitcher() {
   const { isMobile } = useSidebar()
   const { user } = useUser()
-  const { organization, userRole, isLoading, error } = useSafeOrganization()
+  const { organization, userRole, isLoading, error, isInitialized } =
+    useSafeOrganization()
 
-  if (isLoading) {
+  if (!isInitialized || isLoading) {
     return (
       <SidebarMenu>
         <SidebarMenuItem>
