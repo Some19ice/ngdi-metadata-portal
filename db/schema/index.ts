@@ -18,6 +18,7 @@ export * from "./audit-logs-schema"
 export * from "./notifications-schema"
 export * from "./system-settings-schema"
 export * from "./profiles-schema"
+export * from "./analytics-schema"
 
 export type {
   ConstraintsInfo,

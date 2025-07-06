@@ -5,8 +5,13 @@ import {
   metadataRecordsTable,
   organizationsTable,
   userOrganizationsTable,
+  metadataAnalyticsTable,
+  metadataAnalyticsSummaryTable,
+  metadataTopicCategoryEnum,
   type InsertMetadataRecord,
-  type SelectMetadataRecord
+  type SelectMetadataRecord,
+  type InsertMetadataAnalytics,
+  type InsertMetadataAnalyticsSummary
 } from "@/db/schema"
 import { ActionState } from "@/types"
 import { auth } from "@clerk/nextjs/server"
@@ -20,7 +25,9 @@ import {
   sql,
   count,
   isNull,
-  isNotNull
+  isNotNull,
+  sum,
+  max
 } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import { createNotificationAction } from "@/actions/notifications-actions"
@@ -101,6 +108,8 @@ interface AnalyticsEvent {
   eventType: "view" | "download" | "share" | "bookmark" | "search" | "export"
   userId?: string
   sessionId?: string
+  ipAddress?: string
+  userAgent?: string
   metadata?: Record<string, any>
 }
 
@@ -158,6 +167,14 @@ export async function searchMetadataEnhancedAction(
           WHERE name = ANY(${filters.organizations})
         )`
       )
+    }
+
+    // Topic category filtering (from keywords)
+    if (filters.topicCategories && filters.topicCategories.length > 0) {
+      const topicConditions = filters.topicCategories.map(
+        category => sql`${metadataRecordsTable.keywords} @> ${[category]}`
+      )
+      whereConditions.push(or(...topicConditions))
     }
 
     // Temporal filtering
@@ -334,6 +351,9 @@ async function generateSearchFacets(whereClause: any) {
         desc(sql`EXTRACT(YEAR FROM ${metadataRecordsTable.productionDate})`)
       )
 
+    // Topic categories facet (extract from keywords)
+    const topicCategoriesFacet = await generateTopicCategoriesFacet(whereClause)
+
     return {
       dataTypes: dataTypesFacet.map(f => ({
         value: f.value || "",
@@ -343,7 +363,7 @@ async function generateSearchFacets(whereClause: any) {
         value: f.value || "",
         count: f.count
       })),
-      topicCategories: [], // TODO: Extract from keywords or add dedicated field
+      topicCategories: topicCategoriesFacet,
       frameworkTypes: frameworkTypesFacet.map(f => ({
         value: f.value || "",
         count: f.count
@@ -359,6 +379,65 @@ async function generateSearchFacets(whereClause: any) {
       frameworkTypes: [],
       years: []
     }
+  }
+}
+
+/**
+ * Generate topic categories facet by extracting from keywords
+ */
+async function generateTopicCategoriesFacet(whereClause: any) {
+  try {
+    // Get all topic categories from the enum
+    const topicCategories = [
+      "Farming",
+      "Biota",
+      "Boundaries",
+      "Climatology/Meteorology/Atmosphere",
+      "Economy",
+      "Elevation",
+      "Environment",
+      "Geoscientific Information",
+      "Health",
+      "Imagery/Base Maps/Earth Cover",
+      "Intelligence/Military",
+      "Inland Waters",
+      "Location",
+      "Oceans",
+      "Planning/Cadastre",
+      "Society",
+      "Structure",
+      "Transportation",
+      "Utilities/Communication",
+      "Other"
+    ]
+
+    // Count occurrences of each topic category in keywords
+    const topicCategoryCounts = await Promise.all(
+      topicCategories.map(async category => {
+        const [{ count: categoryCount }] = await db
+          .select({ count: count() })
+          .from(metadataRecordsTable)
+          .where(
+            and(
+              whereClause,
+              sql`${metadataRecordsTable.keywords} @> ${[category]}`
+            )
+          )
+
+        return {
+          value: category,
+          count: categoryCount
+        }
+      })
+    )
+
+    // Filter out categories with zero count and sort by count
+    return topicCategoryCounts
+      .filter(tc => tc.count > 0)
+      .sort((a, b) => b.count - a.count)
+  } catch (error) {
+    console.error("Error generating topic categories facet:", error)
+    return []
   }
 }
 
@@ -715,11 +794,12 @@ export async function approveMetadataAction(
       }
     }
 
+    const publicationDate = new Date()
     await db
       .update(metadataRecordsTable)
       .set({
         status: "Published",
-        publicationDate: new Date().toISOString(),
+        publicationDate: publicationDate.toISOString().split("T")[0],
         updatedAt: new Date(),
         ...(reviewNotes && { internalNotes: reviewNotes })
       })
@@ -842,12 +922,25 @@ export async function trackAnalyticsEventAction(
   event: AnalyticsEvent
 ): Promise<ActionState<void>> {
   try {
-    // TODO: Store in analytics table or send to analytics service
-    console.log("Analytics event:", event)
+    const { userId } = await auth()
+
+    // Insert the analytics event
+    await db.insert(metadataAnalyticsTable).values({
+      metadataRecordId: event.recordId,
+      eventType: event.eventType,
+      userId: event.userId || userId || null,
+      sessionId: event.sessionId || null,
+      ipAddress: event.ipAddress || null,
+      userAgent: event.userAgent || null,
+      metadata: event.metadata || null
+    })
+
+    // Update or create summary record
+    await updateAnalyticsSummary(event.recordId, event.eventType)
 
     return {
       isSuccess: true,
-      message: "Analytics event tracked",
+      message: "Analytics event tracked successfully",
       data: undefined
     }
   } catch (error) {
@@ -856,6 +949,74 @@ export async function trackAnalyticsEventAction(
       isSuccess: false,
       message: "Failed to track analytics event"
     }
+  }
+}
+
+/**
+ * Update analytics summary for a metadata record
+ */
+async function updateAnalyticsSummary(recordId: string, eventType: string) {
+  const now = new Date()
+
+  // Check if summary record exists
+  const existingSummary = await db.query.metadataAnalyticsSummary.findFirst({
+    where: eq(metadataAnalyticsSummaryTable.metadataRecordId, recordId)
+  })
+
+  if (existingSummary) {
+    // Update existing summary
+    const updateData: any = { updatedAt: now }
+
+    switch (eventType) {
+      case "view":
+        updateData.totalViews = existingSummary.totalViews + 1
+        updateData.lastViewedAt = now
+        break
+      case "download":
+        updateData.totalDownloads = existingSummary.totalDownloads + 1
+        updateData.lastDownloadedAt = now
+        break
+      case "share":
+        updateData.totalShares = existingSummary.totalShares + 1
+        updateData.lastSharedAt = now
+        break
+      case "bookmark":
+        updateData.totalBookmarks = existingSummary.totalBookmarks + 1
+        updateData.lastBookmarkedAt = now
+        break
+      case "search":
+        updateData.totalSearches = existingSummary.totalSearches + 1
+        updateData.lastSearchedAt = now
+        break
+      case "export":
+        updateData.totalExports = existingSummary.totalExports + 1
+        updateData.lastExportedAt = now
+        break
+    }
+
+    await db
+      .update(metadataAnalyticsSummaryTable)
+      .set(updateData)
+      .where(eq(metadataAnalyticsSummaryTable.metadataRecordId, recordId))
+  } else {
+    // Create new summary record
+    const summaryData: InsertMetadataAnalyticsSummary = {
+      metadataRecordId: recordId,
+      totalViews: eventType === "view" ? 1 : 0,
+      totalDownloads: eventType === "download" ? 1 : 0,
+      totalShares: eventType === "share" ? 1 : 0,
+      totalBookmarks: eventType === "bookmark" ? 1 : 0,
+      totalSearches: eventType === "search" ? 1 : 0,
+      totalExports: eventType === "export" ? 1 : 0,
+      lastViewedAt: eventType === "view" ? now : null,
+      lastDownloadedAt: eventType === "download" ? now : null,
+      lastSharedAt: eventType === "share" ? now : null,
+      lastBookmarkedAt: eventType === "bookmark" ? now : null,
+      lastSearchedAt: eventType === "search" ? now : null,
+      lastExportedAt: eventType === "export" ? now : null
+    }
+
+    await db.insert(metadataAnalyticsSummaryTable).values(summaryData)
   }
 }
 
@@ -872,20 +1033,36 @@ export async function getMetadataAnalyticsAction(recordId: string): Promise<
   }>
 > {
   try {
-    // TODO: Query analytics data from database
-    // For now, return mock data
-    const mockAnalytics = {
-      views: Math.floor(Math.random() * 1000) + 100,
-      downloads: Math.floor(Math.random() * 100) + 10,
-      shares: Math.floor(Math.random() * 50) + 5,
-      bookmarks: Math.floor(Math.random() * 25) + 2,
-      lastViewed: new Date().toISOString()
+    // Query analytics summary from database
+    const analyticsSummary = await db.query.metadataAnalyticsSummary.findFirst({
+      where: eq(metadataAnalyticsSummaryTable.metadataRecordId, recordId)
+    })
+
+    if (!analyticsSummary) {
+      // Return zero stats if no analytics data exists
+      return {
+        isSuccess: true,
+        message: "Analytics retrieved successfully",
+        data: {
+          views: 0,
+          downloads: 0,
+          shares: 0,
+          bookmarks: 0,
+          lastViewed: undefined
+        }
+      }
     }
 
     return {
       isSuccess: true,
       message: "Analytics retrieved successfully",
-      data: mockAnalytics
+      data: {
+        views: analyticsSummary.totalViews,
+        downloads: analyticsSummary.totalDownloads,
+        shares: analyticsSummary.totalShares,
+        bookmarks: analyticsSummary.totalBookmarks,
+        lastViewed: analyticsSummary.lastViewedAt?.toISOString()
+      }
     }
   } catch (error) {
     console.error("Error getting analytics:", error)
