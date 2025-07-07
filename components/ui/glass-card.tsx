@@ -1,6 +1,13 @@
 import * as React from "react"
 import { Instagram, Twitter, Github, ChevronDown } from "lucide-react"
 
+// Mapping of social type to icon component
+const socialIcons = {
+  instagram: Instagram,
+  twitter: Twitter,
+  github: Github
+} as const
+
 const ULogo = (props: React.SVGProps<SVGSVGElement>) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 29.667 31.69" {...props}>
     <path d="M12.827,1.628A1.561,1.561,0,0,1,14.31,0h2.964a1.561,1.561,0,0,1,1.483,1.628v11.9a9.252,9.252,0,0,1-2.432,6.852q-2.432,2.409-6.963,2.409T2.4,20.452Q0,18.094,0,13.669V1.628A1.561,1.561,0,0,1,1.483,0h2.98A1.561,1.561,0,0,1,5.947,1.628V13.191a5.635,5.635,0,0,0,.85,3.451,3.153,3.153,0,0,0,2.632,1.094,3.032,3.032,0,0,0,2.582-1.076,5.836,5.836,0,0,0,.816-3.486Z" />
@@ -61,21 +68,19 @@ const GlassCard = React.forwardRef<HTMLDivElement, GlassCardProps>(
             <div className="flex gap-2.5 [transform-style:preserve-3d]">
               {socials && socials.length > 0
                 ? socials.map((social, index) => {
-                    let Icon = null
-                    if (social.type === "instagram") Icon = Instagram
-                    if (social.type === "twitter") Icon = Twitter
-                    if (social.type === "github") Icon = Github
+                    const Icon = socialIcons[social.type]
                     return (
                       <a
                         key={index}
                         href={social.url}
                         target="_blank"
                         rel="noopener noreferrer"
+                        aria-label={`Visit our ${social.type} page`}
                         className="group/social grid h-[30px] w-[30px] place-content-center rounded-full border-none bg-white shadow-[rgba(0,0,0,0.5)_0px_7px_5px_-5px] transition-all duration-200 ease-in-out group-hover:[box-shadow:rgba(0,0,0,0.2)_-5px_20px_10px_0px] group-hover:[transform:translate3d(0,0,50px)] hover:bg-black active:bg-yellow-400"
                         style={{ transitionDelay: `${400 + index * 200}ms` }}
                       >
                         {Icon ? (
-                          <Icon className="h-4 w-4 stroke-black transition-colors" />
+                          <Icon className="h-4 w-4 stroke-black transition-colors group-hover/social:stroke-white" />
                         ) : null}
                       </a>
                     )

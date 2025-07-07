@@ -1,7 +1,6 @@
 "use client"
 
 import { usePathname } from "next/navigation"
-import { useEffect, useState } from "react"
 import Footer from "@/components/footer"
 import { AppSidebar } from "@/components/sidebar/app-sidebar"
 import MainHeader from "@/components/layout/main-header"
@@ -16,18 +15,12 @@ function MainHeaderFallback() {
 }
 
 export function PageLayoutSwitcher({
-  initialIsLanding,
   children
 }: {
-  initialIsLanding: boolean
   children: React.ReactNode
 }) {
   const pathname = usePathname()
-  const [isLanding, setIsLanding] = useState(initialIsLanding)
-
-  useEffect(() => {
-    setIsLanding(pathname === "/")
-  }, [pathname])
+  const isLanding = pathname === "/"
 
   if (isLanding) {
     return (

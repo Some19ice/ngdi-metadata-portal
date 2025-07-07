@@ -118,7 +118,12 @@ export default function GlobalSearchBar() {
 
   return (
     <div className="relative w-full md:w-64 lg:w-80 group" ref={containerRef}>
-      <MovingBorderWrapper className="rounded-full" variant="line">
+      <MovingBorderWrapper
+        className="rounded-full"
+        variant="box"
+        dotSize={8}
+        duration={6000}
+      >
         <form onSubmit={handleSearch} className="relative flex items-center">
           <div
             className={cn(
