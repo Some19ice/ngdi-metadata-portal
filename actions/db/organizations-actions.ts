@@ -2430,7 +2430,10 @@ export async function getSystemOrganizationStatisticsAction(): Promise<
  */
 export async function getPublicOrganizationsAction(): Promise<
   ActionState<
-    Pick<SelectOrganization, "id" | "name" | "logoUrl" | "websiteUrl">[]
+    Pick<
+      SelectOrganization,
+      "id" | "name" | "logoUrl" | "websiteUrl" | "description"
+    >[]
   >
 > {
   try {
@@ -2439,7 +2442,8 @@ export async function getPublicOrganizationsAction(): Promise<
         id: organizationsTable.id,
         name: organizationsTable.name,
         logoUrl: organizationsTable.logoUrl,
-        websiteUrl: organizationsTable.websiteUrl
+        websiteUrl: organizationsTable.websiteUrl,
+        description: organizationsTable.description
       })
       .from(organizationsTable)
       .where(eq(organizationsTable.status, "active"))

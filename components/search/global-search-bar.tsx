@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation"
 import { useState, useRef, useEffect, useCallback } from "react"
 import { cn } from "@/lib/utils"
 import { useDebounce } from "@/lib/hooks/use-debounce"
+import { MovingBorderWrapper } from "@/components/ui/moving-border"
 
 interface Suggestion {
   id: string
@@ -117,87 +118,90 @@ export default function GlobalSearchBar() {
 
   return (
     <div className="relative w-full md:w-64 lg:w-80 group" ref={containerRef}>
-      <form onSubmit={handleSearch} className="relative flex items-center">
-        <div
-          className={cn(
-            "relative flex items-center transition-all duration-300 ease-out w-full",
-            "rounded-full border bg-background/50 backdrop-blur-sm",
-            "hover:bg-background/80 hover:shadow-md hover:shadow-primary/5",
-            isFocused
-              ? "bg-background border-primary/40 shadow-lg shadow-primary/10 ring-2 ring-primary/20"
-              : "border-border/60"
-          )}
-        >
-          <Search
+      <MovingBorderWrapper className="rounded-full" variant="line">
+        <form onSubmit={handleSearch} className="relative flex items-center">
+          <div
             className={cn(
-              "absolute left-3 h-4 w-4 transition-all duration-200",
-              isFocused || searchTerm
-                ? "text-primary"
-                : "text-muted-foreground group-hover:text-foreground"
+              "relative flex items-center transition-all duration-300 ease-out w-full",
+              "rounded-full border bg-background/50 backdrop-blur-sm",
+              "hover:bg-background/80 hover:shadow-md hover:shadow-primary/5",
+              isFocused
+                ? "bg-background border-primary/40 shadow-lg shadow-primary/10 ring-2 ring-primary/20"
+                : "border-border/60"
             )}
-          />
-
-          <Input
-            ref={inputRef}
-            type="text"
-            placeholder="Search locations, metadata..."
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
-            onFocus={() => setIsFocused(true)}
-            onBlur={() => {
-              setTimeout(() => {
-                if (
-                  document.activeElement?.closest(".suggestions-container") ===
-                  null
-                ) {
-                  setIsFocused(false)
-                }
-              }, 150)
-            }}
-            className={cn(
-              "border-0 bg-transparent pl-10 pr-16 text-sm placeholder:text-muted-foreground/70",
-              "focus-visible:ring-0 focus-visible:ring-offset-0",
-              "transition-all duration-200"
-            )}
-            autoComplete="off"
-          />
-
-          <div className="absolute right-2 flex items-center space-x-1">
-            {isLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-            ) : (
-              searchTerm && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={clearSearch}
-                  className={cn(
-                    "h-6 w-6 p-0 rounded-full transition-all duration-200",
-                    "hover:bg-muted/80 hover:scale-110"
-                  )}
-                >
-                  <X className="h-3 w-3" />
-                  <span className="sr-only">Clear search</span>
-                </Button>
-              )
-            )}
-
-            <div
+          >
+            <Search
               className={cn(
-                "hidden items-center space-x-1 rounded border bg-muted/50 px-2 py-1 text-xs text-muted-foreground transition-opacity duration-200 sm:flex",
-                (isFocused || searchTerm) && "opacity-0"
+                "absolute left-3 h-4 w-4 transition-all duration-200",
+                isFocused || searchTerm
+                  ? "text-primary"
+                  : "text-muted-foreground group-hover:text-foreground"
               )}
-            >
-              <kbd className="font-mono">⌘</kbd>
-              <kbd className="font-mono">K</kbd>
+            />
+
+            <Input
+              ref={inputRef}
+              type="text"
+              placeholder="Search locations, metadata..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              onFocus={() => setIsFocused(true)}
+              onBlur={() => {
+                setTimeout(() => {
+                  if (
+                    document.activeElement?.closest(
+                      ".suggestions-container"
+                    ) === null
+                  ) {
+                    setIsFocused(false)
+                  }
+                }, 150)
+              }}
+              className={cn(
+                "border-0 bg-transparent pl-10 pr-16 text-sm placeholder:text-muted-foreground/70",
+                "focus-visible:ring-0 focus-visible:ring-offset-0",
+                "transition-all duration-200"
+              )}
+              autoComplete="off"
+            />
+
+            <div className="absolute right-2 flex items-center space-x-1">
+              {isLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              ) : (
+                searchTerm && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearSearch}
+                    className={cn(
+                      "h-6 w-6 p-0 rounded-full transition-all duration-200",
+                      "hover:bg-muted/80 hover:scale-110"
+                    )}
+                  >
+                    <X className="h-3 w-3" />
+                    <span className="sr-only">Clear search</span>
+                  </Button>
+                )
+              )}
+
+              <div
+                className={cn(
+                  "hidden items-center space-x-1 rounded border bg-muted/50 px-2 py-1 text-xs text-muted-foreground transition-opacity duration-200 sm:flex",
+                  (isFocused || searchTerm) && "opacity-0"
+                )}
+              >
+                <kbd className="font-mono">⌘</kbd>
+                <kbd className="font-mono">K</kbd>
+              </div>
             </div>
           </div>
-        </div>
-        <button type="submit" className="sr-only">
-          Search
-        </button>
-      </form>
+          <button type="submit" className="sr-only">
+            Search
+          </button>
+        </form>
+      </MovingBorderWrapper>
 
       {isFocused && (debouncedSearchTerm.length > 1 || isLoading) && (
         <div className="absolute top-full left-0 right-0 mt-2 z-50 suggestions-container">

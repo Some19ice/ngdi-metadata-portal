@@ -1,9 +1,3 @@
-/*
-<ai_context>
-The root server layout for the app.
-</ai_context>
-*/
-
 import {
   createProfileAction,
   getProfileByUserIdAction
@@ -20,20 +14,55 @@ import { cn } from "@/lib/utils"
 import { ClerkProvider } from "@clerk/nextjs"
 import { auth } from "@clerk/nextjs/server"
 import type { Metadata } from "next"
-// Temporarily remove Google font
-// import { Inter } from "next/font/google"
 import "./globals.css"
-import Footer from "@/components/footer"
-import { AppSidebar } from "@/components/sidebar/app-sidebar"
-import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
+import { PageLayoutSwitcher } from "@/components/layout/page-layout-switcher"
 import { Suspense } from "react"
+import { headers } from "next/headers"
+import Link from "next/link"
 
-// Temporarily disable Google font
-// const inter = Inter({ subsets: ["latin"] })
+// Ensure this layout is evaluated per-request so we can reliably detect the pathname
+export const dynamic = "force-dynamic"
 
 export const metadata: Metadata = {
-  title: "NGDI Portal",
-  description: "National Geospatial Data Infrastructure Portal"
+  title: "NGDI Portal - National Geospatial Data Infrastructure",
+  description:
+    "Discover, access, and utilize comprehensive geospatial metadata for informed decision-making and research across Nigeria. The official portal for Nigeria's National Geospatial Data Infrastructure.",
+  keywords: [
+    "Nigeria",
+    "geospatial",
+    "GIS",
+    "metadata",
+    "NGDI",
+    "mapping",
+    "spatial data"
+  ],
+  authors: [{ name: "NGDI Portal Team" }],
+  openGraph: {
+    title: "NGDI Portal - Nigeria's Geospatial Data Hub",
+    description:
+      "Explore Nigeria's comprehensive geospatial data infrastructure with advanced search, interactive mapping, and standardized metadata.",
+    url: "https://ngdi-portal.gov.ng",
+    siteName: "NGDI Portal",
+    locale: "en_NG",
+    type: "website"
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "NGDI Portal - Nigeria's Geospatial Data Hub",
+    description:
+      "Discover, access, and utilize Nigeria's geospatial data resources."
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1
+    }
+  }
 }
 
 // Simple skeleton fallback for MainHeader during suspense/hydration
@@ -46,19 +75,77 @@ function MainHeaderFallback() {
   )
 }
 
+// Landing page header component (simplified)
+function LandingHeader() {
+  return (
+    <div className="absolute top-0 left-0 right-0 z-50">
+      <div className="container mx-auto px-4 py-6">
+        <nav className="flex items-center justify-between">
+          <div className="flex items-center space-x-8">
+            <div className="text-white font-bold text-xl">NGDI Portal</div>
+            <div className="hidden md:flex space-x-6">
+              <Link
+                href="/about"
+                className="text-white/90 hover:text-white transition-colors"
+              >
+                About
+              </Link>
+              <Link
+                href="/metadata/search"
+                className="text-white/90 hover:text-white transition-colors"
+              >
+                Search
+              </Link>
+              <Link
+                href="/map"
+                className="text-white/90 hover:text-white transition-colors"
+              >
+                Map
+              </Link>
+              <Link
+                href="/docs"
+                className="text-white/90 hover:text-white transition-colors"
+              >
+                Documentation
+              </Link>
+            </div>
+          </div>
+          <div className="flex items-center space-x-4">
+            <Link
+              href="/login"
+              className="text-white/90 hover:text-white transition-colors"
+            >
+              Sign In
+            </Link>
+            <Link
+              href="/signup"
+              className="bg-white text-slate-900 px-4 py-2 rounded-lg font-semibold hover:bg-white/90 transition-colors"
+            >
+              Get Started
+            </Link>
+          </div>
+        </nav>
+      </div>
+    </div>
+  )
+}
+
 export default async function RootLayout({
   children
 }: {
   children: React.ReactNode
 }) {
+  // Get the current pathname to determine if we're on the landing page
+  const pathname = (await headers()).get("x-pathname") ?? "__unknown__"
+
+  const isLandingPage = pathname === "/"
+
   return (
     <ClerkProvider>
       <html lang="en" suppressHydrationWarning>
         <body
           className={cn(
             "bg-background min-h-screen w-full scroll-smooth antialiased"
-            // Temporarily disable Google font
-            // inter.className
           )}
         >
           <ErrorBoundary>
@@ -71,32 +158,12 @@ export default async function RootLayout({
               <PostHogUserIdentify />
               <PostHogPageview />
 
-              <SidebarProvider>
-                <div className="flex flex-col min-h-screen w-full">
-                  <div className="flex flex-1 w-full">
-                    <AppSidebar />
-                    <div className="flex flex-1 flex-col w-full">
-                      <Suspense fallback={<MainHeaderFallback />}>
-                        <MainHeader />
-                      </Suspense>
-                      <SidebarInset className="flex flex-1 flex-col w-full">
-                        <main className="flex-1 overflow-auto p-4 md:p-6 w-full">
-                          <ErrorBoundary>
-                            <div suppressHydrationWarning>{children}</div>
-                          </ErrorBoundary>
-                        </main>
-                      </SidebarInset>
-                    </div>
-                  </div>
-                  <Footer className="w-full" />
-                </div>
-              </SidebarProvider>
+              <PageLayoutSwitcher initialIsLanding={isLandingPage}>
+                <div suppressHydrationWarning>{children}</div>
+              </PageLayoutSwitcher>
 
               <TailwindIndicator />
-
               <Toaster />
-
-              {/* Stagewise Toolbar - Development Only */}
               <StagewiseToolbar />
             </Providers>
           </ErrorBoundary>

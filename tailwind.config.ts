@@ -199,22 +199,19 @@ const config = {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         gradient: "gradient 8s linear infinite",
-        "fade-in": "fade-in 0.5s ease-in",
-        "fade-in-up": "fade-in-up 0.5s ease-out",
-        "fade-in-down": "fade-in-down 0.5s ease-out",
-        float: "float 15s ease-in-out infinite",
+        "fade-in": "fade-in 0.3s ease-out",
+        "fade-in-up": "fade-in-up 0.3s ease-out",
+        "fade-in-down": "fade-in-down 0.3s ease-out",
+        float: "float 6s ease-in-out infinite",
         "pulse-soft": "pulse-soft 2s ease-in-out infinite",
         "slide-up": "slide-up 0.3s ease-out",
         "slide-down": "slide-down 0.3s ease-out",
         "scale-in": "scale-in 0.2s ease-out"
       },
       backgroundImage: {
-        "gradient-primary": "var(--gradient-primary)",
-        "gradient-secondary": "var(--gradient-secondary)",
-        "gradient-success": "var(--gradient-success)",
-        "gradient-warning": "var(--gradient-warning)",
-        "gradient-destructive": "var(--gradient-destructive)",
-        "gradient-info": "var(--gradient-info)"
+        "gradient-radial": "radial-gradient(var(--tw-gradient-stops))",
+        "gradient-conic":
+          "conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))"
       }
     }
   },

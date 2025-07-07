@@ -9,7 +9,7 @@ import * as React from "react"
 export interface StatCardProps {
   title: string
   value?: string | number | null
-  icon: React.ElementType
+  icon: React.ComponentType<{ className?: string }>
   isLoading?: boolean
   error?: string | null
   description?: string

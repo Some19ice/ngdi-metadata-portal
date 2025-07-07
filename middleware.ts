@@ -61,14 +61,20 @@ export default clerkMiddleware(async (auth, req) => {
     return rateLimitResponse // Return rate limit error response
   }
 
+  // Create response and add pathname to headers for layout
+  const response = NextResponse.next()
+  response.headers.set("x-pathname", pathname)
+
   // If the request is for a public route, do nothing to let it pass through.
   // For any other route, Clerk's default behavior will protect it.
   if (isPublicRoute(req)) {
-    return // Allow public routes
+    return response // Allow public routes
   }
   // For all other routes, Clerk will enforce authentication by default.
   // If you needed to explicitly protect here, it would be auth().protect(),
   // but often the default behavior is sufficient when public routes are handled.
+
+  return response
 })
 
 export const config = {
