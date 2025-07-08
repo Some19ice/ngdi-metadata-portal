@@ -2447,19 +2447,18 @@ export async function getPublicOrganizationsAction(): Promise<
       })
       .from(organizationsTable)
       .where(eq(organizationsTable.status, "active"))
-      .orderBy(asc(organizationsTable.name))
-      .limit(12) // Limit to 12 organizations for the landing page
+      .orderBy(organizationsTable.name)
 
     return {
       isSuccess: true,
-      message: "Public organizations retrieved successfully",
+      message: "Organizations retrieved successfully",
       data: organizations
     }
   } catch (error) {
-    console.error("Error getting public organizations:", error)
+    console.error("Error fetching public organizations:", error)
     return {
       isSuccess: false,
-      message: "Failed to get public organizations"
+      message: "Failed to fetch organizations"
     }
   }
 }
