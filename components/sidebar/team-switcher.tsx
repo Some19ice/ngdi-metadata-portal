@@ -53,11 +53,15 @@ function useSafeOrganization(): SafeOrganizationData {
   })
 
   React.useEffect(() => {
+    let isMounted = true
+
     const fetchOrganizationData = async () => {
       try {
         setSafeData(prev => ({ ...prev, isLoading: true, error: null }))
 
         const result = await getCurrentUserOrganizationAction()
+
+        if (!isMounted) return
 
         if (result.isSuccess) {
           setSafeData({
@@ -78,6 +82,7 @@ function useSafeOrganization(): SafeOrganizationData {
         }
       } catch (error) {
         console.error("Error fetching organization data:", error)
+        if (!isMounted) return
         setSafeData({
           organization: null,
           userRole: null,
@@ -89,6 +94,10 @@ function useSafeOrganization(): SafeOrganizationData {
     }
 
     fetchOrganizationData()
+
+    return () => {
+      isMounted = false
+    }
   }, [])
 
   return safeData

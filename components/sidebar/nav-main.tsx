@@ -74,6 +74,8 @@ export function NavMain({ items }: { items: NavigationItem[] }) {
                 <CollapsibleTrigger asChild>
                   <SidebarMenuButton
                     tooltip={item.title}
+                    aria-expanded={isCurrentPage || isInSection}
+                    aria-label={`${item.title} navigation section`}
                     className={cn(
                       "transition-colors duration-200",
                       (isCurrentPage || isInSection) &&

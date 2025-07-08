@@ -2424,11 +2424,38 @@ export async function getSystemOrganizationStatisticsAction(): Promise<
 // ====== END ORGANIZATION STATISTICS AND ANALYTICS ======
 
 /**
+ * Parameters for filtering and paginating public organization lists.
+ */
+interface GetPublicOrganizationsParams {
+  /** Maximum number of organizations to return (default: 12) */
+  limit?: number
+  /** Number of organizations to skip (default: 0) */
+  offset?: number
+}
+
+/**
  * Get public-facing organizations for display on the landing page
  * This doesn't require authentication and only returns active/approved organizations
  * with basic information (name, logo, website) for public display
+ *
+ * @param params - Optional pagination parameters
+ * @param params.limit - Maximum number of organizations to return (default: 12)
+ * @param params.offset - Number of organizations to skip for pagination (default: 0)
+ *
+ * @returns Promise resolving to ActionState containing array of public organization data
+ *
+ * @example
+ * ```typescript
+ * // Get first 12 organizations (default)
+ * const result = await getPublicOrganizationsAction();
+ *
+ * // Get next 12 organizations
+ * const result = await getPublicOrganizationsAction({ limit: 12, offset: 12 });
+ * ```
  */
-export async function getPublicOrganizationsAction(): Promise<
+export async function getPublicOrganizationsAction(
+  params: GetPublicOrganizationsParams = {}
+): Promise<
   ActionState<
     Pick<
       SelectOrganization,
@@ -2436,6 +2463,8 @@ export async function getPublicOrganizationsAction(): Promise<
     >[]
   >
 > {
+  const { limit = 12, offset = 0 } = params
+
   try {
     const organizations = await db
       .select({
@@ -2447,7 +2476,9 @@ export async function getPublicOrganizationsAction(): Promise<
       })
       .from(organizationsTable)
       .where(eq(organizationsTable.status, "active"))
-      .orderBy(organizationsTable.name)
+      .orderBy(desc(organizationsTable.createdAt)) // Show newest organizations first for better UX
+      .limit(limit)
+      .offset(offset)
 
     return {
       isSuccess: true,

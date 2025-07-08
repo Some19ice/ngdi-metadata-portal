@@ -411,30 +411,27 @@ async function generateTopicCategoriesFacet(whereClause: any) {
       "Other"
     ]
 
-    // Count occurrences of each topic category in keywords
-    const topicCategoryCounts = await Promise.all(
-      topicCategories.map(async category => {
-        const [{ count: categoryCount }] = await db
-          .select({ count: count() })
-          .from(metadataRecordsTable)
-          .where(
-            and(
-              whereClause,
-              sql`${metadataRecordsTable.keywords} @> ${[category]}`
-            )
-          )
-
-        return {
-          value: category,
-          count: categoryCount
-        }
+    const categorySubquery = db
+      .select({
+        category: sql<string>`unnest(${metadataRecordsTable.keywords})`.as(
+          "category"
+        )
       })
-    )
+      .from(metadataRecordsTable)
+      .where(whereClause)
+      .as("categorySubquery")
 
-    // Filter out categories with zero count and sort by count
+    const topicCategoryCounts = await db
+      .select({
+        value: categorySubquery.category,
+        count: count()
+      })
+      .from(categorySubquery)
+      .where(sql`${categorySubquery.category} = ANY(${topicCategories})`)
+      .groupBy(categorySubquery.category)
+      .orderBy(desc(count()))
+
     return topicCategoryCounts
-      .filter(tc => tc.count > 0)
-      .sort((a, b) => b.count - a.count)
   } catch (error) {
     console.error("Error generating topic categories facet:", error)
     return []

@@ -70,16 +70,7 @@ const OrganizationCard = React.memo(
 
           {/* Description with custom line clamping */}
           <div className="text-sm text-gray-600 flex-1 mb-4">
-            <p
-              className="overflow-hidden"
-              style={{
-                display: "-webkit-box",
-                WebkitLineClamp: 3,
-                WebkitBoxOrient: "vertical",
-                lineHeight: "1.4",
-                maxHeight: "4.2em" // 3 lines * 1.4 line-height
-              }}
-            >
+            <p className="line-clamp-3">
               {organization.description || "No description provided."}
             </p>
           </div>

@@ -85,7 +85,7 @@ export default async function RootLayout({
               <PostHogPageview />
 
               <PageLayoutSwitcher>
-                <div suppressHydrationWarning>{children}</div>
+                <div>{children}</div>
               </PageLayoutSwitcher>
 
               <TailwindIndicator />

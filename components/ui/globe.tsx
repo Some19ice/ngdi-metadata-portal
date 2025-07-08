@@ -1,10 +1,11 @@
 "use client"
 import { useEffect, useRef, useState } from "react"
-import { Color, Scene, Fog, PerspectiveCamera, Vector3 } from "three"
+import { Color, Scene, Fog, PerspectiveCamera, Vector3, Group } from "three"
 import ThreeGlobe from "three-globe"
 import { useThree, Canvas, extend } from "@react-three/fiber"
 import { OrbitControls } from "@react-three/drei"
-import countries from "@/data/globe.json"
+import { loadGlobeData } from "@/lib/utils/topojson-loader"
+import { FeatureCollection } from "geojson"
 declare module "@react-three/fiber" {
   interface ThreeElements {
     threeGlobe: ThreeElements["mesh"] & {
@@ -60,12 +61,12 @@ interface WorldProps {
   data: Position[]
 }
 
-let numbersOfRings = [0]
-
 export function Globe({ globeConfig, data }: WorldProps) {
   const globeRef = useRef<ThreeGlobe | null>(null)
-  const groupRef = useRef()
+  const groupRef = useRef<Group>(null)
   const [isInitialized, setIsInitialized] = useState(false)
+  const [countries, setCountries] = useState<FeatureCollection | null>(null)
+  const [isLoadingCountries, setIsLoadingCountries] = useState(true)
 
   const defaultProps = {
     pointSize: 1,
@@ -84,11 +85,24 @@ export function Globe({ globeConfig, data }: WorldProps) {
     ...globeConfig
   }
 
+  // Load countries data
+  useEffect(() => {
+    loadGlobeData()
+      .then(data => {
+        setCountries(data)
+        setIsLoadingCountries(false)
+      })
+      .catch(error => {
+        console.error("Failed to load globe data:", error)
+        setIsLoadingCountries(false)
+      })
+  }, [])
+
   // Initialize globe only once
   useEffect(() => {
     if (!globeRef.current && groupRef.current) {
       globeRef.current = new ThreeGlobe()
-      ;(groupRef.current as any).add(globeRef.current)
+      groupRef.current.add(globeRef.current)
       setIsInitialized(true)
     }
   }, [])
@@ -103,27 +117,43 @@ export function Globe({ globeConfig, data }: WorldProps) {
       emissiveIntensity: number
       shininess: number
     }
-    globeMaterial.color = new Color(globeConfig.globeColor)
-    globeMaterial.emissive = new Color(globeConfig.emissive)
-    globeMaterial.emissiveIntensity = globeConfig.emissiveIntensity || 0.1
-    globeMaterial.shininess = globeConfig.shininess || 0.9
+    globeMaterial.color = new Color(
+      globeConfig.globeColor || defaultProps.globeColor
+    )
+    globeMaterial.emissive = new Color(
+      globeConfig.emissive || defaultProps.emissive
+    )
+    globeMaterial.emissiveIntensity =
+      globeConfig.emissiveIntensity ?? defaultProps.emissiveIntensity
+    globeMaterial.shininess = globeConfig.shininess ?? defaultProps.shininess
   }, [
     isInitialized,
     globeConfig.globeColor,
     globeConfig.emissive,
     globeConfig.emissiveIntensity,
-    globeConfig.shininess
+    globeConfig.shininess,
+    defaultProps.globeColor,
+    defaultProps.emissive,
+    defaultProps.emissiveIntensity,
+    defaultProps.shininess
   ])
 
   // Build data when globe is initialized or when data changes
   useEffect(() => {
-    if (!globeRef.current || !isInitialized || !data) return
+    if (!globeRef.current || !isInitialized || !data || !countries) return
 
     const arcs = data
     let points = []
     for (let i = 0; i < arcs.length; i++) {
       const arc = arcs[i]
-      const rgb = hexToRgb(arc.color) as { r: number; g: number; b: number }
+      const rgb = hexToRgb(arc.color)
+
+      // Skip processing if hexToRgb returns null
+      if (!rgb) {
+        console.warn(`Invalid color format: ${arc.color}, skipping arc`)
+        continue
+      }
+
       points.push({
         size: defaultProps.pointSize,
         order: arc.order,
@@ -191,6 +221,7 @@ export function Globe({ globeConfig, data }: WorldProps) {
   }, [
     isInitialized,
     data,
+    countries,
     defaultProps.pointSize,
     defaultProps.showAtmosphere,
     defaultProps.atmosphereColor,

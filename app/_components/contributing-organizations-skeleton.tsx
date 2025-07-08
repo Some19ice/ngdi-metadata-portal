@@ -6,10 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 
 export function ContributingOrganizationsSkeleton() {
   return (
-    <section
-      className="py-16 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800"
-      aria-labelledby="contributing-orgs"
-    >
+    <section className="py-16" aria-labelledby="contributing-orgs">
       <div className="container mx-auto px-4">
         <div className="text-center mb-12">
           <h2 id="contributing-orgs" className="text-3xl font-bold mb-3">

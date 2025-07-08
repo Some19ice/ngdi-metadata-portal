@@ -105,6 +105,7 @@
     "task-master-ai": "^0.13.2",
     "three": "^0.178.0",
     "three-globe": "^2.43.0",
+    "topojson-client": "^3.1.0",
     "vaul": "^1.0.0",
     "xml2js": "^0.6.2",
     "zod": "^3.23.8",
@@ -116,6 +117,8 @@
     "@types/react": "^18.3.11",
     "@types/react-dom": "^18.3.1",
     "@types/three": "^0.178.0",
+    "@types/topojson-client": "^3.1.5",
+    "@types/topojson-specification": "^1.0.5",
     "@types/xml2js": "^0.4.14",
     "dotenv": "^16.4.5",
     "drizzle-kit": "^0.24.2",
@@ -128,6 +131,8 @@
     "postcss": "^8.4.47",
     "prettier": "^3.3.3",
     "tailwindcss": "^3.4.13",
+    "topojson": "^3.0.2",
+    "topojson-server": "^3.0.1",
     "typescript": "^5.6.3"
   },
   "lint-staged": {

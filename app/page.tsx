@@ -5,6 +5,7 @@ import { HeroSection } from "@/components/landing/hero-section"
 import { FeaturesSection } from "@/components/landing/features-section"
 import { ContributingOrganizationsFetcher } from "./_components/contributing-organizations-fetcher"
 import { ContributingOrganizationsSkeleton } from "./_components/contributing-organizations-skeleton"
+import { UnifiedGeospatialBackground } from "@/components/ui/unified-geospatial-background"
 
 export default async function HomePage() {
   return (
@@ -12,13 +13,16 @@ export default async function HomePage() {
       {/* Hero Section */}
       <HeroSection />
 
-      {/* Features Section */}
-      <FeaturesSection />
+      {/* Features and Organizations Sections with Unified Background */}
+      <UnifiedGeospatialBackground>
+        {/* Features Section */}
+        <FeaturesSection />
 
-      {/* Contributing Organizations Section */}
-      <Suspense fallback={<ContributingOrganizationsSkeleton />}>
-        <ContributingOrganizationsFetcher />
-      </Suspense>
+        {/* Contributing Organizations Section */}
+        <Suspense fallback={<ContributingOrganizationsSkeleton />}>
+          <ContributingOrganizationsFetcher />
+        </Suspense>
+      </UnifiedGeospatialBackground>
     </div>
   )
 }

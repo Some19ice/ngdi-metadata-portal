@@ -1,7 +1,8 @@
 "use client"
-import React from "react"
+import React, { useEffect } from "react"
 import { motion } from "framer-motion"
 import dynamic from "next/dynamic"
+import { preloadGlobeData } from "@/lib/utils/topojson-loader"
 
 const World = dynamic(
   () => import("@/components/ui/globe").then(m => m.World),
@@ -11,6 +12,11 @@ const World = dynamic(
 )
 
 export default function GlobeDemo() {
+  // Preload globe data when component mounts
+  useEffect(() => {
+    preloadGlobeData()
+  }, [])
+
   const globeConfig = {
     pointSize: 4,
     globeColor: "#045d4d",
@@ -34,6 +40,24 @@ export default function GlobeDemo() {
     autoRotateSpeed: 0.5
   }
   const colors = ["#22c55e", "#10b981", "#059669"]
+
+  // Deterministic color selection based on coordinates
+  const getArcColor = (
+    startLat: number,
+    startLng: number,
+    endLat: number,
+    endLng: number
+  ) => {
+    const coordString = `${startLat}-${startLng}-${endLat}-${endLng}`
+    let hash = 0
+    for (let i = 0; i < coordString.length; i++) {
+      const char = coordString.charCodeAt(i)
+      hash = (hash << 5) - hash + char
+      hash = hash & hash // Convert to 32-bit integer
+    }
+    return colors[Math.abs(hash) % colors.length]
+  }
+
   const sampleArcs = [
     {
       order: 1,
@@ -42,7 +66,7 @@ export default function GlobeDemo() {
       endLat: -22.9068,
       endLng: -43.1729,
       arcAlt: 0.1,
-      color: colors[Math.floor(Math.random() * (colors.length - 1))]
+      color: getArcColor(-19.885592, -43.951191, -22.9068, -43.1729)
     },
     {
       order: 1,
@@ -51,7 +75,7 @@ export default function GlobeDemo() {
       endLat: 3.139,
       endLng: 101.6869,
       arcAlt: 0.2,
-      color: colors[Math.floor(Math.random() * (colors.length - 1))]
+      color: getArcColor(28.6139, 77.209, 3.139, 101.6869)
     },
     {
       order: 1,
@@ -60,7 +84,7 @@ export default function GlobeDemo() {
       endLat: -1.303396,
       endLng: 36.852443,
       arcAlt: 0.5,
-      color: colors[Math.floor(Math.random() * (colors.length - 1))]
+      color: getArcColor(-19.885592, -43.951191, -1.303396, 36.852443)
     },
     {
       order: 2,
@@ -69,7 +93,7 @@ export default function GlobeDemo() {
       endLat: 35.6762,
       endLng: 139.6503,
       arcAlt: 0.2,
-      color: colors[Math.floor(Math.random() * (colors.length - 1))]
+      color: getArcColor(1.3521, 103.8198, 35.6762, 139.6503)
     },
     {
       order: 2,
@@ -78,7 +102,7 @@ export default function GlobeDemo() {
       endLat: 3.139,
       endLng: 101.6869,
       arcAlt: 0.3,
-      color: colors[Math.floor(Math.random() * (colors.length - 1))]
+      color: getArcColor(51.5072, -0.1276, 3.139, 101.6869)
     },
     {
       order: 2,
@@ -87,7 +111,7 @@ export default function GlobeDemo() {
       endLat: 36.162809,
       endLng: -115.119411,
       arcAlt: 0.3,
-      color: colors[Math.floor(Math.random() * (colors.length - 1))]
+      color: getArcColor(-15.785493, -47.909029, 36.162809, -115.119411)
     },
     {
       order: 3,
@@ -96,7 +120,7 @@ export default function GlobeDemo() {
       endLat: 22.3193,
       endLng: 114.1694,
       arcAlt: 0.3,
-      color: colors[Math.floor(Math.random() * (colors.length - 1))]
+      color: getArcColor(-33.8688, 151.2093, 22.3193, 114.1694)
     },
     {
       order: 3,
@@ -105,7 +129,7 @@ export default function GlobeDemo() {
       endLat: 40.7128,
       endLng: -74.006,
       arcAlt: 0.3,
-      color: colors[Math.floor(Math.random() * (colors.length - 1))]
+      color: getArcColor(21.3099, -157.8581, 40.7128, -74.006)
     },
     {
       order: 3,
@@ -114,7 +138,7 @@ export default function GlobeDemo() {
       endLat: 51.5072,
       endLng: -0.1276,
       arcAlt: 0.3,
-      color: colors[Math.floor(Math.random() * (colors.length - 1))]
+      color: getArcColor(-6.2088, 106.8456, 51.5072, -0.1276)
     },
     {
       order: 4,
@@ -123,7 +147,7 @@ export default function GlobeDemo() {
       endLat: -15.595412,
       endLng: -56.05918,
       arcAlt: 0.5,
-      color: colors[Math.floor(Math.random() * (colors.length - 1))]
+      color: getArcColor(9.082, 8.6753, -15.595412, -56.05918)
     },
     {
       order: 4,
@@ -132,7 +156,7 @@ export default function GlobeDemo() {
       endLat: 22.3193,
       endLng: 114.1694,
       arcAlt: 0.7,
-      color: colors[Math.floor(Math.random() * (colors.length - 1))]
+      color: getArcColor(-34.6037, -58.3816, 22.3193, 114.1694)
     },
     {
       order: 4,
@@ -141,7 +165,7 @@ export default function GlobeDemo() {
       endLat: 48.8566,
       endLng: 2.3522,
       arcAlt: 0.1,
-      color: colors[Math.floor(Math.random() * (colors.length - 1))]
+      color: getArcColor(51.5072, -0.1276, 48.8566, 2.3522)
     },
     {
       order: 5,
@@ -150,7 +174,7 @@ export default function GlobeDemo() {
       endLat: 51.5072,
       endLng: -0.1276,
       arcAlt: 0.3,
-      color: colors[Math.floor(Math.random() * (colors.length - 1))]
+      color: getArcColor(14.5995, 120.9842, 51.5072, -0.1276)
     },
     {
       order: 5,
@@ -159,7 +183,7 @@ export default function GlobeDemo() {
       endLat: -33.8688,
       endLng: 151.2093,
       arcAlt: 0.2,
-      color: colors[Math.floor(Math.random() * (colors.length - 1))]
+      color: getArcColor(1.3521, 103.8198, -33.8688, 151.2093)
     },
     {
       order: 5,
@@ -168,7 +192,7 @@ export default function GlobeDemo() {
       endLat: 48.8566,
       endLng: 2.3522,
       arcAlt: 0.2,
-      color: colors[Math.floor(Math.random() * (colors.length - 1))]
+      color: getArcColor(34.0522, -118.2437, 48.8566, 2.3522)
     },
     {
       order: 6,
@@ -177,7 +201,7 @@ export default function GlobeDemo() {
       endLat: 9.082,
       endLng: 8.6753,
       arcAlt: 0.4,
-      color: colors[Math.floor(Math.random() * (colors.length - 1))]
+      color: getArcColor(51.5072, -0.1276, 9.082, 8.6753)
     },
     {
       order: 6,
@@ -186,7 +210,7 @@ export default function GlobeDemo() {
       endLat: 40.7128,
       endLng: -74.006,
       arcAlt: 0.6,
-      color: colors[Math.floor(Math.random() * (colors.length - 1))]
+      color: getArcColor(9.082, 8.6753, 40.7128, -74.006)
     }
   ]
 

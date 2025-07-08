@@ -51,6 +51,7 @@ import { NavUser } from "@/components/sidebar/nav-user"
 import { TeamSwitcher } from "@/components/sidebar/team-switcher"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
+import { GlobalRole, OrgRole } from "@/types"
 
 interface NavigationItem {
   title: string
@@ -58,37 +59,15 @@ interface NavigationItem {
   icon?: React.ComponentType<{ className?: string }>
   isActive?: boolean
   badge?: string
-  requiredRoles?: Array<
-    | "System Administrator"
-    | "Node Officer"
-    | "Registered User"
-    | "Metadata Creator"
-    | "Metadata Approver"
-  >
-  requiredOrgRoles?: Array<
-    "Node Officer" | "Metadata Creator" | "Metadata Approver"
-  >
-  excludeRoles?: Array<
-    | "System Administrator"
-    | "Node Officer"
-    | "Registered User"
-    | "Metadata Creator"
-    | "Metadata Approver"
-  >
+  requiredRoles?: GlobalRole[]
+  requiredOrgRoles?: OrgRole[]
+  excludeRoles?: GlobalRole[]
   items?: Array<{
     title: string
     url: string
     badge?: string
-    requiredRoles?: Array<
-      | "System Administrator"
-      | "Node Officer"
-      | "Registered User"
-      | "Metadata Creator"
-      | "Metadata Approver"
-    >
-    requiredOrgRoles?: Array<
-      "Node Officer" | "Metadata Creator" | "Metadata Approver"
-    >
+    requiredRoles?: GlobalRole[]
+    requiredOrgRoles?: OrgRole[]
   }>
 }
 
