@@ -53,9 +53,38 @@ class SearchErrorBoundary extends Component<Props, State> {
       this.props.onError(error, errorInfo)
     }
 
-    // In production, you might want to log this to an error reporting service
-    if (process.env.NODE_ENV === "production") {
-      // Example: logErrorToService(error, errorInfo)
+    // Log error to external service asynchronously to prevent blocking UI
+    setTimeout(() => {
+      this.logErrorToService(error, errorInfo)
+    }, 0)
+  }
+
+  private logErrorToService = (error: Error, errorInfo: ErrorInfo) => {
+    try {
+      // Here you would integrate with your error reporting service
+      // For example: Sentry, LogRocket, Bugsnag, etc.
+      const errorData = {
+        message: error.message,
+        stack: error.stack,
+        componentStack: errorInfo.componentStack,
+        timestamp: new Date().toISOString(),
+        userAgent:
+          typeof navigator !== "undefined" ? navigator.userAgent : "N/A (SSR)",
+        url: typeof window !== "undefined" ? window.location.href : "N/A (SSR)",
+        context: "search",
+        level: "section"
+      }
+
+      // For now, we'll just log to console in development
+      // In production, replace with your error service
+      if (process.env.NODE_ENV === "production") {
+        console.error("Search Error logged:", errorData)
+        // Example: typeof window !== 'undefined' && window.errorService?.captureException(error, { extra: errorData })
+      } else {
+        console.error("Search Error logged (dev):", errorData)
+      }
+    } catch (logError) {
+      console.error("Failed to log search error:", logError)
     }
   }
 
@@ -194,15 +223,42 @@ class SearchErrorBoundary extends Component<Props, State> {
 
 export default SearchErrorBoundary
 
+// Error logging function for hooks
+const logErrorToService = (error: Error, context?: string) => {
+  try {
+    const errorData = {
+      message: error.message,
+      stack: error.stack,
+      timestamp: new Date().toISOString(),
+      userAgent:
+        typeof navigator !== "undefined" ? navigator.userAgent : "N/A (SSR)",
+      url: typeof window !== "undefined" ? window.location.href : "N/A (SSR)",
+      context: context || "search-hook",
+      level: "component"
+    }
+
+    // For now, we'll just log to console in development
+    // In production, replace with your error service
+    if (process.env.NODE_ENV === "production") {
+      console.error("Search Hook Error logged:", errorData)
+      // Example: typeof window !== 'undefined' && window.errorService?.captureException(error, { extra: errorData })
+    } else {
+      console.error("Search Hook Error logged (dev):", errorData)
+    }
+  } catch (logError) {
+    console.error("Failed to log search hook error:", logError)
+  }
+}
+
 // Hook for functional components to handle errors
 export const useSearchErrorHandler = () => {
   const handleError = (error: Error, context?: string) => {
     console.error(`Search error${context ? ` in ${context}` : ""}:`, error)
 
-    // In production, log to error service
-    if (process.env.NODE_ENV === "production") {
-      // logErrorToService(error, { context })
-    }
+    // Log error to external service asynchronously
+    setTimeout(() => {
+      logErrorToService(error, context)
+    }, 0)
   }
 
   const wrapAsync = <T extends any[], R>(

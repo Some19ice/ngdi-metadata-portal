@@ -51,6 +51,7 @@ export function useDebouncedSearch(options: UseDebouncedSearchOptions = {}) {
   const searchCacheRef = useRef<SearchCache>({})
   const suggestionCacheRef = useRef<SuggestionCache>({})
   const abortControllerRef = useRef<AbortController>()
+  const suggestionAbortControllerRef = useRef<AbortController>()
   const lastSearchRef = useRef<string>()
 
   // Cache management
@@ -177,10 +178,14 @@ export function useDebouncedSearch(options: UseDebouncedSearchOptions = {}) {
         }
 
         setSearchTime(Date.now() - startTime)
-      } catch (error: any) {
-        if (error.name !== "AbortError") {
+      } catch (error) {
+        if (error instanceof Error && error.name !== "AbortError") {
           console.error("Search error:", error)
-          setError(error.message || "Search failed")
+          setError(error.message)
+          setSearchResults(null)
+        } else if (!(error instanceof Error)) {
+          console.error("Search error:", error)
+          setError("Search failed")
           setSearchResults(null)
         }
       } finally {
@@ -199,6 +204,14 @@ export function useDebouncedSearch(options: UseDebouncedSearchOptions = {}) {
       }
 
       try {
+        // Cancel previous suggestion request
+        if (suggestionAbortControllerRef.current) {
+          suggestionAbortControllerRef.current.abort()
+        }
+
+        // Create new abort controller
+        suggestionAbortControllerRef.current = new AbortController()
+
         // Check cache first
         const cachedSuggestions = getCachedSuggestions(query)
         if (cachedSuggestions) {
@@ -210,7 +223,10 @@ export function useDebouncedSearch(options: UseDebouncedSearchOptions = {}) {
         setIsLoadingSuggestions(true)
 
         const response = await fetch(
-          `/api/search/suggestions?q=${encodeURIComponent(query)}`
+          `/api/search/suggestions?q=${encodeURIComponent(query)}`,
+          {
+            signal: suggestionAbortControllerRef.current.signal
+          }
         )
 
         if (!response.ok) {
@@ -226,8 +242,13 @@ export function useDebouncedSearch(options: UseDebouncedSearchOptions = {}) {
           setSuggestions([])
         }
       } catch (error) {
-        console.error("Suggestions error:", error)
-        setSuggestions([])
+        if (error instanceof Error && error.name !== "AbortError") {
+          console.error("Suggestions error:", error)
+          setSuggestions([])
+        } else if (!(error instanceof Error)) {
+          console.error("Suggestions error:", error)
+          setSuggestions([])
+        }
       } finally {
         setIsLoadingSuggestions(false)
       }
@@ -331,6 +352,9 @@ export function useDebouncedSearch(options: UseDebouncedSearchOptions = {}) {
       if (abortControllerRef.current) {
         abortControllerRef.current.abort()
       }
+      if (suggestionAbortControllerRef.current) {
+        suggestionAbortControllerRef.current.abort()
+      }
     }
   }, [])
 
@@ -349,19 +373,25 @@ export function useDebouncedSearch(options: UseDebouncedSearchOptions = {}) {
     clearCache,
 
     // Cache stats (for debugging)
-    getCacheStats: useCallback(
-      () => ({
+    getCacheStats: useCallback(() => {
+      const searchTimestamps = Object.values(searchCacheRef.current).map(
+        v => v.timestamp
+      )
+      const suggestionTimestamps = Object.values(
+        suggestionCacheRef.current
+      ).map(v => v.timestamp)
+
+      return {
         searchCacheSize: Object.keys(searchCacheRef.current).length,
         suggestionCacheSize: Object.keys(suggestionCacheRef.current).length,
-        oldestSearchEntry: Math.min(
-          ...Object.values(searchCacheRef.current).map(v => v.timestamp)
-        ),
-        oldestSuggestionEntry: Math.min(
-          ...Object.values(suggestionCacheRef.current).map(v => v.timestamp)
-        )
-      }),
-      []
-    )
+        oldestSearchEntry:
+          searchTimestamps.length > 0 ? Math.min(...searchTimestamps) : null,
+        oldestSuggestionEntry:
+          suggestionTimestamps.length > 0
+            ? Math.min(...suggestionTimestamps)
+            : null
+      }
+    }, [])
   }
 }
 

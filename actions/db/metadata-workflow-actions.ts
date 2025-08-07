@@ -6,15 +6,37 @@ import {
   SelectMetadataRecord,
   metadataRecordsTable,
   metadataChangeLogsTable,
-  metadataLogActionTypeEnum
+  metadataLogActionTypeEnum,
+  metadataStatusEnum
 } from "@/db/schema"
 import { ActionState } from "@/types"
 import { updateMetadataRecordStatusAction } from "./metadata-records-actions"
 import { hasPermission, isNodeOfficerForOrg, checkUserRole } from "@/lib/rbac"
-import { eq, and, not, inArray, or, sql } from "drizzle-orm"
+import { eq, and, not, inArray, or, sql, count, desc } from "drizzle-orm"
 
 // Import directly from schema file since it's not exported from the index
 import { userOrganizationsTable } from "@/db/schema/user-organizations-schema"
+
+// Valid metadata status values from the enum
+type ValidMetadataStatus =
+  | "Draft"
+  | "Pending Validation"
+  | "Needs Revision"
+  | "Approved"
+  | "Published"
+  | "Archived"
+
+// Type guard to validate status values
+function isValidMetadataStatus(status: string): status is ValidMetadataStatus {
+  return [
+    "Draft",
+    "Pending Validation",
+    "Needs Revision",
+    "Approved",
+    "Published",
+    "Archived"
+  ].includes(status)
+}
 
 /**
  * Allow a metadata creator to submit a metadata record for validation
@@ -361,7 +383,16 @@ export async function getPendingValidationMetadataPaginatedAction(
 
     // Apply status filter
     if (filters?.status) {
-      conditions.push(eq(metadataRecordsTable.status, filters.status as any))
+      // Validate the status value before using it
+      if (isValidMetadataStatus(filters.status)) {
+        conditions.push(eq(metadataRecordsTable.status, filters.status))
+      } else {
+        // If invalid status provided, return error
+        return {
+          isSuccess: false,
+          message: `Invalid status filter: ${filters.status}. Valid values are: Draft, Pending Validation, Needs Revision, Approved, Published, Archived.`
+        }
+      }
     } else {
       // Default to pending validation and needs revision
       conditions.push(
@@ -374,7 +405,7 @@ export async function getPendingValidationMetadataPaginatedAction(
 
     // Get total count
     const totalResult = await db
-      .select({ count: db.$count(metadataRecordsTable) })
+      .select({ count: count() })
       .from(metadataRecordsTable)
       .where(and(...conditions))
 
@@ -384,17 +415,17 @@ export async function getPendingValidationMetadataPaginatedAction(
     let searchConditions = conditions
     if (filters?.searchTerm) {
       const searchTerm = `%${filters.searchTerm.toLowerCase()}%`
-      searchConditions = [
-        ...conditions,
-        or(
-          sql`LOWER(${metadataRecordsTable.title}) LIKE ${searchTerm}`,
-          sql`LOWER(${metadataRecordsTable.abstract}) LIKE ${searchTerm}`
-        )
-      ]
+      const searchCondition = or(
+        sql`LOWER(${metadataRecordsTable.title}) LIKE ${searchTerm}`,
+        sql`LOWER(${metadataRecordsTable.abstract}) LIKE ${searchTerm}`
+      )
+      if (searchCondition) {
+        searchConditions = [...conditions, searchCondition]
+      }
     }
 
     // Build order by
-    let orderBy
+    let orderBy: any[]
     switch (filters?.sortBy) {
       case "title":
         orderBy = [metadataRecordsTable.title]
@@ -424,7 +455,7 @@ export async function getPendingValidationMetadataPaginatedAction(
       with: {
         organization: true,
         changeLogs: {
-          orderBy: [metadataChangeLogsTable.createdAt],
+          orderBy: [desc(metadataChangeLogsTable.createdAt)],
           where: and(
             eq(metadataChangeLogsTable.actionType, "StatusChange"),
             inArray(metadataChangeLogsTable.newStatus, [

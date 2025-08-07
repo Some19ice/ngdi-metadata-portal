@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useRouter, useSearchParams, usePathname } from "next/navigation"
 import { MetadataSearchFilters, MetadataSearchResult } from "@/types"
 import {
   parseSearchParams,
@@ -7,6 +7,14 @@ import {
   generateSearchUrl,
   normalizeFilters
 } from "@/lib/utils/search-params-utils"
+
+/**
+ * Threshold for determining meaningful search filters.
+ * Represents the typical number of default filter properties (sortBy, sortOrder, limit, page)
+ * that don't constitute actual search criteria. When the filter count exceeds this threshold,
+ * it indicates the presence of meaningful search filters that warrant performing a search.
+ */
+const DEFAULT_FILTER_PROPERTIES_COUNT = 4
 
 interface UseUnifiedSearchOptions {
   debounceMs?: number
@@ -51,6 +59,7 @@ export function useUnifiedSearch(
 
   const router = useRouter()
   const searchParams = useSearchParams()
+  const pathname = usePathname()
 
   // Core state
   const [filters, setFilters] = useState<MetadataSearchFilters>({})
@@ -75,7 +84,8 @@ export function useUnifiedSearch(
       // Auto search if there are meaningful filters
       if (
         autoSearch &&
-        (normalized.query || Object.keys(normalized).length > 4)
+        (normalized.query ||
+          Object.keys(normalized).length > DEFAULT_FILTER_PROPERTIES_COUNT)
       ) {
         performSearch(normalized)
       }
@@ -96,7 +106,7 @@ export function useUnifiedSearch(
       // Skip search if no meaningful criteria
       if (
         !searchFilters.query?.trim() &&
-        Object.keys(searchFilters).length <= 4
+        Object.keys(searchFilters).length <= DEFAULT_FILTER_PROPERTIES_COUNT
       ) {
         setResults(null)
         setIsLoading(false)
@@ -139,10 +149,31 @@ export function useUnifiedSearch(
         } else {
           throw new Error(result.message || "Search failed")
         }
-      } catch (err: any) {
-        if (err.name !== "AbortError") {
+      } catch (err: unknown) {
+        // Type guard to check if error has name property (for AbortError check)
+        const hasName =
+          err instanceof Error ||
+          (typeof err === "object" && err !== null && "name" in err)
+        const errorName = hasName ? (err as { name: string }).name : ""
+
+        if (errorName !== "AbortError") {
           console.error("Search error:", err)
-          setError(err.message || "Search failed")
+
+          // Type guard to safely extract error message
+          let errorMessage = "Search failed"
+          if (err instanceof Error) {
+            errorMessage = err.message
+          } else if (
+            typeof err === "object" &&
+            err !== null &&
+            "message" in err
+          ) {
+            const message = (err as { message: unknown }).message
+            errorMessage =
+              typeof message === "string" ? message : "Search failed"
+          }
+
+          setError(errorMessage)
           setResults(null)
         }
       } finally {
@@ -172,13 +203,15 @@ export function useUnifiedSearch(
       if (!updateUrl) return
 
       const newUrl = generateSearchUrl(newFilters, basePath)
-      const currentPath = window.location.pathname + window.location.search
+      const currentPath =
+        pathname +
+        (searchParams.toString() ? "?" + searchParams.toString() : "")
 
       if (newUrl !== currentPath) {
         router.push(newUrl)
       }
     },
-    [updateUrl, basePath, router]
+    [updateUrl, basePath, router, pathname, searchParams]
   )
 
   // Update a single filter

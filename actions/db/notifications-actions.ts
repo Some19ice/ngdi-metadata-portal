@@ -1,5 +1,14 @@
 "use server"
 
+/**
+ * IMPORTANT: This module requires the NOTIFICATION_SYSTEM_TOKEN environment variable
+ * to be set for internal system notification creation. This token should be a secure
+ * random string used to authorize system-generated notifications.
+ *
+ * Add to your .env.local file:
+ * NOTIFICATION_SYSTEM_TOKEN=your_secure_random_token_here
+ */
+
 import { db } from "@/db/db"
 import {
   notificationsTable,
@@ -10,14 +19,48 @@ import {
 } from "@/db/schema"
 import { ActionState } from "@/types"
 import { auth } from "@clerk/nextjs/server"
-import { and, eq, desc, gte, isNull, or } from "drizzle-orm"
+import { and, eq, desc, gte, isNull, or, count } from "drizzle-orm"
 import { isNodeOfficerForOrg } from "@/lib/rbac"
+
+// Pagination validation constants
+const MIN_PAGE = 1
+const DEFAULT_PAGE = 1
+const MIN_PAGE_SIZE = 1
+const MAX_PAGE_SIZE = 100
+const DEFAULT_PAGE_SIZE = 20
+
+/**
+ * Validates and sanitizes the page parameter
+ * @param page - The page number to validate
+ * @returns A valid page number (minimum 1)
+ */
+function validatePaginationPage(page: number): number {
+  if (!Number.isInteger(page) || page < MIN_PAGE) {
+    return DEFAULT_PAGE
+  }
+  return page
+}
+
+/**
+ * Validates and sanitizes the pageSize parameter
+ * @param pageSize - The page size to validate
+ * @returns A valid page size within acceptable bounds
+ */
+function validatePaginationPageSize(pageSize: number): number {
+  if (
+    !Number.isInteger(pageSize) ||
+    pageSize < MIN_PAGE_SIZE ||
+    pageSize > MAX_PAGE_SIZE
+  ) {
+    return DEFAULT_PAGE_SIZE
+  }
+  return pageSize
+}
 
 export interface NotificationFilters {
   isRead?: boolean
   priority?: (typeof notificationPriorityEnum.enumValues)[number]
   type?: (typeof notificationTypeEnum.enumValues)[number]
-  organizationId?: string
 }
 
 export interface PaginatedNotifications {
@@ -52,8 +95,12 @@ export async function getNotificationsAction(
     }
   }
 
+  // Validate pagination parameters
+  const validatedPage = validatePaginationPage(page)
+  const validatedPageSize = validatePaginationPageSize(pageSize)
+
   try {
-    const offset = (page - 1) * pageSize
+    const offset = (validatedPage - 1) * validatedPageSize
 
     // Build where conditions
     const conditions = [
@@ -78,7 +125,7 @@ export async function getNotificationsAction(
 
     // Get total count
     const totalResult = await db
-      .select({ count: db.$count(notificationsTable) })
+      .select({ count: count() })
       .from(notificationsTable)
       .where(and(...conditions))
 
@@ -90,7 +137,7 @@ export async function getNotificationsAction(
       .from(notificationsTable)
       .where(and(...conditions))
       .orderBy(desc(notificationsTable.createdAt))
-      .limit(pageSize)
+      .limit(validatedPageSize)
       .offset(offset)
 
     const hasMore = offset + notifications.length < total
@@ -102,8 +149,8 @@ export async function getNotificationsAction(
         notifications,
         total,
         hasMore,
-        page,
-        pageSize
+        page: validatedPage,
+        pageSize: validatedPageSize
       }
     }
   } catch (error) {
@@ -117,10 +164,79 @@ export async function getNotificationsAction(
   }
 }
 
-// Create a new notification
+// System context for internal notification creation
+export interface SystemNotificationContext {
+  isSystemCall: true
+  systemToken: string
+}
+
+// Create a new notification with authorization checks
 export async function createNotificationAction(
-  notification: Omit<InsertNotification, "id" | "createdAt" | "updatedAt">
+  notification: Omit<InsertNotification, "id" | "createdAt" | "updatedAt">,
+  systemContext?: SystemNotificationContext
 ): Promise<ActionState<SelectNotification>> {
+  // Validate system context for internal calls
+  if (systemContext?.isSystemCall) {
+    const expectedSystemToken = process.env.NOTIFICATION_SYSTEM_TOKEN
+    if (
+      !expectedSystemToken ||
+      systemContext.systemToken !== expectedSystemToken
+    ) {
+      return {
+        isSuccess: false,
+        message: "Unauthorized: Invalid system token for notification creation."
+      }
+    }
+  } else {
+    // For non-system calls, require user authentication and authorization
+    const { userId } = await auth()
+    if (!userId) {
+      return {
+        isSuccess: false,
+        message: "Unauthorized: User not logged in."
+      }
+    }
+
+    // Verify the user has permission to create notifications for the target organization
+    if (notification.organizationId) {
+      const isNO = await isNodeOfficerForOrg(
+        userId,
+        notification.organizationId
+      )
+      if (!isNO) {
+        return {
+          isSuccess: false,
+          message:
+            "Forbidden: You are not authorized to create notifications for this organization."
+        }
+      }
+    }
+
+    // Ensure the notification is for the authenticated user or they have proper permissions
+    if (notification.userId !== userId) {
+      // Only Node Officers can create notifications for other users in their organization
+      if (!notification.organizationId) {
+        return {
+          isSuccess: false,
+          message:
+            "Forbidden: Cannot create notifications for other users without organization context."
+        }
+      }
+
+      const isNO = await isNodeOfficerForOrg(
+        userId,
+        notification.organizationId
+      )
+      if (!isNO) {
+        return {
+          isSuccess: false,
+          message:
+            "Forbidden: Only Node Officers can create notifications for other users."
+        }
+      }
+    }
+  }
+
   try {
     const [newNotification] = await db
       .insert(notificationsTable)
@@ -230,11 +346,12 @@ export async function markAllNotificationsAsReadAction(
           eq(notificationsTable.isRead, false)
         )
       )
+      .returning({ id: notificationsTable.id })
 
     return {
       isSuccess: true,
       message: "All notifications marked as read.",
-      data: { updatedCount: result.rowCount || 0 }
+      data: { updatedCount: result.length }
     }
   } catch (error) {
     console.error("Error marking all notifications as read:", error)
@@ -268,8 +385,9 @@ export async function deleteNotificationAction(
           eq(notificationsTable.userId, userId)
         )
       )
+      .returning({ id: notificationsTable.id })
 
-    if (result.rowCount === 0) {
+    if (result.length === 0) {
       return {
         isSuccess: false,
         message: "Notification not found or access denied."
@@ -327,19 +445,19 @@ export async function getNotificationCountsAction(
 
     // Get total count
     const totalResult = await db
-      .select({ count: db.$count(notificationsTable) })
+      .select({ count: count() })
       .from(notificationsTable)
       .where(and(...baseConditions))
 
     // Get unread count
     const unreadResult = await db
-      .select({ count: db.$count(notificationsTable) })
+      .select({ count: count() })
       .from(notificationsTable)
       .where(and(...baseConditions, eq(notificationsTable.isRead, false)))
 
     // Get high priority unread count
     const highPriorityResult = await db
-      .select({ count: db.$count(notificationsTable) })
+      .select({ count: count() })
       .from(notificationsTable)
       .where(
         and(
@@ -376,19 +494,33 @@ export async function createApprovalRequiredNotificationAction(
   metadataRecordId: string,
   recordTitle: string
 ): Promise<ActionState<SelectNotification>> {
-  return createNotificationAction({
-    userId,
-    organizationId,
-    type: "approval_required",
-    title: "New metadata record pending approval",
-    message: `A new metadata record "${recordTitle}" has been submitted for validation`,
-    priority: "high",
-    actionUrl: `/app/metadata/${metadataRecordId}`,
-    metadata: {
-      recordId: metadataRecordId,
-      organizationId
+  const systemToken = process.env.NOTIFICATION_SYSTEM_TOKEN
+  if (!systemToken) {
+    return {
+      isSuccess: false,
+      message: "System configuration error: Missing notification system token."
     }
-  })
+  }
+
+  return createNotificationAction(
+    {
+      userId,
+      organizationId,
+      type: "approval_required",
+      title: "New metadata record pending approval",
+      message: `A new metadata record "${recordTitle}" has been submitted for validation`,
+      priority: "high",
+      actionUrl: `/app/metadata/${metadataRecordId}`,
+      metadata: {
+        recordId: metadataRecordId,
+        organizationId
+      }
+    },
+    {
+      isSystemCall: true,
+      systemToken
+    }
+  )
 }
 
 export async function createUserAddedNotificationAction(
@@ -396,18 +528,32 @@ export async function createUserAddedNotificationAction(
   organizationId: string,
   newUserName: string
 ): Promise<ActionState<SelectNotification>> {
-  return createNotificationAction({
-    userId,
-    organizationId,
-    type: "user_added",
-    title: "New user added to organization",
-    message: `${newUserName} has been added to your organization`,
-    priority: "medium",
-    actionUrl: `/app/(node-officer)/organization-users?orgId=${organizationId}`,
-    metadata: {
-      organizationId
+  const systemToken = process.env.NOTIFICATION_SYSTEM_TOKEN
+  if (!systemToken) {
+    return {
+      isSuccess: false,
+      message: "System configuration error: Missing notification system token."
     }
-  })
+  }
+
+  return createNotificationAction(
+    {
+      userId,
+      organizationId,
+      type: "user_added",
+      title: "New user added to organization",
+      message: `${newUserName} has been added to your organization`,
+      priority: "medium",
+      actionUrl: `/app/(node-officer)/organization-users?orgId=${organizationId}`,
+      metadata: {
+        organizationId
+      }
+    },
+    {
+      isSystemCall: true,
+      systemToken
+    }
+  )
 }
 
 export async function createDeadlineApproachingNotificationAction(
@@ -415,17 +561,31 @@ export async function createDeadlineApproachingNotificationAction(
   organizationId: string,
   pendingCount: number
 ): Promise<ActionState<SelectNotification>> {
-  return createNotificationAction({
-    userId,
-    organizationId,
-    type: "deadline_approaching",
-    title: "Metadata review deadline approaching",
-    message: `${pendingCount} metadata records have been pending review for over 7 days`,
-    priority: "medium",
-    actionUrl: `/app/metadata/search?organizationId=${organizationId}&status=Pending+Validation`,
-    metadata: {
-      organizationId,
-      pendingCount
+  const systemToken = process.env.NOTIFICATION_SYSTEM_TOKEN
+  if (!systemToken) {
+    return {
+      isSuccess: false,
+      message: "System configuration error: Missing notification system token."
     }
-  })
+  }
+
+  return createNotificationAction(
+    {
+      userId,
+      organizationId,
+      type: "deadline_approaching",
+      title: "Metadata review deadline approaching",
+      message: `${pendingCount} metadata records have been pending review for over 7 days`,
+      priority: "medium",
+      actionUrl: `/app/metadata/search?organizationId=${organizationId}&status=Pending+Validation`,
+      metadata: {
+        organizationId,
+        pendingCount
+      }
+    },
+    {
+      isSystemCall: true,
+      systemToken
+    }
+  )
 }

@@ -54,14 +54,14 @@ export default function NodeOfficerErrorBoundary({
             <div className="space-y-3">
               <Button asChild className="w-full">
                 <Link
-                  href={`/app/(node-officer)/officer-dashboard${organizationId ? `?orgId=${organizationId}` : ""}`}
+                  href={`/officer-dashboard${organizationId ? `?orgId=${organizationId}` : ""}`}
                 >
                   <RefreshCw className="mr-2 h-4 w-4" />
                   Reload Dashboard
                 </Link>
               </Button>
               <Button variant="outline" asChild className="w-full">
-                <Link href="/app">
+                <Link href="/">
                   <Building className="mr-2 h-4 w-4" />
                   Return to Main App
                 </Link>
@@ -104,9 +104,7 @@ export default function NodeOfficerErrorBoundary({
 
               {organizationId && (
                 <Button size="sm" variant="outline" asChild>
-                  <Link
-                    href={`/app/(node-officer)/officer-dashboard?orgId=${organizationId}`}
-                  >
+                  <Link href={`/officer-dashboard?orgId=${organizationId}`}>
                     <Building className="mr-2 h-3 w-3" />
                     Dashboard
                   </Link>

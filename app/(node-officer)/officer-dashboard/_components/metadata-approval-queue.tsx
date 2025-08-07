@@ -122,9 +122,7 @@ export default function MetadataApprovalQueue({
 
   // Load records when page changes
   useEffect(() => {
-    if (currentPage > 1) {
-      loadRecords(currentPage)
-    }
+    loadRecords(currentPage)
   }, [currentPage])
 
   // Initial load
@@ -245,7 +243,12 @@ export default function MetadataApprovalQueue({
               <SelectItem value="Needs Revision">Needs Revision</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={sortBy} onValueChange={setSortBy}>
+          <Select
+            value={sortBy}
+            onValueChange={value =>
+              setSortBy(value as "submittedAt" | "title" | "priority")
+            }
+          >
             <SelectTrigger className="w-[150px]">
               <SelectValue placeholder="Sort by" />
             </SelectTrigger>

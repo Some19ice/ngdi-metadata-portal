@@ -44,8 +44,8 @@ class ErrorBoundary extends Component<Props, State> {
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("ErrorBoundary caught an error:", error, errorInfo)
 
+    // Update state with errorInfo (error is already set by getDerivedStateFromError)
     this.setState({
-      error,
       errorInfo
     })
 
@@ -54,8 +54,10 @@ class ErrorBoundary extends Component<Props, State> {
       this.props.onError(error, errorInfo)
     }
 
-    // Log error to external service
-    this.logErrorToService(error, errorInfo)
+    // Log error to external service asynchronously to prevent blocking UI
+    setTimeout(() => {
+      this.logErrorToService(error, errorInfo)
+    }, 0)
   }
 
   private logErrorToService = (error: Error, errorInfo: ErrorInfo) => {
@@ -67,8 +69,9 @@ class ErrorBoundary extends Component<Props, State> {
         stack: error.stack,
         componentStack: errorInfo.componentStack,
         timestamp: new Date().toISOString(),
-        userAgent: navigator.userAgent,
-        url: window.location.href,
+        userAgent:
+          typeof navigator !== "undefined" ? navigator.userAgent : "N/A (SSR)",
+        url: typeof window !== "undefined" ? window.location.href : "N/A (SSR)",
         level: this.props.level || "component"
       }
 
@@ -76,7 +79,7 @@ class ErrorBoundary extends Component<Props, State> {
       // In production, replace with your error service
       console.error("Error logged:", errorData)
 
-      // Example: window.errorService?.captureException(error, { extra: errorData })
+      // Example: typeof window !== 'undefined' && window.errorService?.captureException(error, { extra: errorData })
     } catch (logError) {
       console.error("Failed to log error:", logError)
     }
@@ -91,11 +94,15 @@ class ErrorBoundary extends Component<Props, State> {
   }
 
   private handleReload = () => {
-    window.location.reload()
+    if (typeof window !== "undefined") {
+      window.location.reload()
+    }
   }
 
   private handleGoHome = () => {
-    window.location.href = "/"
+    if (typeof window !== "undefined") {
+      window.location.href = "/"
+    }
   }
 
   public render() {

@@ -22,7 +22,11 @@ import {
   Loader2
 } from "lucide-react"
 import { useUnifiedSearch } from "@/lib/hooks/use-unified-search"
-import { MetadataSearchFilters } from "@/types"
+import {
+  MetadataSearchFilters,
+  MetadataSearchResult,
+  MetadataSearchRecord
+} from "@/types"
 import {
   Collapsible,
   CollapsibleContent,
@@ -491,7 +495,7 @@ function FacetSection({
 
 // Search Results Component
 interface SearchResultsProps {
-  results: any // TODO: Type this properly
+  results: MetadataSearchResult
   viewMode: "grid" | "list" | "map"
 }
 
@@ -523,7 +527,7 @@ function SearchResults({ results, viewMode }: SearchResultsProps) {
           : "space-y-4"
       }
     >
-      {results.records.map((record: any) => (
+      {results.records.map((record: MetadataSearchRecord) => (
         <SearchResultCard key={record.id} record={record} viewMode={viewMode} />
       ))}
     </div>
@@ -532,7 +536,7 @@ function SearchResults({ results, viewMode }: SearchResultsProps) {
 
 // Search Result Card Component
 interface SearchResultCardProps {
-  record: any
+  record: MetadataSearchRecord
   viewMode: "grid" | "list"
 }
 
@@ -570,10 +574,15 @@ function SearchResultCard({ record, viewMode }: SearchResultCardProps) {
                 <Clock className="h-3 w-3" />
                 {new Date(record.createdAt).toLocaleDateString()}
               </div>
-              {record.spatialCoverage && (
+              {(record.geographicDescription || record.locationInfo) && (
                 <div className="flex items-center gap-1">
                   <MapPin className="h-3 w-3" />
-                  {record.spatialCoverage}
+                  {record.geographicDescription ||
+                    (record.locationInfo &&
+                      [record.locationInfo.state, record.locationInfo.country]
+                        .filter(Boolean)
+                        .join(", ")) ||
+                    "Location not specified"}
                 </div>
               )}
             </div>

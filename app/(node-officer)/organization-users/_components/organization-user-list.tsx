@@ -73,9 +73,14 @@ export default function OrganizationUserListClient({
     return () => clearTimeout(timeoutId)
   }, [searchTerm])
 
-  // Load users with proper error handling and state management
+  // Load users with proper error handling and race condition prevention
   const loadUsers = useCallback(
     async (page: number = 1, searchQuery?: string) => {
+      // Prevent concurrent API calls
+      if (isLoading) {
+        return
+      }
+
       setIsLoading(true)
       try {
         const result = await getOrganizationUsersForNOPaginatedAction(
@@ -102,32 +107,71 @@ export default function OrganizationUserListClient({
         setIsLoading(false)
       }
     },
-    [orgId, pageSize]
+    [orgId, pageSize, isLoading]
   )
 
-  // Load users when search term changes (reset to page 1)
+  // Reset to page 1 when search term changes
+  const [prevSearchTerm, setPrevSearchTerm] = useState("")
   useEffect(() => {
-    loadUsers(1, debouncedSearchTerm || undefined)
-  }, [debouncedSearchTerm, loadUsers])
-
-  // Load users when page changes
-  useEffect(() => {
-    if (currentPage > 1) {
-      loadUsers(currentPage, debouncedSearchTerm || undefined)
+    if (debouncedSearchTerm !== prevSearchTerm) {
+      setPrevSearchTerm(debouncedSearchTerm)
+      if (currentPage !== 1) {
+        setCurrentPage(1)
+        return // Let the page change trigger the load
+      }
     }
-  }, [currentPage, loadUsers])
+  }, [debouncedSearchTerm, prevSearchTerm, currentPage])
 
-  // Initial load if no initial users provided
+  // Load users when search term or page changes - consolidated to prevent race conditions
+  useEffect(() => {
+    // Skip initial load if we have initial users and we're on page 1 without search
+    if (initialUsers.length > 0 && currentPage === 1 && !debouncedSearchTerm) {
+      return
+    }
+
+    // Load users for current page and search term (removed the currentPage > 1 condition)
+    loadUsers(currentPage, debouncedSearchTerm || undefined)
+  }, [currentPage, debouncedSearchTerm, loadUsers, initialUsers.length])
+
+  // Initial load and setup
   useEffect(() => {
     if (initialUsers.length === 0) {
+      // No initial users provided, load from server
       loadUsers(1)
     } else {
-      // Set initial state from props
+      // Initial users provided, display them immediately but fetch actual total count
       setUsers(initialUsers)
-      setTotalUsers(initialUsers.length)
-      setTotalPages(Math.ceil(initialUsers.length / pageSize))
+
+      // Fetch the actual total count from server for proper pagination
+      const fetchTotalCount = async () => {
+        try {
+          const result = await getOrganizationUsersForNOPaginatedAction(
+            orgId,
+            1,
+            pageSize,
+            undefined
+          )
+
+          if (result.isSuccess && result.data) {
+            setTotalUsers(result.data.total)
+            setTotalPages(Math.ceil(result.data.total / pageSize))
+            setUserCounts(result.data.counts)
+          } else {
+            // Fallback to initial users length if server request fails
+            setTotalUsers(initialUsers.length)
+            setTotalPages(Math.ceil(initialUsers.length / pageSize))
+          }
+        } catch (error) {
+          console.error("Error fetching total user count:", error)
+          // Fallback to initial users length on error
+          setTotalUsers(initialUsers.length)
+          setTotalPages(Math.ceil(initialUsers.length / pageSize))
+        }
+      }
+
+      fetchTotalCount()
     }
-  }, [orgId, initialUsers, loadUsers])
+  }, [orgId, initialUsers, loadUsers, pageSize])
 
   const handleDataRefresh = useCallback(() => {
     loadUsers(currentPage, debouncedSearchTerm || undefined)

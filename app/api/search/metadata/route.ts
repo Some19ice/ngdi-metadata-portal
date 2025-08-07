@@ -3,159 +3,163 @@
 import { NextRequest, NextResponse } from "next/server"
 import { searchMetadataRecordsAction } from "@/actions/db/metadata-records-actions"
 
-export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json()
-
-    // Map the request body to the parameters expected by searchMetadataRecordsAction
-    const searchParams = {
-      query: body.query,
-      organizationId: body.organizationIds?.[0], // Take first org ID if multiple
-      status: body.status?.[0] as any, // Take first status if multiple
-      temporalExtentStartDate: body.startDate || body.temporalExtentStartDate,
-      temporalExtentEndDate: body.endDate || body.temporalExtentEndDate,
-      frameworkType: body.frameworkTypes?.[0], // Take first framework type if multiple
-      datasetType: body.dataTypes?.[0], // Take first data type if multiple
-      bbox_north: body.bbox_north,
-      bbox_south: body.bbox_south,
-      bbox_east: body.bbox_east,
-      bbox_west: body.bbox_west,
-      sortBy: body.sortBy,
-      sortOrder: body.sortOrder,
-      page: body.page || 1,
-      pageSize: body.pageSize || body.limit || 20
+// Helper function to remove undefined values from search parameters
+function cleanSearchParams<T extends Record<string, any>>(params: T): T {
+  const cleaned = { ...params }
+  Object.keys(cleaned).forEach(key => {
+    if (cleaned[key as keyof typeof cleaned] === undefined) {
+      delete cleaned[key as keyof typeof cleaned]
     }
+  })
+  return cleaned
+}
 
-    // Remove undefined values
-    Object.keys(searchParams).forEach(key => {
-      if (searchParams[key as keyof typeof searchParams] === undefined) {
-        delete searchParams[key as keyof typeof searchParams]
+// Helper function to handle search request and format response
+async function handleSearchRequest(searchParams: any) {
+  const cleanedParams = cleanSearchParams(searchParams)
+  const result = await searchMetadataRecordsAction(cleanedParams)
+
+  if (result.isSuccess) {
+    return NextResponse.json({
+      isSuccess: true,
+      message: result.message,
+      data: {
+        records: result.data?.records || [],
+        totalCount: result.data?.totalRecords || 0,
+        totalPages: result.data?.totalPages || 0,
+        currentPage: result.data?.currentPage || 1,
+        pageSize: result.data?.pageSize || 20,
+        appliedFilters: cleanedParams
       }
     })
-
-    const result = await searchMetadataRecordsAction(searchParams)
-
-    if (result.isSuccess) {
-      return NextResponse.json({
-        isSuccess: true,
-        message: result.message,
-        data: {
-          records: result.data?.records || [],
-          totalCount: result.data?.totalRecords || 0,
-          totalPages: result.data?.totalPages || 0,
-          currentPage: result.data?.currentPage || 1,
-          pageSize: result.data?.pageSize || 20,
-          appliedFilters: searchParams
-        }
-      })
-    } else {
-      return NextResponse.json(
-        {
-          isSuccess: false,
-          message: result.message
-        },
-        { status: 400 }
-      )
-    }
-  } catch (error) {
-    console.error("API search error:", error)
+  } else {
     return NextResponse.json(
       {
         isSuccess: false,
-        message: "Internal server error"
+        message: result.message
       },
-      { status: 500 }
+      { status: 400 }
     )
+  }
+}
+
+// Helper function to handle errors
+function handleError(error: unknown) {
+  console.error("API search error:", error)
+  return NextResponse.json(
+    {
+      isSuccess: false,
+      message: "Internal server error"
+    },
+    { status: 500 }
+  )
+}
+
+// Helper function to extract search parameters from POST request body
+function extractPostSearchParams(body: any) {
+  return {
+    query: body.query,
+    organizationId: body.organizationIds?.[0], // Take first org ID if multiple
+    status: body.status?.[0] as any, // Take first status if multiple
+    temporalExtentStartDate: body.startDate || body.temporalExtentStartDate,
+    temporalExtentEndDate: body.endDate || body.temporalExtentEndDate,
+    frameworkType: body.frameworkTypes?.[0], // Take first framework type if multiple
+    datasetType: body.dataTypes?.[0], // Take first data type if multiple
+    bbox_north: body.bbox_north,
+    bbox_south: body.bbox_south,
+    bbox_east: body.bbox_east,
+    bbox_west: body.bbox_west,
+    sortBy: body.sortBy,
+    sortOrder: validateSortOrder(body.sortOrder),
+    page: body.page || 1,
+    pageSize: body.pageSize || body.limit || 20
+  }
+}
+
+// Helper function to get first non-empty parameter value from a list of aliases
+function getFirstParam(
+  searchParams: URLSearchParams,
+  aliases: string[],
+  splitComma = false
+): string | undefined {
+  for (const alias of aliases) {
+    const value = searchParams.get(alias)
+    if (value) {
+      return splitComma ? value.split(",")[0] : value
+    }
+  }
+  return undefined
+}
+
+// Helper function to validate sort order values
+function validateSortOrder(
+  value: string | undefined
+): "asc" | "desc" | undefined {
+  if (value === "asc" || value === "desc") {
+    return value
+  }
+  return undefined
+}
+
+// Helper function to extract search parameters from GET request URL
+function extractGetSearchParams(searchParams: URLSearchParams) {
+  return {
+    query: getFirstParam(searchParams, ["q", "query"]),
+    organizationId: getFirstParam(
+      searchParams,
+      ["organizationIds", "organizationId"],
+      true
+    ),
+    status: getFirstParam(searchParams, ["status"], true) as any,
+    temporalExtentStartDate: getFirstParam(searchParams, [
+      "startDate",
+      "temporalExtentStartDate"
+    ]),
+    temporalExtentEndDate: getFirstParam(searchParams, [
+      "endDate",
+      "temporalExtentEndDate"
+    ]),
+    frameworkType: getFirstParam(
+      searchParams,
+      ["frameworkTypes", "frameworkType"],
+      true
+    ),
+    datasetType: getFirstParam(
+      searchParams,
+      ["dataTypes", "datasetType"],
+      true
+    ),
+    bbox_north: getFirstParam(searchParams, ["bbox_north", "n"]),
+    bbox_south: getFirstParam(searchParams, ["bbox_south", "s"]),
+    bbox_east: getFirstParam(searchParams, ["bbox_east", "e"]),
+    bbox_west: getFirstParam(searchParams, ["bbox_west", "w"]),
+    sortBy: getFirstParam(searchParams, ["sortBy", "sort"]),
+    sortOrder: validateSortOrder(
+      getFirstParam(searchParams, ["sortOrder", "order"])
+    ),
+    page: parseInt(getFirstParam(searchParams, ["page"]) || "1"),
+    pageSize: parseInt(
+      getFirstParam(searchParams, ["pageSize", "limit"]) || "20"
+    )
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json()
+    const searchParams = extractPostSearchParams(body)
+    return await handleSearchRequest(searchParams)
+  } catch (error) {
+    return handleError(error)
   }
 }
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-
-    // Convert URL search params to the format expected by searchMetadataRecordsAction
-    const searchOptions = {
-      query: searchParams.get("q") || searchParams.get("query") || undefined,
-      organizationId:
-        searchParams.get("organizationIds")?.split(",")[0] ||
-        searchParams.get("organizationId") ||
-        undefined,
-      status: (searchParams.get("status")?.split(",")[0] as any) || undefined,
-      temporalExtentStartDate:
-        searchParams.get("startDate") ||
-        searchParams.get("temporalExtentStartDate") ||
-        undefined,
-      temporalExtentEndDate:
-        searchParams.get("endDate") ||
-        searchParams.get("temporalExtentEndDate") ||
-        undefined,
-      frameworkType:
-        searchParams.get("frameworkTypes")?.split(",")[0] ||
-        searchParams.get("frameworkType") ||
-        undefined,
-      datasetType:
-        searchParams.get("dataTypes")?.split(",")[0] ||
-        searchParams.get("datasetType") ||
-        undefined,
-      bbox_north:
-        searchParams.get("bbox_north") || searchParams.get("n") || undefined,
-      bbox_south:
-        searchParams.get("bbox_south") || searchParams.get("s") || undefined,
-      bbox_east:
-        searchParams.get("bbox_east") || searchParams.get("e") || undefined,
-      bbox_west:
-        searchParams.get("bbox_west") || searchParams.get("w") || undefined,
-      sortBy:
-        searchParams.get("sortBy") || searchParams.get("sort") || undefined,
-      sortOrder:
-        ((searchParams.get("sortOrder") || searchParams.get("order")) as
-          | "asc"
-          | "desc") || undefined,
-      page: parseInt(searchParams.get("page") || "1"),
-      pageSize: parseInt(
-        searchParams.get("pageSize") || searchParams.get("limit") || "20"
-      )
-    }
-
-    // Remove undefined values
-    Object.keys(searchOptions).forEach(key => {
-      if (searchOptions[key as keyof typeof searchOptions] === undefined) {
-        delete searchOptions[key as keyof typeof searchOptions]
-      }
-    })
-
-    const result = await searchMetadataRecordsAction(searchOptions)
-
-    if (result.isSuccess) {
-      return NextResponse.json({
-        isSuccess: true,
-        message: result.message,
-        data: {
-          records: result.data?.records || [],
-          totalCount: result.data?.totalRecords || 0,
-          totalPages: result.data?.totalPages || 0,
-          currentPage: result.data?.currentPage || 1,
-          pageSize: result.data?.pageSize || 20,
-          appliedFilters: searchOptions
-        }
-      })
-    } else {
-      return NextResponse.json(
-        {
-          isSuccess: false,
-          message: result.message
-        },
-        { status: 400 }
-      )
-    }
+    const searchOptions = extractGetSearchParams(searchParams)
+    return await handleSearchRequest(searchOptions)
   } catch (error) {
-    console.error("API search error:", error)
-    return NextResponse.json(
-      {
-        isSuccess: false,
-        message: "Internal server error"
-      },
-      { status: 500 }
-    )
+    return handleError(error)
   }
 }

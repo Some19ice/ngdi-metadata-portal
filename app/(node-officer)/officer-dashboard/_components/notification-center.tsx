@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition, useEffect } from "react"
+import { useState, useTransition, useEffect, useCallback } from "react"
 import {
   Card,
   CardContent,
@@ -66,49 +66,50 @@ export default function NotificationCenter({
   const pageSize = 10
 
   // Load notifications
-  const loadNotifications = async (
-    page: number = 1,
-    filterType: typeof filter = "all"
-  ) => {
-    setIsLoading(true)
-    try {
-      const filters: NotificationFilters = {}
+  const loadNotifications = useCallback(
+    async (page: number = 1, filterType: typeof filter = "all") => {
+      setIsLoading(true)
+      try {
+        const filters: NotificationFilters = {}
 
-      if (filterType === "unread") {
-        filters.isRead = false
-      } else if (filterType === "high") {
-        filters.priority = "high"
-        filters.isRead = false
-      }
-
-      const result = await getNotificationsAction(
-        organizationId,
-        page,
-        pageSize,
-        filters
-      )
-
-      if (result.isSuccess && result.data) {
-        if (page === 1) {
-          setNotifications(result.data.notifications)
-        } else {
-          setNotifications(prev => [...prev, ...result.data!.notifications])
+        if (filterType === "unread") {
+          filters.isRead = false
+        } else if (filterType === "high") {
+          filters.priority = "high"
+          filters.isRead = false
         }
-        setHasMore(result.data.hasMore)
-        setTotalCount(result.data.total)
-        setCurrentPage(page)
-      } else {
-        toast.error(result.message || "Failed to load notifications")
+
+        const result = await getNotificationsAction(
+          organizationId,
+          page,
+          pageSize,
+          filters
+        )
+
+        if (result.isSuccess && result.data) {
+          if (page === 1) {
+            setNotifications(result.data.notifications)
+          } else {
+            setNotifications(prev => [
+              ...prev,
+              ...(result.data?.notifications || [])
+            ])
+          }
+          setCurrentPage(page)
+        } else {
+          toast.error(result.message || "Failed to load notifications")
+        }
+      } catch (error) {
+        toast.error("Failed to load notifications")
+      } finally {
+        setIsLoading(false)
       }
-    } catch (error) {
-      toast.error("Failed to load notifications")
-    } finally {
-      setIsLoading(false)
-    }
-  }
+    },
+    [organizationId]
+  )
 
   // Load notification counts
-  const loadCounts = async () => {
+  const loadCounts = useCallback(async () => {
     try {
       const result = await getNotificationCountsAction(organizationId)
       if (result.isSuccess && result.data) {
@@ -117,31 +118,35 @@ export default function NotificationCenter({
     } catch (error) {
       console.error("Failed to load notification counts:", error)
     }
-  }
+  }, [organizationId])
 
   // Initial load
   useEffect(() => {
     loadNotifications(1, filter)
     loadCounts()
-  }, [organizationId, filter])
+  }, [organizationId, filter, loadNotifications, loadCounts])
 
   const markAsRead = async (notificationId: string) => {
     startTransition(async () => {
       try {
         const result = await markNotificationAsReadAction(notificationId)
         if (result.isSuccess) {
+          // Capture the notification before updating state
+          const notificationToUpdate = notifications.find(
+            n => n.id === notificationId
+          )
+
           setNotifications(prev =>
             prev.map(n =>
               n.id === notificationId ? { ...n, isRead: true } : n
             )
           )
-          // Update counts
+          // Update counts using the captured notification
           setCounts(prev => ({
             ...prev,
             unread: Math.max(0, prev.unread - 1),
             highPriority:
-              notifications.find(n => n.id === notificationId)?.priority ===
-              "high"
+              notificationToUpdate?.priority === "high"
                 ? Math.max(0, prev.highPriority - 1)
                 : prev.highPriority
           }))
