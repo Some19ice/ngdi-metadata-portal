@@ -18,3 +18,4 @@ export * from "../../hooks/use-mobile"
 
 // Data hooks from lib/hooks
 export * from "./use-nigeria-states"
+export * from "./use-debounced-search"

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useState, useTransition, useEffect, useCallback } from "react"
 import { OrganizationUser } from "@/actions/db/node-officer-actions"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -28,20 +28,33 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { ManageOrganizationUserRolesDialog } from "./manage-organization-user-roles-dialog"
 import { RemoveUserFromOrgDialog } from "./remove-user-from-org-dialog"
+import { getOrganizationUsersForNOPaginatedAction } from "@/actions/db/node-officer-actions"
+import { Pagination, PaginationInfo } from "@/components/ui/pagination"
 
 interface OrganizationUserListClientProps {
-  initialUsers: OrganizationUser[]
+  initialUsers?: OrganizationUser[]
   orgId: string
 }
 
 export default function OrganizationUserListClient({
-  initialUsers,
+  initialUsers = [],
   orgId
 }: OrganizationUserListClientProps) {
   const [users, setUsers] = useState<OrganizationUser[]>(initialUsers)
   const [searchTerm, setSearchTerm] = useState("")
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("")
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalUsers, setTotalUsers] = useState(0)
+  const [totalPages, setTotalPages] = useState(0)
+  const [userCounts, setUserCounts] = useState({
+    metadataCreator: 0,
+    metadataApprover: 0,
+    nodeOfficer: 0,
+    total: 0
+  })
+  const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
-  const [isRefreshing, startRefreshTransition] = useTransition()
+  const [isPending, startTransition] = useTransition()
   const [selectedUserForRoles, setSelectedUserForRoles] =
     useState<OrganizationUser | null>(null)
   const [isManageRolesDialogOpen, setIsManageRolesDialogOpen] = useState(false)
@@ -49,12 +62,76 @@ export default function OrganizationUserListClient({
     useState<OrganizationUser | null>(null)
   const [isRemoveUserDialogOpen, setIsRemoveUserDialogOpen] = useState(false)
 
-  const handleDataRefresh = () => {
-    startRefreshTransition(() => {
-      router.refresh()
-      // toast.info("User list is being refreshed...") // Let's remove this for now, can be too noisy
-    })
-  }
+  const pageSize = 10
+
+  // Debounce search term
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm)
+    }, 300)
+
+    return () => clearTimeout(timeoutId)
+  }, [searchTerm])
+
+  // Load users with proper error handling and state management
+  const loadUsers = useCallback(
+    async (page: number = 1, searchQuery?: string) => {
+      setIsLoading(true)
+      try {
+        const result = await getOrganizationUsersForNOPaginatedAction(
+          orgId,
+          page,
+          pageSize,
+          searchQuery
+        )
+
+        if (result.isSuccess && result.data) {
+          setUsers(result.data.users)
+          setTotalUsers(result.data.total)
+          setTotalPages(Math.ceil(result.data.total / pageSize))
+          setUserCounts(result.data.counts)
+          setCurrentPage(page)
+        } else {
+          toast.error(result.message || "Failed to load users")
+          // Don't clear existing data on error
+        }
+      } catch (error) {
+        console.error("Error loading users:", error)
+        toast.error("Failed to load users")
+      } finally {
+        setIsLoading(false)
+      }
+    },
+    [orgId, pageSize]
+  )
+
+  // Load users when search term changes (reset to page 1)
+  useEffect(() => {
+    loadUsers(1, debouncedSearchTerm || undefined)
+  }, [debouncedSearchTerm, loadUsers])
+
+  // Load users when page changes
+  useEffect(() => {
+    if (currentPage > 1) {
+      loadUsers(currentPage, debouncedSearchTerm || undefined)
+    }
+  }, [currentPage, loadUsers])
+
+  // Initial load if no initial users provided
+  useEffect(() => {
+    if (initialUsers.length === 0) {
+      loadUsers(1)
+    } else {
+      // Set initial state from props
+      setUsers(initialUsers)
+      setTotalUsers(initialUsers.length)
+      setTotalPages(Math.ceil(initialUsers.length / pageSize))
+    }
+  }, [orgId, initialUsers, loadUsers])
+
+  const handleDataRefresh = useCallback(() => {
+    loadUsers(currentPage, debouncedSearchTerm || undefined)
+  }, [loadUsers, currentPage, debouncedSearchTerm])
 
   const handleOpenManageRolesDialog = (user: OrganizationUser) => {
     setSelectedUserForRoles(user)
@@ -66,49 +143,88 @@ export default function OrganizationUserListClient({
     setIsRemoveUserDialogOpen(true)
   }
 
-  const filteredUsers = users.filter(
-    user =>
-      user.firstName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.lastName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.emailAddress.toLowerCase().includes(searchTerm.toLowerCase())
+  const handleCloseManageRolesDialog = useCallback(
+    (wasUpdated = false) => {
+      setSelectedUserForRoles(null)
+      setIsManageRolesDialogOpen(false)
+
+      // Only refresh if changes were made
+      if (wasUpdated) {
+        handleDataRefresh()
+      }
+    },
+    [handleDataRefresh]
   )
 
-  // This effect synchronizes the local 'users' state with 'initialUsers' prop.
-  // It's important if the parent component can pass updated 'initialUsers'.
-  if (JSON.stringify(initialUsers) !== JSON.stringify(users)) {
-    setUsers(initialUsers)
-  }
+  const handleCloseRemoveUserDialog = useCallback(
+    (wasRemoved = false) => {
+      setSelectedUserForRemoval(null)
+      setIsRemoveUserDialogOpen(false)
+
+      // Only refresh if a user was actually removed
+      if (wasRemoved) {
+        handleDataRefresh()
+      }
+    },
+    [handleDataRefresh]
+  )
+
+  const handleUserAdded = useCallback(() => {
+    // Refresh the user list when a new user is added
+    handleDataRefresh()
+  }, [handleDataRefresh])
 
   return (
     <div className="space-y-6">
+      {/* Stats Cards */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="bg-background border rounded-lg p-4">
+          <div className="text-2xl font-bold">{userCounts.total}</div>
+          <p className="text-xs text-muted-foreground">Total Users</p>
+        </div>
+        <div className="bg-background border rounded-lg p-4">
+          <div className="text-2xl font-bold">{userCounts.metadataCreator}</div>
+          <p className="text-xs text-muted-foreground">Metadata Creators</p>
+        </div>
+        <div className="bg-background border rounded-lg p-4">
+          <div className="text-2xl font-bold">
+            {userCounts.metadataApprover}
+          </div>
+          <p className="text-xs text-muted-foreground">Metadata Approvers</p>
+        </div>
+        <div className="bg-background border rounded-lg p-4">
+          <div className="text-2xl font-bold">{userCounts.nodeOfficer}</div>
+          <p className="text-xs text-muted-foreground">Node Officers</p>
+        </div>
+      </div>
+
       <div className="flex items-center justify-between gap-4">
         <Input
           placeholder="Search users by name or email..."
           value={searchTerm}
           onChange={e => setSearchTerm(e.target.value)}
           className="max-w-sm"
+          disabled={isLoading}
         />
-        <AddUserDialog orgId={orgId} onUserAdded={handleDataRefresh} />
+        <AddUserDialog orgId={orgId} onUserAdded={handleUserAdded} />
       </div>
 
-      {isRefreshing && (
-        <p className="text-center text-slate-500 p-4">
-          Refreshing user list...
-        </p>
+      {isLoading && users.length === 0 && (
+        <p className="text-center text-slate-500 p-4">Loading users...</p>
       )}
 
-      {!isRefreshing && filteredUsers.length === 0 && searchTerm && (
+      {!isLoading && users.length === 0 && searchTerm && (
         <p className="text-center text-slate-500">
           No users found matching your search term.
         </p>
       )}
-      {!isRefreshing && initialUsers.length === 0 && !searchTerm && (
+      {!isLoading && users.length === 0 && !searchTerm && (
         <p className="text-center text-slate-500">
           This organization currently has no users.
         </p>
       )}
 
-      {!isRefreshing && filteredUsers.length > 0 && (
+      {users.length > 0 && (
         <div className="overflow-hidden rounded-lg border shadow-sm">
           <Table>
             <TableHeader>
@@ -122,7 +238,7 @@ export default function OrganizationUserListClient({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredUsers.map(user => (
+              {users.map(user => (
                 <TableRow key={user.clerkId}>
                   <TableCell>
                     <div className="flex items-center space-x-3">
@@ -215,6 +331,29 @@ export default function OrganizationUserListClient({
         </div>
       )}
 
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+          <PaginationInfo
+            currentPage={currentPage}
+            pageSize={pageSize}
+            totalItems={totalUsers}
+          />
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            disabled={isLoading || isPending}
+          />
+        </div>
+      )}
+
+      {isLoading && users.length > 0 && (
+        <div className="text-center py-2 text-muted-foreground text-sm">
+          Loading...
+        </div>
+      )}
+
       {selectedUserForRoles && (
         <ManageOrganizationUserRolesDialog
           orgId={orgId}
@@ -222,8 +361,7 @@ export default function OrganizationUserListClient({
           isOpen={isManageRolesDialogOpen}
           onOpenChange={setIsManageRolesDialogOpen}
           onRolesUpdated={() => {
-            handleDataRefresh()
-            setSelectedUserForRoles(null) // Clear selection after update
+            handleCloseManageRolesDialog(true)
           }}
         />
       )}
@@ -235,8 +373,7 @@ export default function OrganizationUserListClient({
           isOpen={isRemoveUserDialogOpen}
           onOpenChange={setIsRemoveUserDialogOpen}
           onUserRemoved={() => {
-            handleDataRefresh()
-            setSelectedUserForRemoval(null)
+            handleCloseRemoveUserDialog(true)
           }}
         />
       )}

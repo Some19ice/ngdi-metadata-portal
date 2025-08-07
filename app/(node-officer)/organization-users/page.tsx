@@ -4,6 +4,7 @@ import { Suspense } from "react"
 import OrganizationUserListSkeleton from "./_components/organization-user-list-skeleton"
 import OrganizationUserListFetcher from "./_components/organization-user-list-fetcher"
 import { getOrganizationByIdAction } from "@/actions/db/organizations-actions"
+import { UserManagementErrorBoundary } from "../_components/node-officer-error-boundary"
 
 interface NodeOfficerUsersPageProps {
   searchParams: Promise<{
@@ -50,9 +51,11 @@ export default async function NodeOfficerUsersPage({
         {/* <p className=\"text-xs text-slate-400\">(ID: {orgId})</p> */}
       </div>
 
-      <Suspense fallback={<OrganizationUserListSkeleton />}>
-        <OrganizationUserListFetcher orgId={orgId} />
-      </Suspense>
+      <UserManagementErrorBoundary organizationId={orgId}>
+        <Suspense fallback={<OrganizationUserListSkeleton />}>
+          <OrganizationUserListFetcher orgId={orgId} />
+        </Suspense>
+      </UserManagementErrorBoundary>
     </div>
   )
 }

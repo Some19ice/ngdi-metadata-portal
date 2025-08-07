@@ -279,16 +279,30 @@ export default function IntegratedSearchMapView({
         {showSearchPanel && (
           <CardContent className="pt-0">
             <MetadataSearchForm
-              initialQuery={searchParams.query}
-              initialStartDate={searchParams.temporalExtentStartDate}
-              initialEndDate={searchParams.temporalExtentEndDate}
-              initialFrameworkType={searchParams.frameworkType}
-              initialDatasetType={searchParams.datasetType}
-              initialUseSpatialSearch={searchParams.useSpatialSearch}
-              initialBboxNorth={searchParams.bbox_north}
-              initialBboxSouth={searchParams.bbox_south}
-              initialBboxEast={searchParams.bbox_east}
-              initialBboxWest={searchParams.bbox_west}
+              initialFilters={{
+                query: searchParams.query,
+                startDate: searchParams.temporalExtentStartDate,
+                endDate: searchParams.temporalExtentEndDate,
+                frameworkTypes: searchParams.frameworkType
+                  ? [searchParams.frameworkType]
+                  : undefined,
+                dataTypes: searchParams.datasetType
+                  ? [searchParams.datasetType]
+                  : undefined,
+                useSpatialSearch: searchParams.useSpatialSearch,
+                spatialBounds:
+                  searchParams.bbox_north &&
+                  searchParams.bbox_south &&
+                  searchParams.bbox_east &&
+                  searchParams.bbox_west
+                    ? {
+                        north: parseFloat(searchParams.bbox_north),
+                        south: parseFloat(searchParams.bbox_south),
+                        east: parseFloat(searchParams.bbox_east),
+                        west: parseFloat(searchParams.bbox_west)
+                      }
+                    : undefined
+              }}
             />
 
             {/* Active Spatial Search Indicator */}

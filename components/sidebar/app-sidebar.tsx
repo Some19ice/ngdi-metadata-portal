@@ -100,11 +100,7 @@ const navigationConfig: NavigationItem[] = [
     title: "Map",
     url: "/map",
     icon: Map,
-    items: [
-      { title: "Interactive Map", url: "/map" },
-      { title: "Metadata Demo", url: "/map/metadata-demo" },
-      { title: "GIS Services", url: "/map/gis-services" }
-    ]
+    items: []
   },
   {
     title: "Search",

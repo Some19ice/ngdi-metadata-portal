@@ -38,6 +38,11 @@ import { ManagedUsersStatFetcher } from "./_components/managed-users-stat-fetche
 import MetadataApprovalQueue from "./_components/metadata-approval-queue"
 import OrganizationAnalytics from "./_components/organization-analytics"
 import NotificationCenter from "./_components/notification-center"
+import {
+  DashboardErrorBoundary,
+  ApprovalQueueErrorBoundary,
+  AnalyticsErrorBoundary
+} from "../_components/node-officer-error-boundary"
 
 // StatCard similar to Admin Dashboard, but can be simpler or adapted
 /*
@@ -140,26 +145,8 @@ async function OrgDashboardStatsFetcher({
 async function MetadataApprovalQueueFetcher({
   organization
 }: OrgDashboardStatsProps) {
-  const result = await getPendingValidationMetadataAction(organization.id)
-
-  if (!result.isSuccess || !result.data) {
-    return (
-      <Alert variant="destructive">
-        <AlertTriangle className="h-4 w-4" />
-        <AlertTitle>Error Loading Approval Queue</AlertTitle>
-        <AlertDescription>
-          {result.message || "Failed to load pending records."}
-        </AlertDescription>
-      </Alert>
-    )
-  }
-
-  return (
-    <MetadataApprovalQueue
-      initialRecords={result.data}
-      organizationId={organization.id}
-    />
-  )
+  // The MetadataApprovalQueue component will handle loading its own data
+  return <MetadataApprovalQueue organizationId={organization.id} />
 }
 
 async function OrganizationAnalyticsFetcher({
@@ -194,55 +181,8 @@ async function OrganizationAnalyticsFetcher({
 async function NotificationCenterFetcher({
   organization
 }: OrgDashboardStatsProps) {
-  // Mock notifications for now - in a real implementation, you'd fetch from a notifications table
-  const mockNotifications = [
-    {
-      id: "1",
-      type: "approval_required" as const,
-      title: "New metadata record pending approval",
-      message: "A new metadata record has been submitted for validation",
-      createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
-      isRead: false,
-      priority: "high" as const,
-      actionUrl: `/app/metadata/search?organizationId=${organization.id}&status=Pending+Validation`,
-      metadata: {
-        organizationId: organization.id
-      }
-    },
-    {
-      id: "2",
-      type: "user_added" as const,
-      title: "New user added to organization",
-      message: "A new metadata creator has been added to your organization",
-      createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000), // 1 day ago
-      isRead: true,
-      priority: "medium" as const,
-      actionUrl: `/app/(node-officer)/organization-users?orgId=${organization.id}`,
-      metadata: {
-        organizationId: organization.id
-      }
-    },
-    {
-      id: "3",
-      type: "deadline_approaching" as const,
-      title: "Metadata review deadline approaching",
-      message: "3 metadata records have been pending review for over 7 days",
-      createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), // 3 days ago
-      isRead: false,
-      priority: "medium" as const,
-      actionUrl: `/app/metadata/search?organizationId=${organization.id}&status=Pending+Validation`,
-      metadata: {
-        organizationId: organization.id
-      }
-    }
-  ]
-
-  return (
-    <NotificationCenter
-      organizationId={organization.id}
-      initialNotifications={mockNotifications}
-    />
-  )
+  // The NotificationCenter component will handle loading its own data
+  return <NotificationCenter organizationId={organization.id} />
 }
 
 export default async function NodeOfficerDashboardPage({
@@ -363,103 +303,111 @@ export default async function NodeOfficerDashboardPage({
         <h2 className="text-xl font-semibold mb-3">
           Organization Statistics for {currentOrganization.name}
         </h2>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          <Suspense
-            key={suspenseKey} // Use the key here
-            fallback={
-              <>
-                <StatCard
-                  title="Total Metadata Records"
-                  icon={LibrarySquare}
-                  isLoading
-                  description={`For ${currentOrganization.name}`}
-                />
-                <StatCard
-                  title="Pending Validation"
-                  icon={ListChecks}
-                  isLoading
-                  description="Records awaiting your approval"
-                />
-                <StatCard
-                  title="Needs Revision"
-                  icon={Edit3}
-                  isLoading
-                  description="Records that require changes"
-                />
-                <StatCard
-                  title="Published Records"
-                  icon={CheckSquare}
-                  isLoading
-                  description={`Status of records in ${currentOrganization.name}`}
-                />
-                <StatCard
-                  title="Managed Users"
-                  icon={Users}
-                  isLoading
-                  description={`Creators & Approvers in ${currentOrganization.name}`}
-                />
-              </>
-            }
-          >
-            <OrgDashboardStatsFetcher organization={currentOrganization} />
-          </Suspense>
-        </div>
+        <DashboardErrorBoundary organizationId={currentOrganization.id}>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <Suspense
+              key={suspenseKey} // Use the key here
+              fallback={
+                <>
+                  <StatCard
+                    title="Total Metadata Records"
+                    icon={LibrarySquare}
+                    isLoading
+                    description={`For ${currentOrganization.name}`}
+                  />
+                  <StatCard
+                    title="Pending Validation"
+                    icon={ListChecks}
+                    isLoading
+                    description="Records awaiting your approval"
+                  />
+                  <StatCard
+                    title="Needs Revision"
+                    icon={Edit3}
+                    isLoading
+                    description="Records that require changes"
+                  />
+                  <StatCard
+                    title="Published Records"
+                    icon={CheckSquare}
+                    isLoading
+                    description={`Status of records in ${currentOrganization.name}`}
+                  />
+                  <StatCard
+                    title="Managed Users"
+                    icon={Users}
+                    isLoading
+                    description={`Creators & Approvers in ${currentOrganization.name}`}
+                  />
+                </>
+              }
+            >
+              <OrgDashboardStatsFetcher organization={currentOrganization} />
+            </Suspense>
+          </div>
+        </DashboardErrorBoundary>
       </section>
 
       {/* Enhanced Sections */}
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Metadata Approval Queue */}
         <section>
-          <Suspense
-            key={approvalQueueKey}
-            fallback={
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <CheckSquare className="h-5 w-5" />
-                    <Skeleton className="h-6 w-48" />
-                  </CardTitle>
-                  <Skeleton className="h-4 w-64" />
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {[...Array(3)].map((_, i) => (
-                      <Skeleton key={i} className="h-16 w-full" />
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            }
-          >
-            <MetadataApprovalQueueFetcher organization={currentOrganization} />
-          </Suspense>
+          <ApprovalQueueErrorBoundary organizationId={currentOrganization.id}>
+            <Suspense
+              key={approvalQueueKey}
+              fallback={
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <CheckSquare className="h-5 w-5" />
+                      <Skeleton className="h-6 w-48" />
+                    </CardTitle>
+                    <Skeleton className="h-4 w-64" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      {[...Array(3)].map((_, i) => (
+                        <Skeleton key={i} className="h-16 w-full" />
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              }
+            >
+              <MetadataApprovalQueueFetcher
+                organization={currentOrganization}
+              />
+            </Suspense>
+          </ApprovalQueueErrorBoundary>
         </section>
 
         {/* Notification Center */}
         <section>
-          <Suspense
-            key={notificationsKey}
-            fallback={
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Bell className="h-5 w-5" />
-                    <Skeleton className="h-6 w-32" />
-                  </CardTitle>
-                  <Skeleton className="h-4 w-48" />
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {[...Array(3)].map((_, i) => (
-                      <Skeleton key={i} className="h-20 w-full" />
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            }
-          >
-            <NotificationCenterFetcher organization={currentOrganization} />
-          </Suspense>
+          <DashboardErrorBoundary organizationId={currentOrganization.id}>
+            <Suspense
+              key={notificationsKey}
+              fallback={
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Bell className="h-5 w-5" />
+                      <Skeleton className="h-6 w-32" />
+                    </CardTitle>
+                    <Skeleton className="h-4 w-48" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      {[...Array(3)].map((_, i) => (
+                        <Skeleton key={i} className="h-20 w-full" />
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              }
+            >
+              <NotificationCenterFetcher organization={currentOrganization} />
+            </Suspense>
+          </DashboardErrorBoundary>
         </section>
       </div>
 
@@ -469,49 +417,51 @@ export default async function NodeOfficerDashboardPage({
           <BarChart3 className="h-5 w-5" />
           Analytics & Insights
         </h2>
-        <Suspense
-          key={analyticsKey}
-          fallback={
-            <div className="space-y-6">
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                {[...Array(4)].map((_, i) => (
-                  <Card key={i}>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <Skeleton className="h-4 w-24" />
-                      <Skeleton className="h-4 w-4" />
+        <AnalyticsErrorBoundary organizationId={currentOrganization.id}>
+          <Suspense
+            key={analyticsKey}
+            fallback={
+              <div className="space-y-6">
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                  {[...Array(4)].map((_, i) => (
+                    <Card key={i}>
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <Skeleton className="h-4 w-24" />
+                        <Skeleton className="h-4 w-4" />
+                      </CardHeader>
+                      <CardContent>
+                        <Skeleton className="h-8 w-16 mb-2" />
+                        <Skeleton className="h-3 w-32" />
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+                <div className="grid gap-6 md:grid-cols-2">
+                  <Card>
+                    <CardHeader>
+                      <Skeleton className="h-6 w-48" />
+                      <Skeleton className="h-4 w-64" />
                     </CardHeader>
                     <CardContent>
-                      <Skeleton className="h-8 w-16 mb-2" />
-                      <Skeleton className="h-3 w-32" />
+                      <Skeleton className="h-[300px] w-full" />
                     </CardContent>
                   </Card>
-                ))}
+                  <Card>
+                    <CardHeader>
+                      <Skeleton className="h-6 w-40" />
+                      <Skeleton className="h-4 w-56" />
+                    </CardHeader>
+                    <CardContent>
+                      <Skeleton className="h-[300px] w-full" />
+                    </CardContent>
+                  </Card>
+                </div>
               </div>
-              <div className="grid gap-6 md:grid-cols-2">
-                <Card>
-                  <CardHeader>
-                    <Skeleton className="h-6 w-48" />
-                    <Skeleton className="h-4 w-64" />
-                  </CardHeader>
-                  <CardContent>
-                    <Skeleton className="h-[300px] w-full" />
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader>
-                    <Skeleton className="h-6 w-40" />
-                    <Skeleton className="h-4 w-56" />
-                  </CardHeader>
-                  <CardContent>
-                    <Skeleton className="h-[300px] w-full" />
-                  </CardContent>
-                </Card>
-              </div>
-            </div>
-          }
-        >
-          <OrganizationAnalyticsFetcher organization={currentOrganization} />
-        </Suspense>
+            }
+          >
+            <OrganizationAnalyticsFetcher organization={currentOrganization} />
+          </Suspense>
+        </AnalyticsErrorBoundary>
       </section>
 
       <section>

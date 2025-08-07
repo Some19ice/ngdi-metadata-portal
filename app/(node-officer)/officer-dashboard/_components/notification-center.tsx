@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useState, useTransition, useEffect } from "react"
 import {
   Card,
   CardContent,
@@ -28,83 +28,187 @@ import {
   MoreHorizontal,
   Eye,
   Trash2,
-  Settings
+  Settings,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react"
 import Link from "next/link"
 import { toast } from "sonner"
-
-interface Notification {
-  id: string
-  type:
-    | "approval_required"
-    | "user_added"
-    | "deadline_approaching"
-    | "system_update"
-    | "record_published"
-  title: string
-  message: string
-  createdAt: Date
-  isRead: boolean
-  priority: "low" | "medium" | "high"
-  actionUrl?: string
-  metadata?: {
-    recordId?: string
-    userId?: string
-    organizationId?: string
-  }
-}
+import { SelectNotification } from "@/db/schema"
+import {
+  getNotificationsAction,
+  markNotificationAsReadAction,
+  markAllNotificationsAsReadAction,
+  deleteNotificationAction,
+  getNotificationCountsAction,
+  type NotificationFilters
+} from "@/actions/db/notifications-actions"
 
 interface NotificationCenterProps {
   organizationId: string
-  initialNotifications: Notification[]
+  initialNotifications?: SelectNotification[]
 }
 
 export default function NotificationCenter({
   organizationId,
-  initialNotifications
+  initialNotifications = []
 }: NotificationCenterProps) {
-  const [notifications, setNotifications] = useState(initialNotifications)
+  const [notifications, setNotifications] =
+    useState<SelectNotification[]>(initialNotifications)
   const [filter, setFilter] = useState<"all" | "unread" | "high">("all")
+  const [currentPage, setCurrentPage] = useState(1)
+  const [hasMore, setHasMore] = useState(false)
+  const [totalCount, setTotalCount] = useState(0)
+  const [counts, setCounts] = useState({ total: 0, unread: 0, highPriority: 0 })
   const [isPending, startTransition] = useTransition()
+  const [isLoading, setIsLoading] = useState(false)
 
-  const filteredNotifications = notifications.filter(notification => {
-    switch (filter) {
-      case "unread":
-        return !notification.isRead
-      case "high":
-        return notification.priority === "high"
-      default:
-        return true
+  const pageSize = 10
+
+  // Load notifications
+  const loadNotifications = async (
+    page: number = 1,
+    filterType: typeof filter = "all"
+  ) => {
+    setIsLoading(true)
+    try {
+      const filters: NotificationFilters = {}
+
+      if (filterType === "unread") {
+        filters.isRead = false
+      } else if (filterType === "high") {
+        filters.priority = "high"
+        filters.isRead = false
+      }
+
+      const result = await getNotificationsAction(
+        organizationId,
+        page,
+        pageSize,
+        filters
+      )
+
+      if (result.isSuccess && result.data) {
+        if (page === 1) {
+          setNotifications(result.data.notifications)
+        } else {
+          setNotifications(prev => [...prev, ...result.data!.notifications])
+        }
+        setHasMore(result.data.hasMore)
+        setTotalCount(result.data.total)
+        setCurrentPage(page)
+      } else {
+        toast.error(result.message || "Failed to load notifications")
+      }
+    } catch (error) {
+      toast.error("Failed to load notifications")
+    } finally {
+      setIsLoading(false)
     }
-  })
+  }
 
-  const unreadCount = notifications.filter(n => !n.isRead).length
-  const highPriorityCount = notifications.filter(
-    n => n.priority === "high" && !n.isRead
-  ).length
+  // Load notification counts
+  const loadCounts = async () => {
+    try {
+      const result = await getNotificationCountsAction(organizationId)
+      if (result.isSuccess && result.data) {
+        setCounts(result.data)
+      }
+    } catch (error) {
+      console.error("Failed to load notification counts:", error)
+    }
+  }
+
+  // Initial load
+  useEffect(() => {
+    loadNotifications(1, filter)
+    loadCounts()
+  }, [organizationId, filter])
 
   const markAsRead = async (notificationId: string) => {
-    setNotifications(prev =>
-      prev.map(n => (n.id === notificationId ? { ...n, isRead: true } : n))
-    )
-    // TODO: Implement API call to mark as read
+    startTransition(async () => {
+      try {
+        const result = await markNotificationAsReadAction(notificationId)
+        if (result.isSuccess) {
+          setNotifications(prev =>
+            prev.map(n =>
+              n.id === notificationId ? { ...n, isRead: true } : n
+            )
+          )
+          // Update counts
+          setCounts(prev => ({
+            ...prev,
+            unread: Math.max(0, prev.unread - 1),
+            highPriority:
+              notifications.find(n => n.id === notificationId)?.priority ===
+              "high"
+                ? Math.max(0, prev.highPriority - 1)
+                : prev.highPriority
+          }))
+        } else {
+          toast.error(result.message || "Failed to mark as read")
+        }
+      } catch (error) {
+        toast.error("Failed to mark notification as read")
+      }
+    })
   }
 
   const markAllAsRead = async () => {
     startTransition(async () => {
-      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })))
-      toast.success("All notifications marked as read")
-      // TODO: Implement API call to mark all as read
+      try {
+        const result = await markAllNotificationsAsReadAction(organizationId)
+        if (result.isSuccess) {
+          setNotifications(prev => prev.map(n => ({ ...n, isRead: true })))
+          setCounts(prev => ({ ...prev, unread: 0, highPriority: 0 }))
+          toast.success("All notifications marked as read")
+        } else {
+          toast.error(result.message || "Failed to mark all as read")
+        }
+      } catch (error) {
+        toast.error("Failed to mark all notifications as read")
+      }
     })
   }
 
   const deleteNotification = async (notificationId: string) => {
-    setNotifications(prev => prev.filter(n => n.id !== notificationId))
-    toast.success("Notification deleted")
-    // TODO: Implement API call to delete notification
+    startTransition(async () => {
+      try {
+        const result = await deleteNotificationAction(notificationId)
+        if (result.isSuccess) {
+          const deletedNotification = notifications.find(
+            n => n.id === notificationId
+          )
+          setNotifications(prev => prev.filter(n => n.id !== notificationId))
+          // Update counts
+          setCounts(prev => ({
+            total: Math.max(0, prev.total - 1),
+            unread: deletedNotification?.isRead
+              ? prev.unread
+              : Math.max(0, prev.unread - 1),
+            highPriority:
+              deletedNotification?.priority === "high" &&
+              !deletedNotification?.isRead
+                ? Math.max(0, prev.highPriority - 1)
+                : prev.highPriority
+          }))
+          toast.success("Notification deleted")
+        } else {
+          toast.error(result.message || "Failed to delete notification")
+        }
+      } catch (error) {
+        toast.error("Failed to delete notification")
+      }
+    })
   }
 
-  const getNotificationIcon = (type: Notification["type"]) => {
+  const loadMore = () => {
+    if (hasMore && !isLoading) {
+      loadNotifications(currentPage + 1, filter)
+    }
+  }
+
+  const getNotificationIcon = (type: SelectNotification["type"]) => {
     switch (type) {
       case "approval_required":
         return <CheckCircle className="h-4 w-4 text-blue-500" />
@@ -116,13 +220,25 @@ export default function NotificationCenter({
         return <Settings className="h-4 w-4 text-purple-500" />
       case "record_published":
         return <CheckCircle className="h-4 w-4 text-green-500" />
+      case "record_approved":
+        return <CheckCircle className="h-4 w-4 text-green-500" />
+      case "record_rejected":
+        return <AlertTriangle className="h-4 w-4 text-red-500" />
+      case "role_assigned":
+        return <Info className="h-4 w-4 text-blue-500" />
+      case "role_removed":
+        return <Info className="h-4 w-4 text-orange-500" />
+      case "organization_updated":
+        return <Settings className="h-4 w-4 text-purple-500" />
       default:
         return <Bell className="h-4 w-4 text-gray-500" />
     }
   }
 
-  const getPriorityBadge = (priority: Notification["priority"]) => {
+  const getPriorityBadge = (priority: SelectNotification["priority"]) => {
     switch (priority) {
+      case "urgent":
+        return <Badge variant="destructive">Urgent</Badge>
       case "high":
         return <Badge variant="destructive">High</Badge>
       case "medium":
@@ -158,9 +274,9 @@ export default function NotificationCenter({
             <CardTitle className="flex items-center gap-2">
               <Bell className="h-5 w-5" />
               Notifications
-              {unreadCount > 0 && (
+              {counts.unread > 0 && (
                 <Badge variant="destructive" className="ml-2">
-                  {unreadCount}
+                  {counts.unread}
                 </Badge>
               )}
             </CardTitle>
@@ -184,17 +300,17 @@ export default function NotificationCenter({
                 <DropdownMenuLabel>Filter Notifications</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => setFilter("all")}>
-                  All Notifications
+                  All Notifications ({counts.total})
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setFilter("unread")}>
-                  Unread ({unreadCount})
+                  Unread ({counts.unread})
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setFilter("high")}>
-                  High Priority ({highPriorityCount})
+                  High Priority ({counts.highPriority})
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            {unreadCount > 0 && (
+            {counts.unread > 0 && (
               <Button
                 variant="outline"
                 size="sm"
@@ -209,7 +325,11 @@ export default function NotificationCenter({
       </CardHeader>
       <CardContent>
         <ScrollArea className="h-[400px] pr-4">
-          {filteredNotifications.length === 0 ? (
+          {isLoading && notifications.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              Loading notifications...
+            </div>
+          ) : notifications.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               {filter === "all"
                 ? "No notifications yet"
@@ -217,7 +337,7 @@ export default function NotificationCenter({
             </div>
           ) : (
             <div className="space-y-3">
-              {filteredNotifications.map(notification => (
+              {notifications.map(notification => (
                 <div
                   key={notification.id}
                   className={`p-4 rounded-lg border transition-colors ${
@@ -302,6 +422,25 @@ export default function NotificationCenter({
                   </div>
                 </div>
               ))}
+
+              {/* Pagination Controls */}
+              {hasMore && (
+                <div className="text-center pt-4 border-t">
+                  <Button
+                    variant="outline"
+                    onClick={loadMore}
+                    disabled={isLoading || isPending}
+                  >
+                    {isLoading ? "Loading..." : "Load More"}
+                  </Button>
+                </div>
+              )}
+
+              {isLoading && notifications.length > 0 && (
+                <div className="text-center py-2 text-muted-foreground text-sm">
+                  Loading more notifications...
+                </div>
+              )}
             </div>
           )}
         </ScrollArea>
