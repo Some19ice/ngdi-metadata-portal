@@ -766,12 +766,19 @@ export async function deleteMetadataRecordAction(
 
 export async function searchMetadataRecordsAction(params: {
   query?: string
-  organizationId?: string
-  status?: SelectMetadataRecord["status"]
+  // Multi-select capable filters (arrays); legacy single fields still respected below
+  organizationIds?: string[]
+  statuses?: SelectMetadataRecord["status"][]
   temporalExtentStartDate?: string // ISO Date string
   temporalExtentEndDate?: string // ISO Date string
+  frameworkTypes?: string[]
+  datasetTypes?: string[]
+  // Legacy single-value support
+  organizationId?: string
+  status?: SelectMetadataRecord["status"]
   frameworkType?: string
   datasetType?: string
+  // Spatial
   bbox_north?: string
   bbox_south?: string
   bbox_east?: string
@@ -835,14 +842,26 @@ export async function searchMetadataRecordsAction(params: {
       conditions.push(or(...textSearchConditions))
     }
 
-    if (params.organizationId) {
+    // Organization filter (supports multiple)
+    const orgIds =
+      params.organizationIds && params.organizationIds.length > 0
+        ? params.organizationIds
+        : params.organizationId
+          ? [params.organizationId]
+          : []
+    if (orgIds.length > 0) {
+      // Generate OR conditions for multiple organizations
       conditions.push(
-        eq(metadataRecordsTable.organizationId, params.organizationId)
+        or(...orgIds.map(id => eq(metadataRecordsTable.organizationId, id)))
       )
     }
 
     // Status filtering with permission check
-    if (params.status) {
+    if (params.statuses && params.statuses.length > 0) {
+      conditions.push(
+        or(...params.statuses.map(s => eq(metadataRecordsTable.status, s)))
+      )
+    } else if (params.status) {
       conditions.push(eq(metadataRecordsTable.status, params.status))
     } else {
       // Default to searching only published records if no specific status is given
@@ -883,17 +902,37 @@ export async function searchMetadataRecordsAction(params: {
       )
     }
 
-    // Framework type filtering
-    if (params.frameworkType) {
+    // Framework type filtering (supports multiple)
+    const frameworkTypes =
+      params.frameworkTypes && params.frameworkTypes.length > 0
+        ? params.frameworkTypes
+        : params.frameworkType
+          ? [params.frameworkType]
+          : []
+    if (frameworkTypes.length > 0) {
       conditions.push(
-        sql`${metadataRecordsTable.frameworkType} = ${params.frameworkType}`
+        or(
+          ...frameworkTypes.map(
+            t => sql`${metadataRecordsTable.frameworkType} = ${t}`
+          )
+        )
       )
     }
 
-    // Data type filtering (mapping datasetType to dataType for backward compatibility)
-    if (params.datasetType) {
+    // Data type filtering (supports multiple; datasetType legacy maps to dataType)
+    const datasetTypes =
+      params.datasetTypes && params.datasetTypes.length > 0
+        ? params.datasetTypes
+        : params.datasetType
+          ? [params.datasetType]
+          : []
+    if (datasetTypes.length > 0) {
       conditions.push(
-        sql`${metadataRecordsTable.dataType}::text = ${params.datasetType}`
+        or(
+          ...datasetTypes.map(
+            t => sql`${metadataRecordsTable.dataType}::text = ${t}`
+          )
+        )
       )
     }
 
@@ -960,9 +999,12 @@ export async function searchMetadataRecordsAction(params: {
     // Sorting with validation
     let orderByClause: any[] = [desc(metadataRecordsTable.updatedAt)] // Default sort
     if (params.sortBy) {
+      // Normalize alias: 'date' -> 'createdAt'
+      const normalizedSortBy =
+        params.sortBy === "date" ? "createdAt" : params.sortBy
       const validSortColumns = ["title", "createdAt", "updatedAt", "status"]
-      if (validSortColumns.includes(params.sortBy)) {
-        const sortColumn = (metadataRecordsTable as any)[params.sortBy]
+      if (validSortColumns.includes(normalizedSortBy)) {
+        const sortColumn = (metadataRecordsTable as any)[normalizedSortBy]
         if (sortColumn) {
           orderByClause = [
             params.sortOrder === "asc" ? asc(sortColumn) : desc(sortColumn)

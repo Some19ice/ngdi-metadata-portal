@@ -8,7 +8,7 @@ import { PostHogUserIdentify } from "@/components/utilities/posthog/posthog-user
 import { Providers } from "@/components/utilities/providers"
 import { TailwindIndicator } from "@/components/utilities/tailwind-indicator"
 
-import { ErrorBoundary } from "@/components/utilities/error-boundary"
+import ErrorBoundary from "@/components/utilities/error-boundary"
 import { cn } from "@/lib/utils"
 import { ClerkProvider } from "@clerk/nextjs"
 import { auth } from "@clerk/nextjs/server"

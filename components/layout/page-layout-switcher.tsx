@@ -6,7 +6,7 @@ import { AppSidebar } from "@/components/sidebar/app-sidebar"
 import MainHeader from "@/components/layout/main-header"
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
 import { Suspense } from "react"
-import { ErrorBoundary } from "@/components/utilities/error-boundary"
+import ErrorBoundary from "@/components/utilities/error-boundary"
 
 function MainHeaderFallback() {
   return (

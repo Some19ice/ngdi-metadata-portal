@@ -9,7 +9,11 @@ export async function GET(request: NextRequest) {
     const query = searchParams.get("q")
 
     if (!query || query.length < 2) {
-      return NextResponse.json({ suggestions: [] })
+      return NextResponse.json({
+        isSuccess: true,
+        message: "Query too short",
+        data: []
+      })
     }
 
     // Search for metadata records with a smaller page size for suggestions
@@ -20,7 +24,11 @@ export async function GET(request: NextRequest) {
     })
 
     if (!result.isSuccess || !result.data) {
-      return NextResponse.json({ suggestions: [] })
+      return NextResponse.json({
+        isSuccess: true,
+        message: result.message || "No results",
+        data: []
+      })
     }
 
     // Transform metadata records into suggestion format
@@ -34,11 +42,15 @@ export async function GET(request: NextRequest) {
         undefined
     }))
 
-    return NextResponse.json({ suggestions })
+    return NextResponse.json({
+      isSuccess: true,
+      message: result.message,
+      data: suggestions
+    })
   } catch (error) {
     console.error("Error fetching metadata suggestions:", error)
     return NextResponse.json(
-      { error: "Failed to fetch suggestions" },
+      { isSuccess: false, message: "Failed to fetch suggestions" },
       { status: 500 }
     )
   }

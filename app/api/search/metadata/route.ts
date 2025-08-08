@@ -2,6 +2,7 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import { searchMetadataRecordsAction } from "@/actions/db/metadata-records-actions"
+import { getSearchFacets } from "@/lib/search/facets"
 
 // Helper function to remove undefined values from search parameters
 function cleanSearchParams<T extends Record<string, any>>(params: T): T {
@@ -20,6 +21,13 @@ async function handleSearchRequest(searchParams: any) {
   const result = await searchMetadataRecordsAction(cleanedParams)
 
   if (result.isSuccess) {
+    // Fetch facets (non-blocking if fails)
+    let facets: any = undefined
+    try {
+      facets = await getSearchFacets()
+    } catch (e) {
+      console.warn("Failed to load search facets:", e)
+    }
     return NextResponse.json({
       isSuccess: true,
       message: result.message,
@@ -29,7 +37,8 @@ async function handleSearchRequest(searchParams: any) {
         totalPages: result.data?.totalPages || 0,
         currentPage: result.data?.currentPage || 1,
         pageSize: result.data?.pageSize || 20,
-        appliedFilters: cleanedParams
+        appliedFilters: cleanedParams,
+        facets
       }
     })
   } else {
@@ -57,19 +66,39 @@ function handleError(error: unknown) {
 
 // Helper function to extract search parameters from POST request body
 function extractPostSearchParams(body: any) {
+  // Normalize sortBy aliases
+  const sortBy = body.sortBy === "date" ? "createdAt" : body.sortBy
+
   return {
     query: body.query,
-    organizationId: body.organizationIds?.[0], // Take first org ID if multiple
-    status: body.status?.[0] as any, // Take first status if multiple
+    // Support arrays for multi-select filters; keep legacy single fields
+    organizationIds: Array.isArray(body.organizationIds)
+      ? body.organizationIds
+      : body.organizationId
+        ? [body.organizationId]
+        : undefined,
+    statuses: Array.isArray(body.status)
+      ? body.status
+      : body.status
+        ? [body.status]
+        : undefined,
     temporalExtentStartDate: body.startDate || body.temporalExtentStartDate,
     temporalExtentEndDate: body.endDate || body.temporalExtentEndDate,
-    frameworkType: body.frameworkTypes?.[0], // Take first framework type if multiple
-    datasetType: body.dataTypes?.[0], // Take first data type if multiple
+    frameworkTypes: Array.isArray(body.frameworkTypes)
+      ? body.frameworkTypes
+      : body.frameworkType
+        ? [body.frameworkType]
+        : undefined,
+    datasetTypes: Array.isArray(body.dataTypes)
+      ? body.dataTypes
+      : body.datasetType
+        ? [body.datasetType]
+        : undefined,
     bbox_north: body.bbox_north,
     bbox_south: body.bbox_south,
     bbox_east: body.bbox_east,
     bbox_west: body.bbox_west,
-    sortBy: body.sortBy,
+    sortBy,
     sortOrder: validateSortOrder(body.sortOrder),
     page: body.page || 1,
     pageSize: body.pageSize || body.limit || 20
@@ -103,14 +132,28 @@ function validateSortOrder(
 
 // Helper function to extract search parameters from GET request URL
 function extractGetSearchParams(searchParams: URLSearchParams) {
+  // Helpers to split comma lists to arrays
+  const splitList = (value?: string | undefined) =>
+    value
+      ? value
+          .split(",")
+          .map(v => v.trim())
+          .filter(Boolean)
+      : undefined
+
+  const rawSortBy = getFirstParam(searchParams, ["sortBy", "sort"]) || undefined
+  const sortBy = rawSortBy === "date" ? "createdAt" : rawSortBy
+
   return {
     query: getFirstParam(searchParams, ["q", "query"]),
-    organizationId: getFirstParam(
-      searchParams,
-      ["organizationIds", "organizationId"],
-      true
+    organizationIds: splitList(
+      getFirstParam(
+        searchParams,
+        ["orgIds", "organizationIds", "organizationId"],
+        true
+      )
     ),
-    status: getFirstParam(searchParams, ["status"], true) as any,
+    statuses: splitList(getFirstParam(searchParams, ["status"], true)) as any,
     temporalExtentStartDate: getFirstParam(searchParams, [
       "startDate",
       "temporalExtentStartDate"
@@ -119,21 +162,21 @@ function extractGetSearchParams(searchParams: URLSearchParams) {
       "endDate",
       "temporalExtentEndDate"
     ]),
-    frameworkType: getFirstParam(
-      searchParams,
-      ["frameworkTypes", "frameworkType"],
-      true
+    frameworkTypes: splitList(
+      getFirstParam(
+        searchParams,
+        ["frameworks", "frameworkTypes", "frameworkType"],
+        true
+      )
     ),
-    datasetType: getFirstParam(
-      searchParams,
-      ["dataTypes", "datasetType"],
-      true
+    datasetTypes: splitList(
+      getFirstParam(searchParams, ["types", "dataTypes", "datasetType"], true)
     ),
     bbox_north: getFirstParam(searchParams, ["bbox_north", "n"]),
     bbox_south: getFirstParam(searchParams, ["bbox_south", "s"]),
     bbox_east: getFirstParam(searchParams, ["bbox_east", "e"]),
     bbox_west: getFirstParam(searchParams, ["bbox_west", "w"]),
-    sortBy: getFirstParam(searchParams, ["sortBy", "sort"]),
+    sortBy,
     sortOrder: validateSortOrder(
       getFirstParam(searchParams, ["sortOrder", "order"])
     ),

@@ -223,10 +223,8 @@ export function useDebouncedSearch(options: UseDebouncedSearchOptions = {}) {
         setIsLoadingSuggestions(true)
 
         const response = await fetch(
-          `/api/search/suggestions?q=${encodeURIComponent(query)}`,
-          {
-            signal: suggestionAbortControllerRef.current.signal
-          }
+          `/api/search/metadata-suggestions?q=${encodeURIComponent(query)}`,
+          { signal: suggestionAbortControllerRef.current.signal }
         )
 
         if (!response.ok) {
@@ -236,8 +234,9 @@ export function useDebouncedSearch(options: UseDebouncedSearchOptions = {}) {
         const result = await response.json()
 
         if (result.isSuccess) {
-          setSuggestions(result.data)
-          setCachedSuggestions(query, result.data)
+          const items = result.data || result.suggestions || []
+          setSuggestions(items)
+          setCachedSuggestions(query, items)
         } else {
           setSuggestions([])
         }
