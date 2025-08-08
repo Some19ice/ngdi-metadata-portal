@@ -27,6 +27,15 @@ import {
 import { toast } from "sonner"
 import Link from "next/link"
 import { format } from "date-fns"
+import dynamic from "next/dynamic"
+import { transformDatabaseRecordToMapRecord } from "@/lib/map-utils"
+import { MapErrorBoundary } from "@/components/ui/map/map-error-boundary"
+
+// Lazy-load the map to avoid any SSR/hydration issues
+const MetadataMapDisplay = dynamic(
+  () => import("@/components/ui/map/metadata-map-display"),
+  { ssr: false }
+)
 
 interface MetadataRecord extends SelectMetadataRecord {
   organization?: SelectOrganization | null
@@ -81,6 +90,10 @@ export default function EnhancedPublicMetadataViewer({
   const constraintsInfo = record.constraintsInfo as any
   const dataQualityInfo = record.dataQualityInfo as any
   const processingInfo = record.processingInfo as any
+
+  // Prepare map-ready record (if spatial bounds exist)
+  const mapRecord = transformDatabaseRecordToMapRecord(record)
+  const mapRecords = mapRecord ? [mapRecord] : []
 
   // Derived display fields aligned with schema
   const formTypeFormat = record.formTypeDistributionFormat as {
@@ -442,20 +455,32 @@ export default function EnhancedPublicMetadataViewer({
         </Card>
       )}
 
-      {/* Interactive Map Placeholder */}
+      {/* Interactive Map */}
       <Card>
         <CardHeader>
           <CardTitle>Interactive Map</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="aspect-video bg-muted rounded-lg flex items-center justify-center">
-            <div className="text-center">
-              <MapPin className="h-12 w-12 text-muted-foreground mx-auto mb-2" />
-              <p className="text-muted-foreground">
-                Interactive map will be displayed here
-              </p>
+          {mapRecords.length > 0 ? (
+            <div className="h-[500px] w-full rounded-lg overflow-hidden">
+              <MapErrorBoundary level="section" showDetails={false}>
+                <MetadataMapDisplay
+                  key={`map-${record.id}`}
+                  records={mapRecords}
+                  showBoundingBoxes={true}
+                />
+              </MapErrorBoundary>
             </div>
-          </div>
+          ) : (
+            <div className="aspect-video bg-muted rounded-lg flex items-center justify-center">
+              <div className="text-center">
+                <MapPin className="h-12 w-12 text-muted-foreground mx-auto mb-2" />
+                <p className="text-muted-foreground">
+                  No spatial extent available
+                </p>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
