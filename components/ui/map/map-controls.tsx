@@ -57,6 +57,26 @@ export default function MapControls({
   const [isExpanded, setIsExpanded] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const controlsRef = useRef<HTMLDivElement>(null)
+  const updateUrlToCurrentView = useCallback(() => {
+    if (!map) return
+    const center = map.getCenter()
+    const zoom = map.getZoom()
+    const bearing = map.getBearing()
+    const pitch = map.getPitch()
+    const url = new URL(window.location.href)
+    url.searchParams.set(
+      "center",
+      `${center.lng.toFixed(5)},${center.lat.toFixed(5)}`
+    )
+    url.searchParams.set("zoom", `${zoom.toFixed(2)}`)
+    url.searchParams.set("bearing", `${Math.round(bearing)}`)
+    url.searchParams.set("pitch", `${Math.round(pitch)}`)
+    window.history.replaceState(
+      {},
+      "",
+      `${url.pathname}?${url.searchParams.toString()}`
+    )
+  }, [map])
 
   // Keyboard navigation
   useEffect(() => {
@@ -295,6 +315,13 @@ export default function MapControls({
                   </span>
                 </DropdownMenuItem>
               ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={updateUrlToCurrentView}
+                disabled={!isLoaded || !map}
+              >
+                Update URL to current view
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
 

@@ -4,8 +4,7 @@ import { db } from "@/db/db"
 import {
   notificationsTable,
   InsertNotification,
-  SelectNotification,
-  notificationTypeEnum
+  SelectNotification
 } from "@/db/schema/notifications-schema"
 import { ActionState } from "@/types"
 import { auth } from "@clerk/nextjs/server"
@@ -17,13 +16,11 @@ import { eq, desc, and, sql } from "drizzle-orm"
 export async function createNotificationAction(
   notificationData: Omit<InsertNotification, "id" | "createdAt" | "updatedAt">
 ): Promise<ActionState<SelectNotification>> {
-  // No specific permission check here as this is an internal action.
-  // The calling action should have its own permission checks.
-  // We do ensure a recipientUserId is provided.
-  if (!notificationData.recipientUserId) {
+  // Basic validation
+  if (!notificationData.userId) {
     return {
       isSuccess: false,
-      message: "Recipient user ID is required to create a notification."
+      message: "User ID is required to create a notification."
     }
   }
 
@@ -73,7 +70,7 @@ export async function getNotificationsForUserAction(
   const { limit = 10, offset = 0, status = "all" } = params
 
   try {
-    const conditions = [eq(notificationsTable.recipientUserId, currentUserId)]
+    const conditions = [eq(notificationsTable.userId, currentUserId)]
 
     if (status === "read") {
       conditions.push(eq(notificationsTable.isRead, true))
@@ -129,7 +126,7 @@ export async function markNotificationAsReadAction(
       return { isSuccess: false, message: "Notification not found." }
     }
 
-    if (notification.recipientUserId !== currentUserId) {
+    if (notification.userId !== currentUserId) {
       return {
         isSuccess: false,
         message: "Forbidden: You cannot mark this notification as read."
@@ -165,11 +162,12 @@ export async function markNotificationAsReadAction(
 }
 
 // --- Mark All Notifications As Read Action ---
-export async function markAllNotificationsAsReadAction(): Promise<
-  ActionState<{ count: number }>
-> {
+export async function markAllNotificationsAsReadAction(
+  userIdParam?: string
+): Promise<ActionState<{ count: number }>> {
   const { userId: currentUserId } = await auth()
-  if (!currentUserId) {
+  const effectiveUserId = userIdParam || currentUserId
+  if (!effectiveUserId) {
     return { isSuccess: false, message: "User not authenticated." }
   }
 
@@ -179,7 +177,7 @@ export async function markAllNotificationsAsReadAction(): Promise<
       .set({ isRead: true, updatedAt: new Date() })
       .where(
         and(
-          eq(notificationsTable.recipientUserId, currentUserId),
+          eq(notificationsTable.userId, effectiveUserId),
           eq(notificationsTable.isRead, false)
         )
       )

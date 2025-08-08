@@ -102,46 +102,29 @@ const MapAccessibility = memo(function MapAccessibility({
     }
   }, [settings])
 
-  // Apply settings to map and document
+  // Apply settings to map container (scoped) and avoid global document side effects
   useEffect(() => {
     if (!map) return
 
     const mapContainer = map.getContainer()
     if (!mapContainer) return
 
-    // High contrast mode
-    if (settings.highContrast) {
-      mapContainer.style.filter = "contrast(150%) brightness(110%)"
-      document.documentElement.classList.add("high-contrast")
-    } else {
-      mapContainer.style.filter = ""
-      document.documentElement.classList.remove("high-contrast")
-    }
+    // High contrast mode (scoped)
+    mapContainer.style.filter = settings.highContrast
+      ? "contrast(150%) brightness(110%)"
+      : ""
 
-    // Reduced motion
-    if (settings.reducedMotion) {
-      map.setLayoutProperty("*", "transition", { duration: 0 })
-      document.documentElement.classList.add("reduce-motion")
-    } else {
-      document.documentElement.classList.remove("reduce-motion")
-    }
+    // Reduced motion (scoped to map only)
+    try {
+      if (settings.reducedMotion) {
+        map.setLayoutProperty("*", "transition", { duration: 0 })
+      }
+    } catch {}
 
-    // Text size
-    document.documentElement.style.fontSize = `${settings.textSize}%`
-
-    // Focus indicators
-    if (settings.focusIndicators) {
-      document.documentElement.classList.add("show-focus")
-    } else {
-      document.documentElement.classList.remove("show-focus")
-    }
-
-    // Simplified UI
-    if (settings.simplifiedUI) {
-      document.documentElement.classList.add("simplified-ui")
-    } else {
-      document.documentElement.classList.remove("simplified-ui")
-    }
+    // Text size (scoped via CSS variable on map container)
+    mapContainer.style.setProperty("--map-text-scale", `${settings.textSize}%`)
+    mapContainer.dataset.focusIndicators = settings.focusIndicators ? "1" : "0"
+    mapContainer.dataset.simplifiedUi = settings.simplifiedUI ? "1" : "0"
   }, [map, settings])
 
   // Keyboard navigation setup

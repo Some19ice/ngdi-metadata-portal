@@ -296,11 +296,12 @@ export async function updateUserRoleAction(
     const notificationTitle = "Role Updated"
     const notificationMessage = `Your system role has been updated to: ${newRoleName}.`
     await createNotificationAction({
-      recipientUserId: targetUserId,
-      type: "NewRoleAssignment", // Use the enum value directly
+      userId: targetUserId,
+      organizationId: "00000000-0000-0000-0000-000000000000",
+      type: "role_assigned",
       title: notificationTitle,
       message: notificationMessage,
-      link: "/app/profile" // Example link, adjust as needed
+      actionUrl: "/app/profile"
     })
 
     return {
@@ -428,21 +429,23 @@ export async function createUserForOrganizationAction(params: {
       // Send welcome email with credentials if requested
       if (params.sendWelcomeEmail) {
         await createNotificationAction({
-          recipientUserId: clerkUser.id,
-          type: "NewRoleAssignment",
+          userId: clerkUser.id,
+          organizationId: params.organizationId,
+          type: "user_added",
           title: `Welcome to ${organization.name}`,
           message: `You have been added as a ${params.role} for ${organization.name}. Please log in with your provided credentials to access the system.`,
-          link: "/login"
+          actionUrl: "/login"
         })
       }
 
       // Notify the creating user
       await createNotificationAction({
-        recipientUserId: authState.userId,
-        type: "Other",
+        userId: authState.userId,
+        organizationId: params.organizationId,
+        type: "system_update",
         title: "User Account Created",
         message: `Successfully created account for ${params.firstName} ${params.lastName} as ${params.role} in ${organization.name}.`,
-        link: `/organization-users?orgId=${params.organizationId}`
+        actionUrl: `/app/(node-officer)/organization-users?orgId=${params.organizationId}`
       })
 
       return {
@@ -560,11 +563,12 @@ export async function createBulkUsersForOrganizationAction(params: {
           // In production, this would send an actual email
           // For now, create a notification
           await createNotificationAction({
-            recipientUserId: clerkUser.id,
-            type: "NewRoleAssignment",
+            userId: clerkUser.id,
+            organizationId: params.organizationId,
+            type: "user_added",
             title: "Welcome to NGDI Portal",
             message: `You have been added as a ${userData.role}. Your temporary password is: ${tempPassword}. Please change it upon first login.`,
-            link: "/login"
+            actionUrl: "/login"
           })
         }
       } catch (error: any) {

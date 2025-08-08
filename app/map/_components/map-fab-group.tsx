@@ -52,6 +52,7 @@ export default function MapFabGroup({
   const [locating, setLocating] = useState(false)
   const [isGroupExpanded, setIsGroupExpanded] = useState(false)
   const [bearingNorth, setBearingNorth] = useState(0)
+  const [reducedMotion, setReducedMotion] = useState(false)
 
   useEffect(() => {
     const handler = () => {
@@ -59,6 +60,15 @@ export default function MapFabGroup({
     }
     document.addEventListener("fullscreenchange", handler)
     return () => document.removeEventListener("fullscreenchange", handler)
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)")
+    const listener = () => setReducedMotion(mq.matches)
+    listener()
+    mq.addEventListener?.("change", listener)
+    return () => mq.removeEventListener?.("change", listener)
   }, [])
 
   // Track map bearing for compass with throttling
@@ -157,7 +167,7 @@ export default function MapFabGroup({
         map.flyTo({
           center: [longitude, latitude],
           zoom: 15,
-          duration: 2500,
+          duration: reducedMotion ? 0 : 2500,
           essential: true,
           easing: t => {
             return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2

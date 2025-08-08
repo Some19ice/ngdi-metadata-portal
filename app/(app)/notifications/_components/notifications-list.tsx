@@ -18,18 +18,12 @@ interface NotificationsListProps {
 // Helper to get an icon based on notification type
 function getNotificationIcon(type: SelectNotification["type"]) {
   switch (type) {
-    case "MetadataStatusChange":
+    case "record_published":
       return <Info className="h-5 w-5 text-blue-500" />
-    case "NewRoleAssignment":
+    case "role_assigned":
       return <CheckCircle className="h-5 w-5 text-green-500" />
-    case "TaskDelegation": // Assuming you might add this type
-      return <BellRing className="h-5 w-5 text-purple-500" />
-    case "SystemAlert":
+    case "system_update":
       return <AlertTriangle className="h-5 w-5 text-red-500" />
-    case "UserMention":
-      return <BellRing className="h-5 w-5 text-yellow-500" />
-    case "NewFeatureAnnouncement":
-      return <Info className="h-5 w-5 text-indigo-500" />
     default:
       return <BellRing className="h-5 w-5 text-gray-500" />
   }
@@ -80,8 +74,8 @@ export default function NotificationsList({
             <p className="text-sm text-muted-foreground">
               {notification.message}
             </p>
-            {notification.link && (
-              <Link href={notification.link} passHref legacyBehavior>
+            {notification.actionUrl && (
+              <Link href={notification.actionUrl} passHref legacyBehavior>
                 <a className="text-xs text-blue-600 hover:underline">
                   View Details
                 </a>

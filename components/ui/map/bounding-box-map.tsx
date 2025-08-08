@@ -1,24 +1,10 @@
 "use client"
 
-import { useEffect, useState, useRef, useCallback } from "react"
-import { MapContainer, TileLayer, Rectangle, useMap } from "react-leaflet"
-import L from "leaflet"
-import { useLeafletMapKey } from "@/hooks"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import maplibregl, { Map, LngLatBoundsLike, LngLatLike } from "maplibre-gl"
+import "maplibre-gl/dist/maplibre-gl.css"
+import { getAvailableMapStyles } from "@/lib/map-config"
 
-// Import Leaflet CSS
-import "leaflet/dist/leaflet.css"
-
-// Fix for default marker icon issue with webpack
-// @ts-ignore
-delete L.Icon.Default.prototype._getIconUrl
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl:
-    "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png",
-  iconUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png",
-  shadowUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png"
-})
-
-// Define the props for the component
 interface BoundingBoxMapProps {
   onBoundsChange?: (
     bounds: {
@@ -36,75 +22,334 @@ interface BoundingBoxMapProps {
   } | null
 }
 
-// Helper component to handle drawing and dragging
-function BoundingBoxDrawer({
+export default function BoundingBoxMap({
   onBoundsChange,
   initialBounds
 }: BoundingBoxMapProps) {
-  const map = useMap()
-  const [bounds, setBounds] = useState<L.LatLngBounds | null>(null)
-  const [drawing, setDrawing] = useState<boolean>(false)
-  const [startPoint, setStartPoint] = useState<L.LatLng | null>(null)
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const mapRef = useRef<Map | null>(null)
+  const isDraggingRef = useRef(false)
+  const dragStartRef = useRef<[number, number] | null>(null)
 
-  // Initialize with initial bounds if provided
+  const [ready, setReady] = useState(false)
+
+  const styles = useMemo(() => getAvailableMapStyles(), [])
+  const initialStyleUrl =
+    styles[0]?.url || "https://demotiles.maplibre.org/style.json"
+
+  // Create or update the rectangle source/layers
+  const ensureBboxLayers = useCallback((map: Map) => {
+    if (!map.getSource("bbox-source")) {
+      map.addSource("bbox-source", {
+        type: "geojson",
+        data: {
+          type: "FeatureCollection",
+          features: []
+        }
+      })
+
+      map.addLayer({
+        id: "bbox-fill",
+        type: "fill",
+        source: "bbox-source",
+        paint: {
+          "fill-color": "#3b82f6",
+          "fill-opacity": 0.2
+        }
+      })
+
+      map.addLayer({
+        id: "bbox-outline",
+        type: "line",
+        source: "bbox-source",
+        paint: {
+          "line-color": "#2563eb",
+          "line-width": 2
+        }
+      })
+    }
+  }, [])
+
+  const setBbox = useCallback(
+    (map: Map, sw: [number, number], ne: [number, number]) => {
+      const source = map.getSource("bbox-source") as maplibregl.GeoJSONSource
+      if (!source) return
+      const [west, south] = sw
+      const [east, north] = ne
+      const polygon: GeoJSON.Feature = {
+        type: "Feature",
+        geometry: {
+          type: "Polygon",
+          coordinates: [
+            [
+              [west, south],
+              [east, south],
+              [east, north],
+              [west, north],
+              [west, south]
+            ]
+          ]
+        },
+        properties: {}
+      }
+      source.setData({ type: "FeatureCollection", features: [polygon] })
+
+      onBoundsChange?.({ north, south, east, west })
+    },
+    [onBoundsChange]
+  )
+
+  // Add simple edit/drag interaction for the bbox polygon corners and body
+  const enableBboxEditing = useCallback(
+    (map: Map) => {
+      const source = map.getSource("bbox-source") as maplibregl.GeoJSONSource
+      if (!source) return
+
+      // Add corner handles layer
+      if (!map.getLayer("bbox-handles")) {
+        map.addLayer({
+          id: "bbox-handles",
+          type: "circle",
+          source: "bbox-source",
+          filter: ["==", "$type", "Point"],
+          paint: {
+            "circle-radius": 5,
+            "circle-color": "#1f2937",
+            "circle-stroke-color": "#ffffff",
+            "circle-stroke-width": 2
+          }
+        })
+      }
+
+      // Derive handles from current bbox data
+      const deriveHandles = () => {
+        const data = source._data as any
+        if (!data || !data.features || data.features.length === 0) return null
+        const coords = data.features[0]?.geometry?.coordinates?.[0]
+        if (!coords || coords.length < 4) return null
+        const [sw, se, ne, nw] = coords
+        return { sw, se, ne, nw }
+      }
+
+      // Update source with points for handles overlay by creating a separate feature collection
+      const updateHandlesSource = () => {
+        const handles = deriveHandles()
+        if (!handles) return
+        const features: GeoJSON.Feature[] = [
+          {
+            type: "Feature",
+            geometry: { type: "Point", coordinates: handles.sw },
+            properties: { corner: "sw" }
+          },
+          {
+            type: "Feature",
+            geometry: { type: "Point", coordinates: handles.se },
+            properties: { corner: "se" }
+          },
+          {
+            type: "Feature",
+            geometry: { type: "Point", coordinates: handles.ne },
+            properties: { corner: "ne" }
+          },
+          {
+            type: "Feature",
+            geometry: { type: "Point", coordinates: handles.nw },
+            properties: { corner: "nw" }
+          }
+        ]
+        // Store as a separate in-memory collection within the same source by appending (MapLibre doesn't support multiple geometries per source id for editing);
+        // for simplicity we skip persistent handle rendering on every frame; handles are visualized by hover via queryRenderedFeatures.
+      }
+
+      // Drag state
+      let draggingHandle: string | null = null
+      let draggingBox = false
+      let dragStartLngLat: [number, number] | null = null
+
+      // Pointer down: detect if on a handle or inside polygon
+      map.on("mousedown", "bbox-fill", e => {
+        const features = map.queryRenderedFeatures(e.point, {
+          layers: ["bbox-fill"]
+        })
+        if (features.length > 0) {
+          draggingBox = true
+          dragStartLngLat = [e.lngLat.lng, e.lngLat.lat]
+          map.getCanvas().style.cursor = "grabbing"
+        }
+      })
+
+      map.on("mousedown", e => {
+        const feats = map.queryRenderedFeatures(e.point, {
+          layers: ["bbox-outline"]
+        })
+        if (feats.length === 0) return
+        // Identify nearest corner by comparing distances
+        const sourceData = source._data as any
+        const coords = sourceData?.features?.[0]?.geometry?.coordinates?.[0]
+        if (!coords) return
+        const corners = [
+          { id: "sw", c: coords[0] },
+          { id: "se", c: coords[1] },
+          { id: "ne", c: coords[2] },
+          { id: "nw", c: coords[3] }
+        ]
+        let minD = Number.POSITIVE_INFINITY
+        let chosen: string | null = null
+        corners.forEach(k => {
+          const dx = e.lngLat.lng - k.c[0]
+          const dy = e.lngLat.lat - k.c[1]
+          const d2 = dx * dx + dy * dy
+          if (d2 < minD && d2 < 0.0001) {
+            minD = d2
+            chosen = k.id
+          }
+        })
+        if (chosen) {
+          draggingHandle = chosen
+          map.getCanvas().style.cursor = "grabbing"
+        }
+      })
+
+      map.on("mousemove", e => {
+        if (!draggingHandle && !draggingBox) return
+        const data = source._data as any
+        const coords = data?.features?.[0]?.geometry?.coordinates?.[0]
+        if (!coords) return
+        if (draggingHandle) {
+          const [lng, lat] = [e.lngLat.lng, e.lngLat.lat]
+          const next = [...coords]
+          const idxMap: Record<string, number> = { sw: 0, se: 1, ne: 2, nw: 3 }
+          const idx = idxMap[draggingHandle]
+          next[idx] = [lng, lat]
+          // Close ring
+          next[4] = next[0]
+          source.setData({
+            type: "FeatureCollection",
+            features: [
+              {
+                type: "Feature",
+                geometry: { type: "Polygon", coordinates: [next] },
+                properties: {}
+              }
+            ]
+          })
+          // Emit updated bounds
+          const xs = next.map((c: number[]) => c[0])
+          const ys = next.map((c: number[]) => c[1])
+          const west = Math.min(...xs)
+          const east = Math.max(...xs)
+          const south = Math.min(...ys)
+          const north = Math.max(...ys)
+          onBoundsChange?.({ north, south, east, west })
+        } else if (draggingBox && dragStartLngLat) {
+          const dx = e.lngLat.lng - dragStartLngLat[0]
+          const dy = e.lngLat.lat - dragStartLngLat[1]
+          const moved = coords.map((c: number[]) => [c[0] + dx, c[1] + dy])
+          moved[4] = moved[0]
+          source.setData({
+            type: "FeatureCollection",
+            features: [
+              {
+                type: "Feature",
+                geometry: { type: "Polygon", coordinates: [moved] },
+                properties: {}
+              }
+            ]
+          })
+          dragStartLngLat = [e.lngLat.lng, e.lngLat.lat]
+          const xs = moved.map((c: number[]) => c[0])
+          const ys = moved.map((c: number[]) => c[1])
+          const west = Math.min(...xs)
+          const east = Math.max(...xs)
+          const south = Math.min(...ys)
+          const north = Math.max(...ys)
+          onBoundsChange?.({ north, south, east, west })
+        }
+      })
+
+      const stopDrag = () => {
+        draggingHandle = null
+        draggingBox = false
+        dragStartLngLat = null
+        map.getCanvas().style.cursor = ""
+      }
+      map.on("mouseup", stopDrag)
+      map.on("mouseleave", stopDrag)
+    },
+    [onBoundsChange]
+  )
+
+  // Initialize map
   useEffect(() => {
-    if (initialBounds) {
-      const southwest = L.latLng(initialBounds.south, initialBounds.west)
-      const northeast = L.latLng(initialBounds.north, initialBounds.east)
-      const initialLatLngBounds = L.latLngBounds(southwest, northeast)
-      setBounds(initialLatLngBounds)
+    if (!containerRef.current || mapRef.current) return
 
-      // Fit the map to these bounds if valid
-      if (initialLatLngBounds.isValid()) {
-        map.fitBounds(initialLatLngBounds)
+    const map = new maplibregl.Map({
+      container: containerRef.current,
+      style: initialStyleUrl,
+      center: [0, 20] as LngLatLike,
+      zoom: 2
+    })
+
+    mapRef.current = map
+
+    map.on("load", () => {
+      ensureBboxLayers(map)
+
+      // If initial bounds provided, render and fit
+      if (initialBounds) {
+        const sw: [number, number] = [initialBounds.west, initialBounds.south]
+        const ne: [number, number] = [initialBounds.east, initialBounds.north]
+        setBbox(map, sw, ne)
+        const llb: LngLatBoundsLike = [sw, ne]
+        map.fitBounds(llb, { padding: 20, duration: 0 })
+      }
+
+      setReady(true)
+      enableBboxEditing(map)
+    })
+
+    return () => {
+      map.remove()
+      mapRef.current = null
+    }
+  }, [initialStyleUrl, ensureBboxLayers, initialBounds, setBbox])
+
+  // Handle drag-to-draw rectangle
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+
+    const handleMouseDown = (e: maplibregl.MapMouseEvent) => {
+      isDraggingRef.current = true
+      dragStartRef.current = [e.lngLat.lng, e.lngLat.lat]
+      // reset layer data
+      ensureBboxLayers(map)
+      const source = map.getSource("bbox-source") as maplibregl.GeoJSONSource
+      if (source) {
+        source.setData({ type: "FeatureCollection", features: [] })
       }
     }
-  }, [initialBounds, map])
 
-  // Stable event handlers to prevent unnecessary re-renders
-  const handleMouseDown = useCallback(
-    (e: L.LeafletMouseEvent) => {
-      if (!drawing) {
-        setDrawing(true)
-        setStartPoint(e.latlng)
-        setBounds(null)
-      }
-    },
-    [drawing]
-  )
+    const handleMouseMove = (e: maplibregl.MapMouseEvent) => {
+      if (!isDraggingRef.current || !dragStartRef.current) return
+      const start = dragStartRef.current
+      const current: [number, number] = [e.lngLat.lng, e.lngLat.lat]
+      const sw: [number, number] = [
+        Math.min(start[0], current[0]),
+        Math.min(start[1], current[1])
+      ]
+      const ne: [number, number] = [
+        Math.max(start[0], current[0]),
+        Math.max(start[1], current[1])
+      ]
+      setBbox(map, sw, ne)
+    }
 
-  const handleMouseMove = useCallback(
-    (e: L.LeafletMouseEvent) => {
-      if (drawing && startPoint) {
-        const newBounds = L.latLngBounds(startPoint, e.latlng)
-        setBounds(newBounds)
-      }
-    },
-    [drawing, startPoint]
-  )
+    const handleMouseUp = () => {
+      isDraggingRef.current = false
+      dragStartRef.current = null
+    }
 
-  const handleMouseUp = useCallback(
-    (e: L.LeafletMouseEvent) => {
-      if (drawing && startPoint) {
-        setDrawing(false)
-        const newBounds = L.latLngBounds(startPoint, e.latlng)
-        setBounds(newBounds)
-
-        if (onBoundsChange && newBounds.isValid()) {
-          onBoundsChange({
-            north: newBounds.getNorth(),
-            south: newBounds.getSouth(),
-            east: newBounds.getEast(),
-            west: newBounds.getWest()
-          })
-        }
-      }
-    },
-    [drawing, startPoint, onBoundsChange]
-  )
-
-  // Set up event listeners
-  useEffect(() => {
     map.on("mousedown", handleMouseDown)
     map.on("mousemove", handleMouseMove)
     map.on("mouseup", handleMouseUp)
@@ -114,86 +359,12 @@ function BoundingBoxDrawer({
       map.off("mousemove", handleMouseMove)
       map.off("mouseup", handleMouseUp)
     }
-  }, [map, handleMouseDown, handleMouseMove, handleMouseUp])
-
-  // Report bounds changes to parent component
-  useEffect(() => {
-    if (bounds && bounds.isValid() && onBoundsChange) {
-      onBoundsChange({
-        north: bounds.getNorth(),
-        south: bounds.getSouth(),
-        east: bounds.getEast(),
-        west: bounds.getWest()
-      })
-    }
-  }, [bounds, onBoundsChange])
-
-  return bounds ? (
-    <Rectangle
-      bounds={bounds}
-      pathOptions={{ color: "blue", weight: 2, opacity: 0.7, fillOpacity: 0.2 }}
-    />
-  ) : null
-}
-
-export default function BoundingBoxMap({
-  onBoundsChange,
-  initialBounds
-}: BoundingBoxMapProps) {
-  // Use the custom hook for stable map key generation
-  const mapKey = useLeafletMapKey("bounding-box-map")
-
-  // Create a stable key that only changes when initialBounds structure changes
-  const boundsKey = initialBounds
-    ? `${initialBounds.north}-${initialBounds.south}-${initialBounds.east}-${initialBounds.west}`
-    : "no-bounds"
-
-  // Error boundary state
-  const [hasError, setHasError] = useState(false)
-
-  // Reset error state when bounds change
-  useEffect(() => {
-    setHasError(false)
-  }, [boundsKey])
-
-  if (hasError) {
-    return (
-      <div className="w-full h-80 bg-gray-100 rounded-md flex items-center justify-center text-muted-foreground">
-        <div className="text-center">
-          <p>Map failed to load</p>
-          <button
-            onClick={() => setHasError(false)}
-            className="mt-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-          >
-            Retry
-          </button>
-        </div>
-      </div>
-    )
-  }
+  }, [setBbox, ensureBboxLayers])
 
   return (
-    <div className="w-full h-80">
-      <MapContainer
-        key={`${mapKey}-${boundsKey}`}
-        center={[20, 0]} // Default center at equator
-        zoom={2}
-        style={{ height: "100%", width: "100%" }}
-        scrollWheelZoom={true}
-        // Add error handling
-        whenReady={() => {
-          // Map is ready, no additional setup needed
-        }}
-      >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
-        <BoundingBoxDrawer
-          onBoundsChange={onBoundsChange}
-          initialBounds={initialBounds}
-        />
-      </MapContainer>
-    </div>
+    <div
+      ref={containerRef}
+      className="w-full h-80 rounded-md overflow-hidden"
+    />
   )
 }

@@ -29,7 +29,6 @@ import {
   MapEventManager
 } from "@/lib/map-security"
 
-
 interface MetadataMapDisplayProps {
   records: MetadataRecord[]
   className?: string
@@ -49,6 +48,11 @@ export default function MetadataMapDisplay({
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null)
   const [isMapLoaded, setIsMapLoaded] = useState(false)
   const [enableClustering, setEnableClustering] = useState<boolean>(true)
+  const [showBounds, setShowBounds] = useState<boolean>(() => {
+    if (typeof window === "undefined") return showBoundingBoxes
+    const v = localStorage.getItem("mapShowBounds")
+    return v === null ? showBoundingBoxes : v === "1"
+  })
   // Store the internal style change handler from MapView
   const [internalStyleChangeHandler, setInternalStyleChangeHandler] = useState<
     ((styleId: string) => void) | null
@@ -254,6 +258,28 @@ export default function MetadataMapDisplay({
         })
       }
 
+      // Apply persisted visibility
+      try {
+        const persisted =
+          typeof window !== "undefined" && localStorage.getItem("mapShowBounds")
+        const shouldShow = persisted === null ? true : persisted === "1"
+        const visibility = shouldShow ? "visible" : "none"
+        if (mapInstance.getLayer("metadata-bounds")) {
+          mapInstance.setLayoutProperty(
+            "metadata-bounds",
+            "visibility",
+            visibility
+          )
+        }
+        if (mapInstance.getLayer("metadata-bounds-outline")) {
+          mapInstance.setLayoutProperty(
+            "metadata-bounds-outline",
+            "visibility",
+            visibility
+          )
+        }
+      } catch {}
+
       // Apply filters based on selected record
       if (selectedRecordId) {
         // Add a conditional filter to highlight the selected record
@@ -410,6 +436,13 @@ export default function MetadataMapDisplay({
 
     toggleLayerVisibility("metadata-bounds")
     toggleLayerVisibility("metadata-bounds-outline")
+    setShowBounds(prev => {
+      const next = !prev
+      if (typeof window !== "undefined") {
+        localStorage.setItem("mapShowBounds", next ? "1" : "0")
+      }
+      return next
+    })
   }, [mapInstance, toggleLayerVisibility])
 
   return (

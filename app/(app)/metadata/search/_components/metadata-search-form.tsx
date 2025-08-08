@@ -171,6 +171,26 @@ export default function MetadataSearchForm({
       form.setValue("bboxEast", bounds.east.toString())
       form.setValue("bboxWest", bounds.west.toString())
       form.setValue("useSpatialSearch", true)
+
+      // Update URL immediately to reflect current bbox selection
+      const values = form.getValues()
+      const filters: MetadataSearchFilters = {
+        query: values.query?.trim() || undefined,
+        startDate: values.startDate || undefined,
+        endDate: values.endDate || undefined,
+        frameworkTypes:
+          values.frameworkTypes && values.frameworkTypes.length > 0
+            ? values.frameworkTypes
+            : undefined,
+        dataTypes:
+          values.dataTypes && values.dataTypes.length > 0
+            ? values.dataTypes
+            : undefined,
+        useSpatialSearch: true,
+        spatialBounds: bounds
+      }
+      const url = generateSearchUrl(filters, "/metadata/search")
+      router.replace(url)
     }
   }
 

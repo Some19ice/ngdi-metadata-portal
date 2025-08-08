@@ -19,7 +19,7 @@ async function handleMarkAllRead() {
     console.error("User not authenticated to mark all notifications as read.")
     return
   }
-  const result = await markAllNotificationsAsReadAction()
+  const result = await markAllNotificationsAsReadAction(userId)
   if (result.isSuccess) {
     revalidatePath("/notifications") // Revalidate to show updated read status
   } else {

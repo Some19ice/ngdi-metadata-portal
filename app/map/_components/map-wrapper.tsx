@@ -40,6 +40,11 @@ const MapControls = dynamic(() => import("@/components/ui/map/map-controls"), {
   ssr: false
 })
 
+// Lazy-load drawing tools (heavy)
+const MapDrawingTools = dynamic(
+  () => import("@/components/ui/map/map-drawing-tools"),
+  { ssr: false }
+)
 // Nigeria coordinates
 const NIGERIA_COORDINATES: [number, number] = [8.6753, 9.082]
 
@@ -302,7 +307,10 @@ function MapWrapper({
 }: MapWrapperProps) {
   const [map, setMap] = useState<Map | null>(null)
   const [isLoaded, setIsLoaded] = useState(false)
-  const [activeStyleId, setActiveStyleId] = useState("")
+  const [activeStyleId, setActiveStyleId] = useState(() => {
+    if (typeof window === "undefined") return ""
+    return localStorage.getItem("mapActiveStyleId") || ""
+  })
   const [currentSearchResults, setCurrentSearchResults] = useState<
     GeocodingFeature[]
   >(searchResults || [])
@@ -313,10 +321,13 @@ function MapWrapper({
 
   // Responsive detection (mobile screens under 1024px)
   const [isMobile, setIsMobile] = useState(false)
+  const [reducedMotion, setReducedMotion] = useState(false)
   useEffect(() => {
     const updateScreen = () => {
       if (typeof window !== "undefined") {
         setIsMobile(window.innerWidth < 1024)
+        const mq = window.matchMedia("(prefers-reduced-motion: reduce)")
+        setReducedMotion(mq.matches)
       }
     }
     updateScreen()
@@ -334,6 +345,8 @@ function MapWrapper({
     return false
   })
 
+  const [showDrawingTools, setShowDrawingTools] = useState(false)
+
   // Sync incoming `searchResults` prop to local state **only** when it changes in
   // a meaningful way. This prevents an infinite state update loop that occurred
   // when `searchResults` was `undefined` (no search) – the previous logic kept
@@ -350,7 +363,7 @@ function MapWrapper({
         map.flyTo({
           center: firstResult.center,
           zoom: 13,
-          duration: 1500,
+          duration: reducedMotion ? 0 : 1500,
           essential: true,
           easing: t => t * t * (3 - 2 * t)
         })
@@ -366,14 +379,64 @@ function MapWrapper({
 
   // Handle initial center and zoom when map loads
   useEffect(() => {
-    if (map && isLoaded && initialCenter) {
-      map.flyTo({
-        center: initialCenter,
-        zoom: initialZoom || 6,
-        duration: 1000
-      })
+    if (map && isLoaded) {
+      // Apply bbox_* query params if present
+      const url =
+        typeof window !== "undefined" ? new URL(window.location.href) : null
+      const bn = url?.searchParams.get("bbox_north")
+      const bs = url?.searchParams.get("bbox_south")
+      const be = url?.searchParams.get("bbox_east")
+      const bw = url?.searchParams.get("bbox_west")
+      if (bn && bs && be && bw) {
+        const north = parseFloat(bn)
+        const south = parseFloat(bs)
+        const east = parseFloat(be)
+        const west = parseFloat(bw)
+        if (
+          !Number.isNaN(north) &&
+          !Number.isNaN(south) &&
+          !Number.isNaN(east) &&
+          !Number.isNaN(west) &&
+          north > south &&
+          east > west
+        ) {
+          map.fitBounds(
+            [
+              [west, south],
+              [east, north]
+            ],
+            { padding: 40, duration: reducedMotion ? 0 : 600 }
+          )
+          return
+        }
+      }
+
+      // Restore persisted view if available
+      const stored =
+        typeof window !== "undefined"
+          ? localStorage.getItem("mapViewState")
+          : null
+      if (stored) {
+        try {
+          const { center, zoom, bearing, pitch } = JSON.parse(stored) as {
+            center: [number, number]
+            zoom: number
+            bearing: number
+            pitch: number
+          }
+          map.jumpTo({ center, zoom, bearing, pitch })
+          return
+        } catch {}
+      }
+      if (initialCenter) {
+        map.flyTo({
+          center: initialCenter,
+          zoom: initialZoom || 6,
+          duration: reducedMotion ? 0 : 1000
+        })
+      }
     }
-  }, [map, isLoaded, initialCenter, initialZoom])
+  }, [map, isLoaded, initialCenter, initialZoom, reducedMotion])
 
   const handleMapLoad = useCallback((mapInstance: Map) => {
     setMap(mapInstance)
@@ -395,6 +458,27 @@ function MapWrapper({
     // MapView controls are handled via props, not manually here
   }, [])
 
+  // Persist map view on move/end
+  useEffect(() => {
+    if (!map) return
+    const persist = () => {
+      const center = map.getCenter()
+      const view = {
+        center: [center.lng, center.lat] as [number, number],
+        zoom: map.getZoom(),
+        bearing: map.getBearing(),
+        pitch: map.getPitch()
+      }
+      if (typeof window !== "undefined") {
+        localStorage.setItem("mapViewState", JSON.stringify(view))
+      }
+    }
+    map.on("moveend", persist)
+    return () => {
+      map.off("moveend", persist)
+    }
+  }, [map])
+
   // Debounce style switching to avoid hammering the CDN when users click rapidly.
   const styleChangeTimeout = useRef<NodeJS.Timeout | null>(null)
 
@@ -407,6 +491,9 @@ function MapWrapper({
 
       styleChangeTimeout.current = setTimeout(() => {
         setActiveStyleId(styleId)
+        if (typeof window !== "undefined") {
+          localStorage.setItem("mapActiveStyleId", styleId)
+        }
 
         if (map && isLoaded) {
           const selectedStyle = validatedStyles.find(s => s.id === styleId)
@@ -484,7 +571,7 @@ function MapWrapper({
         map.flyTo({
           center: location.center,
           zoom: 13,
-          duration: 1500,
+          duration: reducedMotion ? 0 : 1500,
           essential: true,
           easing: t => t * t * (3 - 2 * t)
         })
@@ -499,7 +586,7 @@ function MapWrapper({
         zoom: "13"
       })
     },
-    [map, clearUserLocationMarkers, updateUrlParams]
+    [map, clearUserLocationMarkers, updateUrlParams, reducedMotion]
   )
 
   // Handle search query from MapSearchInput
@@ -723,12 +810,28 @@ function MapWrapper({
               center: initialCenter,
               zoom: initialZoom
             }}
+            initialStyleId={activeStyleId || validatedStyles[0]?.id}
             onMapLoad={handleMapLoad}
             onStyleChange={setActiveStyleId}
             className="w-full h-full"
             showControls={false}
           />
         </MapErrorBoundary>
+
+        {map && isLoaded && showDrawingTools && (
+          <MapDrawingTools map={map} className="pointer-events-auto" />
+        )}
+
+        {/* Toggle Drawing Tools */}
+        <div className="absolute top-4 right-4 z-30">
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => setShowDrawingTools(v => !v)}
+          >
+            {showDrawingTools ? "Hide" : "Show"} Drawing Tools
+          </Button>
+        </div>
       </div>
 
       {/* Floating Action Buttons */}

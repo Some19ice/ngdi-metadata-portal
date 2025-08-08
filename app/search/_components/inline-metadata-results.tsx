@@ -82,10 +82,11 @@ async function MetadataResultsFetcher({
       dataTypes: searchParams.datasetType
         ? [searchParams.datasetType]
         : undefined,
-      bboxNorth: searchParams.bbox_north as any,
-      bboxSouth: searchParams.bbox_south as any,
-      bboxEast: searchParams.bbox_east as any,
-      bboxWest: searchParams.bbox_west as any,
+      // Map canonical params to the legacy fields expected by the server action
+      bbox_north: (searchParams.bbox_north as any) || undefined,
+      bbox_south: (searchParams.bbox_south as any) || undefined,
+      bbox_east: (searchParams.bbox_east as any) || undefined,
+      bbox_west: (searchParams.bbox_west as any) || undefined,
       sortBy: (searchParams.sortBy as any) || "updated",
       sortOrder: (searchParams.sortOrder as any) || "desc",
       page,

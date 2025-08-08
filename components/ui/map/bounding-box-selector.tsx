@@ -24,7 +24,7 @@ interface BoundingBoxSelectorProps {
   } | null
 }
 
-// Dynamically import the map component to avoid SSR issues with Leaflet
+// Dynamically import the MapLibre-based bbox map to avoid SSR issues
 const BoundingBoxMap = dynamic(() => import("./bounding-box-map"), {
   ssr: false,
   loading: () => (

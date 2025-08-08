@@ -1,7 +1,7 @@
 "use client"
 
-import React, { useMemo, useCallback, useRef, useEffect } from "react"
-import { Map, Marker, Popup } from "maplibre-gl"
+import React, { useCallback, useRef, useEffect } from "react"
+import { Map, Marker, Popup, LngLatLike, PointLike } from "maplibre-gl"
 import { MetadataRecord } from "@/lib/map-utils"
 
 interface MarkerData {
@@ -28,98 +28,80 @@ interface MarkerCluster {
   bounds: [[number, number], [number, number]]
 }
 
-// Clustering algorithm optimized for performance
-function clusterMarkers(
+// Pixel-accurate clustering using map projection
+function clusterMarkersByPixels(
+  map: Map,
   markers: MarkerData[],
-  zoom: number,
-  clusterRadius: number = 50,
-  maxZoom: number = 16
+  clusterRadiusPx: number,
+  maxZoom: number
 ): (MarkerData | MarkerCluster)[] {
-  // Don't cluster at high zoom levels
-  if (zoom >= maxZoom) {
-    return markers
-  }
+  const zoom = map.getZoom()
+  if (zoom >= maxZoom) return markers
 
-  const clusters: MarkerCluster[] = []
+  const clusters: (MarkerData | MarkerCluster)[] = []
   const processed = new Set<string>()
 
-  // Calculate pixel distance based on zoom level
-  const pixelRadius = clusterRadius / Math.pow(2, zoom - 10)
+  const projected = markers.map(m => ({
+    id: m.id,
+    pixel: map.project(m.position as LngLatLike),
+    marker: m
+  }))
 
-  markers.forEach(marker => {
-    if (processed.has(marker.id)) return
+  projected.forEach((item, idx) => {
+    if (processed.has(item.id)) return
 
-    const nearby: MarkerData[] = [marker]
-    processed.add(marker.id)
+    const group: typeof projected = [item]
+    processed.add(item.id)
 
-    // Find nearby markers
-    markers.forEach(otherMarker => {
-      if (processed.has(otherMarker.id)) return
-
-      const distance = getDistance(marker.position, otherMarker.position)
-      if (distance <= pixelRadius) {
-        nearby.push(otherMarker)
-        processed.add(otherMarker.id)
+    for (let j = idx + 1; j < projected.length; j++) {
+      const other = projected[j]
+      if (processed.has(other.id)) continue
+      const dx = item.pixel.x - other.pixel.x
+      const dy = item.pixel.y - other.pixel.y
+      if (Math.hypot(dx, dy) <= clusterRadiusPx) {
+        group.push(other)
+        processed.add(other.id)
       }
-    })
+    }
 
-    // Create cluster if multiple markers
-    if (nearby.length > 1) {
-      const bounds = getBounds(nearby.map(m => m.position))
-      const center = getCenter(nearby.map(m => m.position))
+    if (group.length > 1) {
+      let minX = Infinity,
+        minY = Infinity,
+        maxX = -Infinity,
+        maxY = -Infinity,
+        sumX = 0,
+        sumY = 0
+
+      group.forEach(g => {
+        minX = Math.min(minX, g.pixel.x)
+        minY = Math.min(minY, g.pixel.y)
+        maxX = Math.max(maxX, g.pixel.x)
+        maxY = Math.max(maxY, g.pixel.y)
+        sumX += g.pixel.x
+        sumY += g.pixel.y
+      })
+
+      const centerPixel = { x: sumX / group.length, y: sumY / group.length }
+      const centerLngLat = map.unproject(centerPixel as unknown as PointLike)
+      const sw = map.unproject({ x: minX, y: maxY } as unknown as PointLike)
+      const ne = map.unproject({ x: maxX, y: minY } as unknown as PointLike)
 
       clusters.push({
-        id: `cluster-${marker.id}`,
-        position: center,
-        count: nearby.length,
-        markers: nearby,
-        bounds
+        id: `cluster-${item.id}`,
+        position: [centerLngLat.lng, centerLngLat.lat],
+        count: group.length,
+        markers: group.map(g => g.marker),
+        bounds: [
+          [sw.lng, sw.lat],
+          [ne.lng, ne.lat]
+        ]
       })
     } else {
-      // Single marker, return as-is
-      clusters.push(marker as any)
+      clusters.push(item.marker)
     }
   })
 
   return clusters
-}
-
-// Optimized distance calculation
-function getDistance(pos1: [number, number], pos2: [number, number]): number {
-  const dx = pos1[0] - pos2[0]
-  const dy = pos1[1] - pos2[1]
-  return Math.sqrt(dx * dx + dy * dy)
-}
-
-// Calculate bounds for a set of positions
-function getBounds(
-  positions: [number, number][]
-): [[number, number], [number, number]] {
-  let minLng = Infinity,
-    minLat = Infinity
-  let maxLng = -Infinity,
-    maxLat = -Infinity
-
-  positions.forEach(([lng, lat]) => {
-    minLng = Math.min(minLng, lng)
-    maxLng = Math.max(maxLng, lng)
-    minLat = Math.min(minLat, lat)
-    maxLat = Math.max(maxLat, lat)
-  })
-
-  return [
-    [minLng, minLat],
-    [maxLng, maxLat]
-  ]
-}
-
-// Calculate center point
-function getCenter(positions: [number, number][]): [number, number] {
-  const sum = positions.reduce(
-    (acc, [lng, lat]) => [acc[0] + lng, acc[1] + lat],
-    [0, 0]
-  )
-  return [sum[0] / positions.length, sum[1] / positions.length]
 }
 
 export default function OptimizedMarkerCluster({
@@ -138,16 +120,6 @@ export default function OptimizedMarkerCluster({
   )
   const currentZoom = useRef<number>(1)
 
-  // Memoize clustered data based on zoom level
-  const clusteredData = useMemo(() => {
-    if (!map) return []
-
-    const zoom = map.getZoom()
-    currentZoom.current = zoom
-
-    return clusterMarkers(markers, zoom, clusterRadius, maxZoom)
-  }, [markers, map?.getZoom(), clusterRadius, maxZoom])
-
   // Debounced update function for performance
   const updateMarkers = useCallback(
     debounce(() => {
@@ -159,7 +131,14 @@ export default function OptimizedMarkerCluster({
       markersRef.current.clear()
       clustersRef.current.clear()
 
-      // Add new markers/clusters
+      // Compute clusters for current zoom and add markers
+      const clusteredData = clusterMarkersByPixels(
+        map,
+        markers,
+        clusterRadius,
+        maxZoom
+      )
+
       clusteredData.forEach(item => {
         if ("count" in item) {
           // It's a cluster
@@ -197,7 +176,7 @@ export default function OptimizedMarkerCluster({
         }
       })
     }, 100),
-    [map, clusteredData, onMarkerClick, onClusterClick]
+    [map, markers, clusterRadius, maxZoom, onMarkerClick, onClusterClick]
   )
 
   // Update markers when data changes
