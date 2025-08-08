@@ -1,17 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { SelectMetadataRecord, SelectOrganization } from "@/db/schema"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardFooter
-} from "@/components/ui/card"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,45 +15,39 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger
 } from "@/components/ui/alert-dialog"
-import { Separator } from "@/components/ui/separator"
 import { useRouter } from "next/navigation"
 import {
   ArrowLeft,
   Edit,
   Trash2,
-  Eye,
   Globe,
   Download,
   CheckCircle2,
   FilePenLine,
   Send,
   XCircle,
-  MapPin,
-  ExternalLink
+  Link as LinkIcon
 } from "lucide-react"
 import { toast } from "sonner"
 import EditMetadataRecordDialog from "./edit-metadata-record-dialog"
 import { deleteMetadataRecordAction } from "@/actions/db/metadata-records-actions"
-import Link from "next/link"
 import {
   approveMetadataAction,
   rejectMetadataAction,
   submitForValidationAction,
   resubmitRevisedMetadataAction
 } from "@/actions/db/metadata-workflow-actions"
-import dynamic from "next/dynamic"
-import { Skeleton } from "@/components/ui/skeleton"
-import { LatLngBoundsExpression } from "leaflet"
 import { Suspense } from "react"
+import { trackAnalyticsEventAction } from "@/actions/db/enhanced-metadata-workflow-actions"
+import EnhancedPublicMetadataViewer from "./enhanced-public-viewer"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu"
 
-// Dynamically import the map component
-const BasicMapDisplay = dynamic(
-  () => import("@/components/ui/basic-map-display"),
-  {
-    ssr: false,
-    loading: () => <Skeleton className="h-[300px] w-full rounded-md" /> // Simple skeleton loader for the map
-  }
-)
+// unified public viewer; map rendering is handled within that component
 
 interface ViewMetadataRecordProps {
   record: SelectMetadataRecord & { organization?: SelectOrganization | null }
@@ -71,38 +57,16 @@ interface ViewMetadataRecordProps {
   currentUserCanSubmitForValidation: boolean
   currentUserCanApproveReject: boolean
   currentUserCanResubmit: boolean
+  analytics?: {
+    views: number
+    downloads: number
+    shares: number
+    bookmarks: number
+    lastViewed?: string
+  }
 }
 
-const DetailItem: React.FC<{
-  label: string
-  value?: string | number | null | string[]
-  isBadge?: boolean
-  badgeVariant?: "default" | "secondary" | "destructive" | "outline"
-  isList?: boolean
-}> = ({ label, value, isBadge, badgeVariant = "secondary", isList }) => {
-  if (value === null || typeof value === "undefined" || value === "")
-    return null
-  return (
-    <div className="mb-3">
-      <h3 className="text-sm font-medium text-muted-foreground">{label}</h3>
-      {isBadge && typeof value === "string" ? (
-        <Badge variant={badgeVariant}>{value}</Badge>
-      ) : isList && Array.isArray(value) ? (
-        <ul className="list-disc list-inside">
-          {value.map((item, index) => (
-            <li key={index} className="text-sm text-foreground">
-              {item}
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="text-sm text-foreground break-words">
-          {typeof value === "number" ? value : String(value)}
-        </p>
-      )}
-    </div>
-  )
-}
+//
 
 // Helper function from metadata-table-columns, consider moving to a shared utils file
 async function handleAction(
@@ -133,26 +97,19 @@ export default function ViewMetadataRecord({
   currentUserCanDelete,
   currentUserCanSubmitForValidation,
   currentUserCanApproveReject,
-  currentUserCanResubmit
+  currentUserCanResubmit,
+  analytics
 }: ViewMetadataRecordProps) {
   const router = useRouter()
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [localAnalytics, setLocalAnalytics] = useState(
+    analytics || { views: 0, downloads: 0, shares: 0, bookmarks: 0 }
+  )
+  // unified view only
 
-  // Extract spatial info once for reuse
-  const spatialInfo = record.spatialInfo as any
-  const boundingBox = spatialInfo?.boundingBox
-  const temporalInfo = record.temporalInfo as any
-
-  // Prepare display for formTypeDistributionFormat
-  const formatInfo = record.formTypeDistributionFormat as {
-    name?: string
-    version?: string
-  } | null
-  const distributionFormatDisplay = formatInfo?.name
-    ? `${formatInfo.name} ${formatInfo.version || ""}`.trim()
-    : null
+  //
 
   const handleEdit = () => {
     setIsEditDialogOpen(true)
@@ -186,38 +143,69 @@ export default function ViewMetadataRecord({
     })
   }
 
-  const handleViewOnMap = () => {
-    const sLat = parseFloat(boundingBox?.southBoundingCoordinate || "")
-    const nLat = parseFloat(boundingBox?.northBoundingCoordinate || "")
-    const wLng = parseFloat(boundingBox?.westBoundingCoordinate || "")
-    const eLng = parseFloat(boundingBox?.eastBoundingCoordinate || "")
+  //
 
-    if (!isNaN(sLat) && !isNaN(nLat) && !isNaN(wLng) && !isNaN(eLng)) {
-      const mapUrl = `https://www.openstreetmap.org/#map=5/${(sLat + nLat) / 2}/${(wLng + eLng) / 2}&bbox=${wLng},${sLat},${eLng},${nLat}`
-      window.open(mapUrl, "_blank")
-    } else {
-      toast.info("Spatial extent not fully defined or invalid for map view.")
+  // Track a view on mount (best-effort)
+  useEffect(() => {
+    ;(async () => {
+      try {
+        await trackAnalyticsEventAction({
+          recordId: record.id,
+          eventType: "view"
+        })
+        setLocalAnalytics(prev => ({ ...prev, views: (prev.views || 0) + 1 }))
+      } catch (e) {
+        // Ignore failures silently
+      }
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [record.id])
+
+  // Unified export/download helper
+  async function handleExport(format: "json" | "xml" | "csv" | "iso19139") {
+    try {
+      const res = await fetch(`/api/metadata/${record.id}?format=${format}`)
+      if (!res.ok) throw new Error("Export failed")
+
+      if (format === "json") {
+        const data = await res.json()
+        const blob = new Blob([JSON.stringify(data, null, 2)], {
+          type: "application/json"
+        })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement("a")
+        a.href = url
+        a.download = `metadata-${record.id}.json`
+        a.click()
+        URL.revokeObjectURL(url)
+      } else {
+        const text = await res.text()
+        const mime =
+          format === "xml" || format === "iso19139"
+            ? "application/xml"
+            : "text/csv"
+        const blob = new Blob([text], { type: mime })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement("a")
+        a.href = url
+        a.download = `metadata-${record.id}.${
+          format === "iso19139" ? "xml" : format
+        }`
+        a.click()
+        URL.revokeObjectURL(url)
+      }
+
+      await trackAnalyticsEventAction({
+        recordId: record.id,
+        eventType: "export",
+        metadata: { format }
+      })
+    } catch (e) {
+      toast.error("Failed to export")
     }
   }
 
-  const getStatusBadgeVariant = (
-    status: string
-  ): "default" | "secondary" | "destructive" | "outline" => {
-    switch (status) {
-      case "Published":
-      case "Approved":
-        return "default" // Visually, this is often the primary/positive color
-      case "Pending Validation":
-      case "Needs Revision":
-        return "secondary" // A neutral or slightly warning tone
-      case "Draft":
-        return "outline"
-      case "Archived":
-        return "destructive"
-      default:
-        return "secondary"
-    }
-  }
+  //
 
   const renderWorkflowActions = () => {
     switch (record.status) {
@@ -298,29 +286,7 @@ export default function ViewMetadataRecord({
     }
   }
 
-  // Safely access nested properties for distribution format
-  const distributionFormat = record.formTypeDistributionFormat as
-    | { name?: string; version?: string }
-    | undefined
-  const distributionFormatName = distributionFormat?.name || "N/A"
-  const distributionFormatVersion = distributionFormat?.version || "N/A"
-
-  // Prepare bounds for the map
-  let mapBounds: LatLngBoundsExpression | null = null
-
-  if (boundingBox) {
-    const sLat = parseFloat(boundingBox.southBoundingCoordinate || "")
-    const nLat = parseFloat(boundingBox.northBoundingCoordinate || "")
-    const wLng = parseFloat(boundingBox.westBoundingCoordinate || "")
-    const eLng = parseFloat(boundingBox.eastBoundingCoordinate || "")
-
-    if (!isNaN(sLat) && !isNaN(nLat) && !isNaN(wLng) && !isNaN(eLng)) {
-      mapBounds = [
-        [sLat, wLng],
-        [nLat, eLng]
-      ]
-    }
-  }
+  //
 
   return (
     <>
@@ -367,249 +333,117 @@ export default function ViewMetadataRecord({
           </div>
         </div>
 
-        <Card>
-          <CardHeader>
-            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-2">
-              <div>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="truncate">{record.title}</CardTitle>
-                  {record.status && (
-                    <Badge
-                      variant={getStatusBadgeVariant(record.status)}
-                      className="ml-2 whitespace-nowrap"
-                    >
-                      {record.status}
-                    </Badge>
-                  )}
-                </div>
-                <CardDescription className="text-xs text-muted-foreground">
-                  ID: {record.id}
-                </CardDescription>
-              </div>
-              <div className="flex flex-col items-start md:items-end gap-2 pt-1 md:pt-0 flex-shrink-0">
-                {record.organization && (
-                  <DetailItem
-                    label="Organization"
-                    value={record.organization.name}
-                  />
-                )}
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <Separator />
-
-            {/* Section: General Information */}
-            <section>
-              <h2 className="text-lg font-semibold mb-3">
-                General Information
-              </h2>
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-x-6">
-                <DetailItem label="Abstract" value={record.abstract} />
-                <DetailItem label="Purpose" value={record.purpose} />
-                <DetailItem label="Dataset Type" value={record.dataType} />
-                <DetailItem label="Author" value={record.author} />
-                <DetailItem
-                  label="Framework Type"
-                  value={record.frameworkType}
-                />
-                <DetailItem
-                  label="Keywords"
-                  value={(record.keywords as string[] | null) ?? []}
-                  isList={true}
-                />
-                <DetailItem label="Thumbnail URL" value={record.thumbnailUrl} />
-                <DetailItem label="Image Name" value={record.imageName} />
-                <DetailItem
-                  label="Record Creator ID"
-                  value={record.creatorUserId}
-                />
-              </div>
-            </section>
-
-            <Separator />
-
-            {/* Section: Spatial Information */}
-            <section>
-              <h2 className="text-lg font-semibold mb-3">
-                Spatial Information
-              </h2>
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-x-6">
-                <DetailItem
-                  label="West Bound Longitude"
-                  value={boundingBox?.westBoundingCoordinate}
-                />
-                <DetailItem
-                  label="East Bound Longitude"
-                  value={boundingBox?.eastBoundingCoordinate}
-                />
-                <DetailItem
-                  label="South Bound Latitude"
-                  value={boundingBox?.southBoundingCoordinate}
-                />
-                <DetailItem
-                  label="North Bound Latitude"
-                  value={boundingBox?.northBoundingCoordinate}
-                />
-                <DetailItem
-                  label="Coordinate System"
-                  value={spatialInfo?.coordinateSystem}
-                />
-                <DetailItem
-                  label="Projection Name"
-                  value={spatialInfo?.projectionName}
-                />
-                <DetailItem
-                  label="Spatial Resolution"
-                  value={spatialInfo?.spatialResolution}
-                />
-              </div>
+        {/* Top Bar: Quick actions and analytics badges */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            {record.downloadUrl && (
               <Button
-                variant="outline"
+                variant="default"
                 size="sm"
-                onClick={handleViewOnMap}
-                className="mt-3"
-                disabled={
-                  !(
-                    boundingBox?.westBoundingCoordinate &&
-                    boundingBox?.eastBoundingCoordinate &&
-                    boundingBox?.southBoundingCoordinate &&
-                    boundingBox?.northBoundingCoordinate
-                  )
-                }
+                onClick={async () => {
+                  try {
+                    await trackAnalyticsEventAction({
+                      recordId: record.id,
+                      eventType: "download"
+                    })
+                    setLocalAnalytics(prev => ({
+                      ...prev,
+                      downloads: (prev.downloads || 0) + 1
+                    }))
+                    window.open(record.downloadUrl!, "_blank")
+                  } catch (e) {
+                    window.open(record.downloadUrl!, "_blank")
+                  }
+                }}
               >
-                <ExternalLink className="mr-2 h-4 w-4" /> View on OpenStreetMap
+                <Download className="mr-2 h-4 w-4" /> Download
               </Button>
-            </section>
+            )}
 
-            <Separator />
-
-            {/* Section: Temporal Information */}
-            <section>
-              <h2 className="text-lg font-semibold mb-3">
-                Temporal Information
-              </h2>
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-x-6">
-                <DetailItem
-                  label="Production Date"
-                  value={
-                    record.productionDate
-                      ? new Date(record.productionDate).toLocaleDateString()
-                      : null
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                try {
+                  if (navigator.share) {
+                    await navigator.share({
+                      title: record.title,
+                      url: window.location.href
+                    })
+                  } else {
+                    await navigator.clipboard.writeText(window.location.href)
+                    toast.success("Link copied to clipboard!")
                   }
-                />
-                <DetailItem
-                  label="Date From"
-                  value={
-                    temporalInfo?.dateFrom
-                      ? new Date(temporalInfo.dateFrom).toLocaleDateString()
-                      : null
-                  }
-                />
-                <DetailItem
-                  label="Date To"
-                  value={
-                    temporalInfo?.dateTo
-                      ? new Date(temporalInfo.dateTo).toLocaleDateString()
-                      : null
-                  }
-                />
-                <DetailItem
-                  label="Update Frequency"
-                  value={record.updateFrequency}
-                />
-              </div>
-            </section>
+                  await trackAnalyticsEventAction({
+                    recordId: record.id,
+                    eventType: "share"
+                  })
+                  setLocalAnalytics(prev => ({
+                    ...prev,
+                    shares: (prev.shares || 0) + 1
+                  }))
+                } catch (e) {
+                  // ignore
+                }
+              }}
+            >
+              <Globe className="mr-2 h-4 w-4" /> Share
+            </Button>
 
-            <Separator />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                await navigator.clipboard.writeText(window.location.href)
+                toast.success("URL copied")
+              }}
+            >
+              <LinkIcon className="mr-2 h-4 w-4" /> Copy Link
+            </Button>
 
-            {/* Section: Distribution Information */}
-            <section>
-              <h2 className="text-lg font-semibold mb-3">
-                Distribution Information
-              </h2>
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-x-6">
-                <DetailItem
-                  label="Distribution Format"
-                  value={distributionFormatDisplay}
-                />
-                <DetailItem label="Access Method" value={record.accessMethod} />
-                <DetailItem label="Download URL" value={record.downloadUrl} />
-                <DetailItem label="API Endpoint" value={record.apiEndpoint} />
-                <DetailItem label="License Type" value={record.licenseType} />
-                <DetailItem label="Usage Terms" value={record.usageTerms} />
-                <DetailItem label="File Format" value={record.fileFormat} />
-              </div>
-              {record.downloadUrl && (
-                <Button
-                  variant="default"
-                  size="sm"
-                  onClick={() => window.open(record.downloadUrl!, "_blank")}
-                  className="mt-3"
-                >
-                  <Download className="mr-2 h-4 w-4" /> Download Data
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <FilePenLine className="mr-2 h-4 w-4" /> Export
                 </Button>
-              )}
-            </section>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                <DropdownMenuItem onClick={() => handleExport("json")}>
+                  JSON
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleExport("xml")}>
+                  XML
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleExport("csv")}>
+                  CSV
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleExport("iso19139")}>
+                  ISO 19139
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
 
-            <Separator />
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary">
+              Views: {localAnalytics.views || 0}
+            </Badge>
+            <Badge variant="secondary">
+              Downloads: {localAnalytics.downloads || 0}
+            </Badge>
+            <Badge variant="secondary">
+              Shares: {localAnalytics.shares || 0}
+            </Badge>
+            <Badge variant="secondary">
+              Bookmarks: {localAnalytics.bookmarks || 0}
+            </Badge>
+          </div>
+        </div>
 
-            {/* Section: Interactive Map */}
-            {boundingBox &&
-              boundingBox.westBoundingCoordinate &&
-              boundingBox.eastBoundingCoordinate &&
-              boundingBox.southBoundingCoordinate &&
-              boundingBox.northBoundingCoordinate && (
-                <div className="mt-6">
-                  <h3 className="text-lg font-medium mb-4">Spatial Extent</h3>
-                  <div className="h-64 w-full rounded-md overflow-hidden border">
-                    <Suspense fallback={<Skeleton className="h-full w-full" />}>
-                      <BasicMapDisplay
-                        bounds={mapBounds}
-                        style={{ height: "350px", width: "100%" }}
-                      />
-                    </Suspense>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="mt-2"
-                    onClick={handleViewOnMap}
-                  >
-                    <ExternalLink className="mr-2 h-4 w-4" />
-                    View on OpenStreetMap
-                  </Button>
-                </div>
-              )}
-
-            <Separator />
-
-            <section>
-              <h2 className="text-lg font-semibold mb-3">Administrative</h2>
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-x-6">
-                <DetailItem
-                  label="Last Updated"
-                  value={new Date(record.updatedAt).toLocaleString()}
-                />
-                <DetailItem
-                  label="Created At"
-                  value={new Date(record.createdAt).toLocaleString()}
-                />
-                {record.publicationDate && (
-                  <DetailItem
-                    label="Publication Date"
-                    value={new Date(
-                      record.publicationDate
-                    ).toLocaleDateString()}
-                  />
-                )}
-              </div>
-            </section>
-          </CardContent>
-          <CardFooter className="flex justify-end space-x-2">
-            {renderWorkflowActions()}
-          </CardFooter>
-        </Card>
+        <EnhancedPublicMetadataViewer record={record as any} />
+        {renderWorkflowActions() && (
+          <div className="flex justify-end">{renderWorkflowActions()}</div>
+        )}
       </div>
 
       {record && (
