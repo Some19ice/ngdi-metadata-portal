@@ -23,6 +23,7 @@ const isPublicRoute = createRouteMatcher([
   "/privacy(.*)",
   "/publications(.*)",
   "/terms(.*)",
+  "/metadata(.*)",
   "/api/clerk-user(.*)",
   "/api/stripe/webhooks(.*)"
   // Add other explicitly public marketing page routes here

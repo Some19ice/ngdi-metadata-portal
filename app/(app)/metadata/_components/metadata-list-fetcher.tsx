@@ -1,10 +1,10 @@
 "use server"
 
 import { auth } from "@clerk/nextjs/server"
-import { redirect } from "next/navigation"
 import {
   getMetadataRecordsForUserAction,
-  getMetadataRecordsByOrgAction
+  getMetadataRecordsByOrgAction,
+  searchMetadataRecordsAction
 } from "@/actions/db/metadata-records-actions"
 import { SelectMetadataRecord } from "@/db/schema"
 import { getManagedOrganizationsAction } from "@/actions/db/organizations-actions"
@@ -13,43 +13,60 @@ import { hasPermission } from "@/lib/rbac"
 
 export default async function MetadataListFetcher() {
   const { userId } = await auth()
-  if (!userId) {
-    redirect("/login") // Should be caught by page or middleware earlier
-  }
 
   let records: SelectMetadataRecord[] = []
   const recordIds = new Set<string>()
+  let userRecordsActionSuccess: boolean | null = null
+  let managedOrgsActionSuccess: boolean | null = null
+  let managedOrgsActionHadData: boolean = false
 
-  // 1. Fetch records created by the user
-  const userRecordsAction = await getMetadataRecordsForUserAction()
-  if (userRecordsAction.isSuccess && userRecordsAction.data) {
-    userRecordsAction.data.forEach(record => {
-      if (!recordIds.has(record.id)) {
-        records.push(record)
-        recordIds.add(record.id)
+  if (userId) {
+    // 1. Fetch records created by the user
+    const userRecordsAction = await getMetadataRecordsForUserAction()
+    userRecordsActionSuccess = !!userRecordsAction.isSuccess
+    if (userRecordsAction.isSuccess && userRecordsAction.data) {
+      userRecordsAction.data.forEach(record => {
+        if (!recordIds.has(record.id)) {
+          records.push(record)
+          recordIds.add(record.id)
+        }
+      })
+    }
+
+    // 2. Fetch records for organizations the user is a Node Officer for
+    const managedOrgsAction = await getManagedOrganizationsAction()
+    managedOrgsActionSuccess = !!managedOrgsAction.isSuccess
+    managedOrgsActionHadData =
+      !!managedOrgsAction.data && managedOrgsAction.data.length > 0
+    if (managedOrgsAction.isSuccess && managedOrgsAction.data) {
+      for (const org of managedOrgsAction.data) {
+        const orgRecordsAction = await getMetadataRecordsByOrgAction(org.id)
+        if (orgRecordsAction.isSuccess && orgRecordsAction.data) {
+          orgRecordsAction.data.forEach(record => {
+            if (!recordIds.has(record.id)) {
+              records.push(record)
+              recordIds.add(record.id)
+            }
+          })
+        }
       }
+    }
+  } else {
+    // Public browse: show published records by default
+    const publicSearch = await searchMetadataRecordsAction({
+      page: 1,
+      pageSize: 24
     })
-  }
-
-  // 2. Fetch records for organizations the user is a Node Officer for
-  const managedOrgsAction = await getManagedOrganizationsAction()
-  if (managedOrgsAction.isSuccess && managedOrgsAction.data) {
-    for (const org of managedOrgsAction.data) {
-      const orgRecordsAction = await getMetadataRecordsByOrgAction(org.id)
-      if (orgRecordsAction.isSuccess && orgRecordsAction.data) {
-        orgRecordsAction.data.forEach(record => {
-          if (!recordIds.has(record.id)) {
-            records.push(record)
-            recordIds.add(record.id)
-          }
-        })
-      }
+    if (publicSearch.isSuccess && publicSearch.data) {
+      records = publicSearch.data.records as unknown as SelectMetadataRecord[]
     }
   }
 
   // 3. If user is an admin (e.g. has manage:metadata), fetch all records (or a specific subset like PendingValidation)
   // For now, this is a placeholder. An admin might see all records, or we could add a filter for them.
-  const isAdmin = await hasPermission(userId, "manage", "metadata")
+  const isAdmin = userId
+    ? await hasPermission(userId, "manage", "metadata")
+    : false
   if (isAdmin && records.length === 0) {
     // Example: If admin and no records found yet, maybe fetch all pending?
     // const pendingRecordsAction = await getMetadataRecordsByStatusAction("PendingValidation");
@@ -72,9 +89,10 @@ export default async function MetadataListFetcher() {
 
   // Pass a flag if there were issues fetching primary data sources (user/org records)
   // and the user isn't an admin who might have other ways to see data.
-  const errorLoadingPrimaryData =
-    !userRecordsAction.isSuccess &&
-    (managedOrgsAction.data ? !managedOrgsAction.isSuccess : true) // only error if orgs were expected
+  const errorLoadingPrimaryData = userId
+    ? !userRecordsActionSuccess &&
+      (managedOrgsActionHadData ? !managedOrgsActionSuccess : true)
+    : false
 
   if (errorLoadingPrimaryData && !isAdmin && records.length === 0) {
     return <MetadataListClient initialRecords={[]} errorLoading={true} />

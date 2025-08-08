@@ -22,9 +22,6 @@ export default async function ViewMetadataRecordFetcher({
   }
 
   const { userId } = await auth()
-  if (!userId) {
-    redirect("/login")
-  }
 
   const result = await getMetadataRecordByIdAction(recordId)
 
@@ -61,15 +58,22 @@ export default async function ViewMetadataRecordFetcher({
 
   const record = result.data
 
-  // Calculate permissions
-  const canEditGlobal = await hasPermission(userId, "edit", "metadata")
-  const canDeleteGlobal = await hasPermission(userId, "delete", "metadata")
-  const canApproveGlobal = await hasPermission(userId, "approve", "metadata")
-
-  const isRecordOwner = record.creatorUserId === userId
-  const isNOForRecordOrg = record.organizationId
-    ? await isNodeOfficerForOrg(userId, record.organizationId)
+  // Calculate permissions (only if authenticated)
+  const canEditGlobal = userId
+    ? await hasPermission(userId, "edit", "metadata")
     : false
+  const canDeleteGlobal = userId
+    ? await hasPermission(userId, "delete", "metadata")
+    : false
+  const canApproveGlobal = userId
+    ? await hasPermission(userId, "approve", "metadata")
+    : false
+
+  const isRecordOwner = userId ? record.creatorUserId === userId : false
+  const isNOForRecordOrg =
+    userId && record.organizationId
+      ? await isNodeOfficerForOrg(userId, record.organizationId)
+      : false
 
   // Determine specific permissions
   const currentUserCanEdit =

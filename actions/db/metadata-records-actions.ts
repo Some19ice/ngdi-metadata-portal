@@ -168,9 +168,6 @@ export async function getMetadataRecordByIdAction(
   id: string
 ): Promise<ActionState<SelectMetadataRecord | null>> {
   const { userId: currentUserId } = await auth()
-  if (!currentUserId) {
-    return { isSuccess: false, message: "User not authenticated." }
-  }
 
   try {
     const record = await db.query.metadataRecords.findFirst({
@@ -182,11 +179,20 @@ export async function getMetadataRecordByIdAction(
       return { isSuccess: false, message: "Metadata record not found." }
     }
 
-    const canViewGlobal = await hasPermission(currentUserId, "view", "metadata")
+    const canViewGlobal = currentUserId
+      ? await hasPermission(currentUserId, "view", "metadata")
+      : false
 
     if (record.status !== "Published" && !canViewGlobal) {
+      if (!currentUserId) {
+        return {
+          isSuccess: false,
+          message:
+            "User does not have permission to view this non-published metadata record."
+        }
+      }
       const isCreator = record.creatorUserId === currentUserId
-      const isNOForRecordOrg = record.organizationId // Check if organizationId is not null
+      const isNOForRecordOrg = record.organizationId
         ? await isNodeOfficerForOrg(currentUserId, record.organizationId)
         : false
       const isAdmin = await hasPermission(currentUserId, "manage", "metadata")
