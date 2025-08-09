@@ -1,7 +1,8 @@
 "use server"
 
 import { NextRequest, NextResponse } from "next/server"
-import { applyRateLimit, RATE_LIMIT_CONFIGS } from "@/lib/rate-limiter"
+// Note: Global API rate limiting is applied via middleware.
+// This route no longer applies an additional per-route limiter to avoid double counting.
 import { geocodeLocationShared } from "@/lib/gis-services/geocoding-service"
 
 // Try multiple environment variable names for the API key
@@ -280,14 +281,6 @@ async function searchNigerianLocations(query: string, limit: number = 10) {
 }
 
 export async function GET(request: NextRequest) {
-  // ---------- Rate limiting ----------
-  // Apply a lightweight rate-limit for search endpoints to protect MapTiler quota.
-  const rateLimitResponse = await applyRateLimit(
-    request,
-    RATE_LIMIT_CONFIGS.search
-  )
-  if (rateLimitResponse) return rateLimitResponse
-
   try {
     // Log the API key status for debugging (without exposing the key)
     if (process.env.NODE_ENV !== "production") {
