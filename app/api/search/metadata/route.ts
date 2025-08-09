@@ -189,7 +189,14 @@ function extractGetSearchParams(searchParams: URLSearchParams) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
+    // Safely parse JSON body; handle empty body gracefully
+    let body: any = {}
+    try {
+      const text = await request.text()
+      body = text ? JSON.parse(text) : {}
+    } catch {
+      body = {}
+    }
     const searchParams = extractPostSearchParams(body)
     return await handleSearchRequest(searchParams)
   } catch (error) {

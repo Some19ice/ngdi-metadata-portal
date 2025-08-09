@@ -8,7 +8,7 @@ import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server"
 import { NextResponse } from "next/server"
 import { applyRateLimit, RATE_LIMIT_CONFIGS } from "@/lib/rate-limiter"
 
-// Define public routes
+// Define public routes (pages and APIs that should be accessible without auth)
 const isPublicRoute = createRouteMatcher([
   "/", // Main landing page
   "/login(.*)",
@@ -23,7 +23,13 @@ const isPublicRoute = createRouteMatcher([
   "/privacy(.*)",
   "/publications(.*)",
   "/terms(.*)",
+  // Keep metadata pages public for now
   "/metadata(.*)",
+  // Public API endpoints used by public pages/search
+  "/api/search(.*)",
+  "/api/metadata(.*)",
+  "/api/map/geocode(.*)",
+  "/api/states-data(.*)",
   "/api/clerk-user(.*)",
   "/api/stripe/webhooks(.*)"
   // Add other explicitly public marketing page routes here
@@ -72,8 +78,6 @@ export default clerkMiddleware(async (auth, req) => {
     return response // Allow public routes
   }
   // For all other routes, Clerk will enforce authentication by default.
-  // If you needed to explicitly protect here, it would be auth().protect(),
-  // but often the default behavior is sufficient when public routes are handled.
 
   return response
 })

@@ -55,20 +55,36 @@ export default function GlobalSearchBar() {
             `/api/map/geocode?q=${encodeURIComponent(debouncedSearchTerm)}`
           ),
           fetch(
-            `/api/search/suggestions?q=${encodeURIComponent(debouncedSearchTerm)}`
+            `/api/search/metadata-suggestions?q=${encodeURIComponent(
+              debouncedSearchTerm
+            )}`
           )
         ])
 
         const locationData = locationResponse.ok
           ? await locationResponse.json()
           : { features: [] }
-        const metadataData = metadataResponse.ok
+
+        const rawMetadata = metadataResponse.ok
           ? await metadataResponse.json()
-          : { suggestions: [] }
+          : { data: [] }
+
+        // Normalize metadata suggestions and tag them for rendering
+        const metadataSuggestions: MetadataSuggestion[] = Array.isArray(
+          rawMetadata?.data
+        )
+          ? (rawMetadata.data as Array<{ id: string; title: string }>).map(
+              s => ({
+                id: s.id,
+                title: s.title,
+                type: "metadata"
+              })
+            )
+          : []
 
         // Combine suggestions with priority: metadata first, then locations
         const allSuggestions: SearchSuggestion[] = [
-          ...(metadataData.suggestions || []).slice(0, 3), // Limit metadata suggestions
+          ...metadataSuggestions.slice(0, 3), // Limit metadata suggestions
           ...(locationData.features || []).slice(0, 4) // Limit location suggestions
         ]
 

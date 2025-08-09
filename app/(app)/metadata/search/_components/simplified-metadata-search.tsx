@@ -394,13 +394,29 @@ export default function SimplifiedMetadataSearch() {
           )}
 
           {/* Results */}
-          {results && !isLoading && (
+          {results && !isLoading && results.records?.length > 0 && (
             <Suspense fallback={<DatasetCardSkeleton className="h-64" />}>
               <SearchResults results={results} viewMode={viewMode} />
             </Suspense>
           )}
 
-          {/* Empty State */}
+          {/* Empty State: results object present but zero records */}
+          {results && !isLoading && !error && results.records?.length === 0 && (
+            <Card>
+              <CardContent className="p-8 text-center">
+                <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No results found</h3>
+                <p className="text-muted-foreground mb-4">
+                  Try adjusting your search terms or filters
+                </p>
+                <Button variant="outline" onClick={clearAllFilters}>
+                  Clear all filters
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Empty State: no results loaded yet but query present */}
           {!results && !isLoading && !error && filters.query && (
             <Card>
               <CardContent className="p-8 text-center">
