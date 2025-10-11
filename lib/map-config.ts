@@ -35,9 +35,7 @@ export const STREETS_STYLE_OBJECT = {
   sources: {
     "osm-raster": {
       type: "raster" as const,
-      tiles: [
-        "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-      ],
+      tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
       tileSize: 256,
       attribution: "© OpenStreetMap contributors"
     }
@@ -59,9 +57,7 @@ export const TERRAIN_STYLE_OBJECT = {
   sources: {
     "topo-raster": {
       type: "raster" as const,
-      tiles: [
-        "https://tile.opentopomap.org/{z}/{x}/{y}.png"
-      ],
+      tiles: ["https://tile.opentopomap.org/{z}/{x}/{y}.png"],
       tileSize: 256,
       attribution: "© OpenTopoMap (CC-BY-SA)"
     }
@@ -178,7 +174,10 @@ export function getAvailableMapStyles(
   if (isValid && apiKey) {
     const maptilerStyles = MAPTILER_STYLES.map(style => ({
       ...style,
-      url: style.url.replace("${apiKey}", apiKey)
+      url:
+        typeof style.url === "string"
+          ? style.url.replace("${apiKey}", apiKey)
+          : style.url
     }))
     // Filter out satellite since we already have it as default, add others
     const otherStyles = maptilerStyles.filter(style => style.id !== "satellite")

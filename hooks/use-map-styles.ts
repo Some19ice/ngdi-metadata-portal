@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
-import { Map } from "maplibre-gl"
+import { Map, StyleSpecification } from "maplibre-gl"
 import { MapStyle } from "@/components/ui/map/map-view"
 import {
   logMapError,
@@ -33,7 +33,9 @@ export function useMapStyles({
   const [activeStyleId, setActiveStyleId] = useState<string>(initialStyleId)
   const [isStyleActuallyLoaded, setIsStyleActuallyLoaded] = useState(false)
   // Ref to store the URL of the last style *successfully applied* to map.setStyle
-  const lastAppliedStyleUrlRef = useRef<string | null>(null)
+  const lastAppliedStyleUrlRef = useRef<string | StyleSpecification | null>(
+    null
+  )
 
   // Effect to sync activeStyleId with initialStyleId prop
   useEffect(() => {
@@ -67,10 +69,26 @@ export function useMapStyles({
 
     // If the style URL is the same as the last one applied and map says it's loaded, do nothing.
     // map.getStyle() can be heavy. Check map.isStyleLoaded() for general readiness.
-    // Direct URL check is more robust than relying on map.getStyle().name
+    // Direct URL/style check is more robust than relying on map.getStyle().name
     const currentMapStyle = map.getStyle()
+
+    // Compare current style with what we want to load
+    const isSameStyle = (
+      current: string | StyleSpecification | null,
+      target: string | StyleSpecification
+    ): boolean => {
+      if (current === null) return false
+      if (typeof current === "string" && typeof target === "string") {
+        return current === target
+      }
+      if (typeof current === "object" && typeof target === "object") {
+        return JSON.stringify(current) === JSON.stringify(target)
+      }
+      return false
+    }
+
     if (
-      lastAppliedStyleUrlRef.current === styleToLoad.url &&
+      isSameStyle(lastAppliedStyleUrlRef.current, styleToLoad.url) &&
       currentMapStyle && // Ensure there is a current style object
       map.isStyleLoaded() // And map says it's loaded
     ) {
