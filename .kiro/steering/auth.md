@@ -1,0 +1,14 @@
+---
+inclusion: always
+---
+
+### Auth Rules
+
+Follow these rules when working on auth.
+
+It uses Clerk for authentication.
+
+#### General Rules
+
+- Import the auth helper with `import { auth } from "@clerk/nextjs/server"` in server components
+- await the auth helper in server action

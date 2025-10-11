@@ -3,20 +3,13 @@
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { motion } from "framer-motion"
-import {
-  ArrowRight,
-  Search,
-  Map,
-  Database,
-  Users,
-  Globe2,
-  Star
-} from "lucide-react"
+import { ArrowRight, Search, Map, Globe2 } from "lucide-react"
 import Link from "next/link"
 import dynamic from "next/dynamic"
 import { Suspense } from "react"
 import Image from "next/image"
 import LandingHeader from "@/components/layout/landing-header"
+import { TrustBadges } from "@/components/landing/trust-badges"
 
 // Dynamically import the globe component for better performance
 const GlobeDemo = dynamic(() => import("@/components/hero-globe"), {
@@ -27,13 +20,6 @@ const GlobeDemo = dynamic(() => import("@/components/hero-globe"), {
 })
 
 export function HeroSection() {
-  const stats = [
-    { label: "Datasets", value: "1,250+", icon: Database },
-    { label: "Organizations", value: "120", icon: Users },
-    { label: "Data Categories", value: "45", icon: Globe2 },
-    { label: "Active Users", value: "2,500", icon: Star }
-  ]
-
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
       {/* Navigation Header */}
@@ -42,12 +28,13 @@ export function HeroSection() {
       {/* Background Image with Overlay */}
       <div className="absolute inset-0">
         <Image
-          src="/img/hero-satellite-earth.jpg"
+          src="/img/hero-satellite-earth.webp"
           alt="Satellite view of Earth from space"
           fill
           className="object-cover"
           priority
           quality={90}
+          sizes="100vw"
         />
         <div className="absolute inset-0 bg-gradient-to-r from-slate-900/80 via-slate-800/60 to-slate-900/80" />
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-slate-900/40" />
@@ -112,7 +99,7 @@ export function HeroSection() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.8 }}
-              className="flex flex-col sm:flex-row gap-4 mb-12 justify-center lg:justify-start"
+              className="flex flex-col sm:flex-row gap-4 mb-8 justify-center lg:justify-start"
             >
               <Link href="/search">
                 <Button
@@ -137,32 +124,8 @@ export function HeroSection() {
               </Link>
             </motion.div>
 
-            {/* Statistics */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 1.0 }}
-              className="grid grid-cols-2 md:grid-cols-4 gap-4"
-            >
-              {stats.map((stat, index) => {
-                const Icon = stat.icon
-                return (
-                  <motion.div
-                    key={stat.label}
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ duration: 0.5, delay: 1.2 + index * 0.1 }}
-                    className="text-center p-4 bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 transition-transform duration-300 hover:scale-105 hover:bg-white/20"
-                  >
-                    <Icon className="w-6 h-6 text-blue-400 mx-auto mb-2" />
-                    <div className="text-2xl font-bold text-white">
-                      {stat.value}
-                    </div>
-                    <div className="text-sm text-white/80">{stat.label}</div>
-                  </motion.div>
-                )
-              })}
-            </motion.div>
+            {/* Trust Badges */}
+            <TrustBadges />
           </motion.div>
 
           {/* Right Content - Globe Component */}

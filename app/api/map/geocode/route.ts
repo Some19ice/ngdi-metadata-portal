@@ -290,11 +290,34 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
     const searchText = searchParams.get("q")
 
-    // Removed the 2-character minimum restriction to allow single character searches
-    if (!searchText || searchText.trim().length < 1) {
+    // Implement minimum search length to prevent excessive API calls
+    if (!searchText || searchText.trim().length < 2) {
       return NextResponse.json(
         {
-          error: "Search term is required",
+          error: "Search term must be at least 2 characters long",
+          features: []
+        },
+        { status: 400 }
+      )
+    }
+
+    // Additional validation for search patterns
+    const cleanSearchText = searchText.trim()
+    if (cleanSearchText.length > 100) {
+      return NextResponse.json(
+        {
+          error: "Search term too long",
+          features: []
+        },
+        { status: 400 }
+      )
+    }
+
+    // Prevent obviously invalid searches
+    if (/^\d+$/.test(cleanSearchText) && cleanSearchText.length < 3) {
+      return NextResponse.json(
+        {
+          error: "Invalid search pattern",
           features: []
         },
         { status: 400 }

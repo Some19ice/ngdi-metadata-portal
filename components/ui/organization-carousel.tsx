@@ -29,90 +29,82 @@ const OrganizationCard = React.memo(
       <motion.div
         onMouseEnter={() => setHovered(index)}
         onMouseLeave={() => setHovered(null)}
-        className={cn(
-          "relative bg-white/80 backdrop-blur-sm border border-white/20 rounded-xl overflow-hidden transition-all duration-150 ease-out cursor-pointer group shadow-lg",
-          "hover:shadow-xl hover:scale-[1.02]",
-          hovered !== null &&
-            hovered !== index &&
-            "blur-sm scale-[0.98] opacity-70"
-        )}
-        initial={{ opacity: 0, y: 20 }}
+        initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: index * 0.05, duration: 0.2 }}
-        whileHover={{ y: -4, transition: { duration: 0.15 } }}
+        transition={{ duration: 0.6, delay: index * 0.1 }}
+        whileHover={{ y: -4 }}
+        className="relative group"
       >
-        <div className="p-6 h-full flex flex-col">
-          {/* Logo Section */}
-          <div className="flex items-center gap-4 mb-4">
-            <div className="relative w-16 h-16 rounded-lg overflow-hidden bg-white shadow-md flex items-center justify-center">
+        <div
+          className={cn(
+            "relative bg-card/80 backdrop-blur-sm border border-border rounded-xl p-8 h-full",
+            "transition-all duration-300 hover:shadow-xl hover:shadow-primary/10",
+            "hover:border-primary/40 overflow-hidden"
+          )}
+        >
+          {/* Logo and Title Section */}
+          <div className="flex items-start gap-4 mb-6">
+            <div
+              className={cn(
+                "p-3 rounded-xl bg-primary/10 flex-shrink-0",
+                "group-hover:bg-primary/15 transition-colors duration-300"
+              )}
+            >
               {organization.logoUrl && !imageError ? (
                 <img
                   src={organization.logoUrl}
                   alt={`${organization.name} logo`}
-                  className="w-full h-full object-contain p-2"
+                  className="w-12 h-12 object-contain"
                   onError={() => setImageError(true)}
                 />
               ) : (
-                <Building2 className="w-8 h-8 text-gray-400" />
+                <Building2 className="w-12 h-12 text-primary" />
               )}
             </div>
             <div className="flex-1 min-w-0">
-              <h3 className="text-lg font-semibold text-gray-900 truncate">
+              <h3 className="text-xl font-semibold text-foreground mb-2 line-clamp-2">
                 {organization.name}
               </h3>
               {organization.category && (
-                <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-emerald-100 text-emerald-700 mt-1">
+                <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-primary/10 text-primary border border-primary/20">
                   {organization.category}
                 </span>
               )}
             </div>
           </div>
 
-          {/* Description with custom line clamping */}
-          <div className="text-sm text-gray-600 flex-1 mb-4">
-            <p className="line-clamp-3">
+          {/* Description */}
+          <div className="mb-6">
+            <p className="text-muted-foreground leading-relaxed line-clamp-3">
               {organization.description || "No description provided."}
             </p>
           </div>
 
           {/* Website Link */}
           {organization.websiteUrl && (
-            <div className="flex items-center justify-between pt-4 border-t border-gray-200">
-              <div className="flex items-center gap-2 text-sm text-gray-500">
-                <Globe className="w-4 h-4" />
-                <span className="truncate">
-                  {organization.websiteUrl.replace(/^https?:\/\//, "")}
-                </span>
-              </div>
+            <div className="pt-4 border-t border-border">
               <motion.a
                 href={organization.websiteUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-emerald-600 hover:text-emerald-700 transition-colors duration-100 rounded-md hover:bg-emerald-50"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                transition={{ duration: 0.1 }}
+                className={cn(
+                  "inline-flex items-center gap-2 text-sm font-medium text-primary",
+                  "hover:text-primary/80 transition-colors duration-300"
+                )}
+                whileHover={{ x: 4 }}
+                transition={{ duration: 0.2 }}
                 onClick={e => e.stopPropagation()}
               >
-                Visit
-                <ExternalLink className="w-3 h-3" />
+                <Globe className="w-4 h-4" />
+                <span className="truncate">Visit Website</span>
+                <ExternalLink className="w-4 h-4 flex-shrink-0" />
               </motion.a>
             </div>
           )}
-        </div>
 
-        {/* Hover Overlay */}
-        <AnimatePresence>
-          {hovered === index && (
-            <motion.div
-              className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-cyan-500/10 pointer-events-none"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.1 }}
-            />
-          )}
-        </AnimatePresence>
+          {/* Hover Gradient Overlay */}
+          <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+        </div>
       </motion.div>
     )
   }

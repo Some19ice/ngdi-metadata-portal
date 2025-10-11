@@ -1,6 +1,7 @@
 "use client"
 
 import "maplibre-gl/dist/maplibre-gl.css"
+import "../map-markers.css"
 import { useState, useCallback, useRef, useEffect, memo } from "react"
 import { Map, Marker, Popup, LngLatBounds, ScaleControl } from "maplibre-gl"
 import dynamic from "next/dynamic"
@@ -18,16 +19,7 @@ import MapSearchInput from "./map-search-input"
 import { toast } from "sonner"
 import { Drawer, DrawerContent, DrawerTrigger } from "@/components/ui/drawer"
 import { Button } from "@/components/ui/button"
-import {
-  Menu,
-  ChevronsLeft,
-  ChevronsRight,
-  ZoomIn,
-  ZoomOut,
-  Compass,
-  Home,
-  MapPin
-} from "lucide-react"
+import { Menu, ChevronsLeft, MapPin } from "lucide-react"
 import MapFabGroup from "./map-fab-group"
 import { useRouter, usePathname } from "next/navigation"
 
@@ -84,174 +76,7 @@ const MapHeaderOverlay = memo(
 
 MapHeaderOverlay.displayName = "MapHeaderOverlay"
 
-// Memoized control panel component
-const MapControlPanel = memo(
-  ({
-    map,
-    isLoaded,
-    validatedStyles,
-    activeStyleId,
-    handleControlStyleChange,
-    handleSearchQuery,
-    handleLocationSelect,
-    copyCoordinates,
-    currentSearchResults
-  }: {
-    map: Map | null
-    isLoaded: boolean
-    validatedStyles: MapStyle[]
-    activeStyleId: string
-    handleControlStyleChange: (styleId: string) => void
-    handleSearchQuery: (query: string) => void
-    handleLocationSelect: (location: GeocodingFeature) => void
-    copyCoordinates: () => void
-    currentSearchResults: GeocodingFeature[]
-  }) => {
-    return (
-      <div className="p-4 space-y-4">
-        {/* Header */}
-        <div className="text-center border-b border-gray-100 pb-4">
-          <h2 className="text-lg font-semibold text-gray-900">Map Controls</h2>
-          <p className="text-sm text-gray-500 mt-1">Navigate and explore</p>
-        </div>
-
-        {/* Search Input */}
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-gray-700">
-            Search Location
-          </label>
-          <MapSearchInput
-            onSearch={handleSearchQuery}
-            onLocationSelect={handleLocationSelect}
-            className="w-full"
-          />
-        </div>
-
-        {/* Map Style Selector */}
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-gray-700">Map Style</label>
-          <div className="grid grid-cols-2 gap-2">
-            {validatedStyles.slice(0, 4).map(style => (
-              <button
-                key={style.id}
-                onClick={() => handleControlStyleChange(style.id)}
-                className={`p-2 text-xs rounded-lg border-2 transition-all ${
-                  activeStyleId === style.id
-                    ? "border-blue-500 bg-blue-50 text-blue-700"
-                    : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
-                }`}
-                disabled={!style.url}
-              >
-                {style.name}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Quick Stats */}
-        {isLoaded && map && (
-          <div className="bg-gray-50 rounded-lg p-3 space-y-2">
-            <h4 className="text-sm font-medium text-gray-700">Current View</h4>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div>
-                <span className="text-gray-500">Zoom:</span>
-                <span className="ml-1 font-medium">
-                  {Math.round(map.getZoom() * 10) / 10}
-                </span>
-              </div>
-              <div>
-                <span className="text-gray-500">Bearing:</span>
-                <span className="ml-1 font-medium">
-                  {Math.round(map.getBearing())}°
-                </span>
-              </div>
-            </div>
-            <button
-              onClick={copyCoordinates}
-              className="w-full text-left text-xs text-gray-600 hover:text-gray-800 hover:bg-gray-100 p-2 rounded transition-colors"
-              title="Click to copy coordinates"
-            >
-              <span className="text-gray-500">Center:</span>
-              <span className="ml-1 font-mono">
-                {`${map.getCenter().lat.toFixed(4)}, ${map.getCenter().lng.toFixed(4)}`}
-              </span>
-            </button>
-          </div>
-        )}
-
-        {/* Quick Actions */}
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-gray-700">
-            Quick Actions
-          </label>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              onClick={() => map?.zoomIn()}
-              disabled={!isLoaded}
-              className="flex items-center justify-center gap-2 p-2 text-sm bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
-            >
-              <ZoomIn className="h-4 w-4" />
-              Zoom In
-            </button>
-            <button
-              onClick={() => map?.zoomOut()}
-              disabled={!isLoaded}
-              className="flex items-center justify-center gap-2 p-2 text-sm bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
-            >
-              <ZoomOut className="h-4 w-4" />
-              Zoom Out
-            </button>
-            <button
-              onClick={() => map?.setBearing(0)}
-              disabled={!isLoaded}
-              className="flex items-center justify-center gap-2 p-2 text-sm bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
-            >
-              <Compass className="h-4 w-4" />
-              Reset North
-            </button>
-            <button
-              onClick={() =>
-                map?.flyTo({
-                  center: NIGERIA_COORDINATES,
-                  zoom: 6,
-                  duration: 2000
-                })
-              }
-              disabled={!isLoaded}
-              className="flex items-center justify-center gap-2 p-2 text-sm bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
-            >
-              <Home className="h-4 w-4" />
-              Home View
-            </button>
-          </div>
-        </div>
-
-        {/* Search Results */}
-        {currentSearchResults && currentSearchResults.length > 0 && (
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700">
-              Search Results ({currentSearchResults.length})
-            </label>
-            <SearchResultsPanel
-              searchResults={currentSearchResults}
-              onLocationClick={handleLocationSelect}
-            />
-          </div>
-        )}
-
-        {/* Help Text */}
-        <div className="text-xs text-gray-500 pt-2 border-t border-gray-100">
-          <p>
-            Use the floating buttons on the map for more actions like locate me
-            and fullscreen.
-          </p>
-        </div>
-      </div>
-    )
-  }
-)
-
-MapControlPanel.displayName = "MapControlPanel"
+// Consolidated controls are rendered inline below using MapControls
 
 // Memoized search results panel
 const SearchResultsPanel = memo(
@@ -353,29 +178,45 @@ function MapWrapper({
   // writing a new empty array (`[]`) to state on every render, triggering the
   // "Maximum update depth exceeded" error.
   useEffect(() => {
-    // Case 1: new search results provided
-    if (searchResults && searchResults !== currentSearchResults) {
-      setCurrentSearchResults(searchResults)
+    // Use a more efficient comparison method to prevent infinite loops
+    const hasNewSearchResults = searchResults && searchResults.length > 0
+    const hasCurrentResults = currentSearchResults.length > 0
 
-      // Auto-fly to the first result for a fresh search
-      if (map && isLoaded && searchResults.length > 0) {
-        const firstResult = searchResults[0]
-        map.flyTo({
-          center: firstResult.center,
-          zoom: 13,
-          duration: reducedMotion ? 0 : 1500,
-          essential: true,
-          easing: t => t * t * (3 - 2 * t)
-        })
+    // Case 1: new search results provided
+    if (hasNewSearchResults) {
+      // Check if the results are actually different using a safe comparison
+      const newIds = searchResults
+        .map(r => r.id || r.place_name || JSON.stringify(r.center))
+        .sort()
+        .join(",")
+      const currentIds = currentSearchResults
+        .map(r => r.id || r.place_name || JSON.stringify(r.center))
+        .sort()
+        .join(",")
+
+      if (newIds !== currentIds) {
+        setCurrentSearchResults(searchResults)
+
+        // Auto-fly to the first result for a fresh search
+        if (map && isLoaded) {
+          const firstResult = searchResults[0]
+          map.flyTo({
+            center: firstResult.center,
+            zoom: 13,
+            duration: reducedMotion ? 0 : 1500,
+            essential: true,
+            easing: t => t * t * (3 - 2 * t)
+          })
+        }
       }
       return
     }
 
     // Case 2: search cleared – only reset when we currently have results
-    if (!searchResults && currentSearchResults.length > 0) {
+    if (!hasNewSearchResults && hasCurrentResults) {
       setCurrentSearchResults([])
     }
-  }, [searchResults, currentSearchResults, map, isLoaded])
+  }, [searchResults, map, isLoaded, reducedMotion]) // Keep dependencies minimal
 
   // Handle initial center and zoom when map loads
   useEffect(() => {
@@ -446,14 +287,7 @@ function MapWrapper({
     const scale = new ScaleControl({ maxWidth: 120, unit: "metric" })
     mapInstance.addControl(scale, "bottom-left")
 
-    // Set initial style ID from the map
-    const currentStyle = mapInstance.getStyle()
-    if (currentStyle) {
-      // Use name if available, otherwise fall back to the style id field.
-      const derivedId =
-        (currentStyle as any).name || (currentStyle as any).id || ""
-      setActiveStyleId(derivedId)
-    }
+    // Do not overwrite `activeStyleId` here; MapView manages initial style and will notify via onStyleChange
 
     // MapView controls are handled via props, not manually here
   }, [])
@@ -736,29 +570,115 @@ function MapWrapper({
   }, [])
 
   return (
-    <div className="flex h-full bg-gray-50 gap-4">
-      {/* Location Header Overlay */}
-      <MapHeaderOverlay
-        currentSearchResults={currentSearchResults}
-        highlightedLocation={highlightedLocation}
-      />
-
+    <div className="flex h-full max-h-full bg-gray-50 gap-4 p-4 overflow-hidden">
       {/* Desktop Sidebar */}
       <div
-        className={`hidden lg:flex lg:flex-col bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden relative z-10 transition-all duration-300 ${sidebarCollapsed ? "w-0 opacity-0" : "w-80"}`}
+        className={`hidden lg:flex lg:flex-col bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden relative z-10 transition-all duration-300 ${sidebarCollapsed ? "w-0 opacity-0 pointer-events-none" : "w-80 max-w-80"}`}
       >
-        <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
-          <MapControlPanel
-            map={map}
-            isLoaded={isLoaded}
-            validatedStyles={validatedStyles}
-            activeStyleId={activeStyleId}
-            handleControlStyleChange={handleStyleChange}
-            handleSearchQuery={handleSearchQuery}
-            handleLocationSelect={handleLocationSelect}
-            copyCoordinates={copyCoordinates}
-            currentSearchResults={currentSearchResults}
-          />
+        <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 max-h-full">
+          <div className="p-4 space-y-4">
+            <div className="text-center border-b border-gray-100 pb-4">
+              <h2 className="text-lg font-semibold text-gray-900">Search</h2>
+              <p className="text-sm text-gray-500 mt-1">
+                Find a place and explore results
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700">
+                Search Location
+              </label>
+              <MapSearchInput
+                onSearch={handleSearchQuery}
+                onLocationSelect={handleLocationSelect}
+                className="w-full"
+              />
+            </div>
+
+            {/* Map Style Switcher */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700">
+                Map Style
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {validatedStyles.map(style => (
+                  <button
+                    key={style.id}
+                    onClick={() => handleStyleChange(style.id)}
+                    className={`p-2 text-xs rounded-lg border-2 transition-all ${
+                      activeStyleId === style.id
+                        ? "border-blue-500 bg-blue-50 text-blue-700"
+                        : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
+                    } ${!style.url ? "opacity-50 cursor-not-allowed" : ""}`}
+                    disabled={!style.url}
+                    aria-current={
+                      activeStyleId === style.id ? "true" : undefined
+                    }
+                  >
+                    {style.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Drawing Tools Toggle */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700">
+                Drawing Tools
+              </label>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => setShowDrawingTools(v => !v)}
+                >
+                  {showDrawingTools ? "Hide Panel" : "Show Panel"}
+                </Button>
+              </div>
+            </div>
+
+            {isLoaded && map && (
+              <div className="bg-gray-50 rounded-lg p-3 space-y-2">
+                <h4 className="text-sm font-medium text-gray-700">
+                  Current View
+                </h4>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <span className="text-gray-500">Zoom:</span>
+                    <span className="ml-1 font-medium">
+                      {Math.round(map.getZoom() * 10) / 10}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Bearing:</span>
+                    <span className="ml-1 font-medium">
+                      {Math.round(map.getBearing())}°
+                    </span>
+                  </div>
+                </div>
+                <button
+                  onClick={copyCoordinates}
+                  className="w-full text-left text-xs text-gray-600 hover:text-gray-800 hover:bg-gray-100 p-2 rounded transition-colors"
+                  title="Click to copy coordinates"
+                >
+                  <span className="text-gray-500">Center:</span>
+                  <span className="ml-1 font-mono">{`${map.getCenter().lat.toFixed(4)}, ${map.getCenter().lng.toFixed(4)}`}</span>
+                </button>
+              </div>
+            )}
+
+            {currentSearchResults && currentSearchResults.length > 0 && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">
+                  Search Results ({currentSearchResults.length})
+                </label>
+                <SearchResultsPanel
+                  searchResults={currentSearchResults}
+                  onLocationClick={handleLocationSelect}
+                />
+              </div>
+            )}
+          </div>
         </div>
         {/* Collapse Toggle - only show when sidebar is visible */}
         {!sidebarCollapsed && (
@@ -784,26 +704,126 @@ function MapWrapper({
               <Menu className="h-5 w-5" />
             </Button>
           </DrawerTrigger>
-          <DrawerContent className="h-[85vh] p-0 overflow-hidden">
-            <div className="h-full overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
-              <MapControlPanel
-                map={map}
-                isLoaded={isLoaded}
-                validatedStyles={validatedStyles}
-                activeStyleId={activeStyleId}
-                handleControlStyleChange={handleStyleChange}
-                handleSearchQuery={handleSearchQuery}
-                handleLocationSelect={handleLocationSelect}
-                copyCoordinates={copyCoordinates}
-                currentSearchResults={currentSearchResults}
-              />
+          <DrawerContent className="max-h-[85vh] p-0 overflow-hidden">
+            <div className="h-full max-h-[80vh] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
+              <div className="p-4 space-y-4">
+                <div className="text-center border-b border-gray-100 pb-4">
+                  <h2 className="text-lg font-semibold text-gray-900">
+                    Search
+                  </h2>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Find a place and explore results
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">
+                    Search Location
+                  </label>
+                  <MapSearchInput
+                    onSearch={handleSearchQuery}
+                    onLocationSelect={handleLocationSelect}
+                    className="w-full"
+                  />
+                </div>
+
+                {/* Map Style Switcher */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">
+                    Map Style
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {validatedStyles.map(style => (
+                      <button
+                        key={style.id}
+                        onClick={() => handleStyleChange(style.id)}
+                        className={`p-2 text-xs rounded-lg border-2 transition-all ${
+                          activeStyleId === style.id
+                            ? "border-blue-500 bg-blue-50 text-blue-700"
+                            : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
+                        } ${!style.url ? "opacity-50 cursor-not-allowed" : ""}`}
+                        disabled={!style.url}
+                        aria-current={
+                          activeStyleId === style.id ? "true" : undefined
+                        }
+                      >
+                        {style.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Drawing Tools Toggle */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">
+                    Drawing Tools
+                  </label>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => setShowDrawingTools(v => !v)}
+                    >
+                      {showDrawingTools ? "Hide Panel" : "Show Panel"}
+                    </Button>
+                  </div>
+                </div>
+
+                {isLoaded && map && (
+                  <div className="bg-gray-50 rounded-lg p-3 space-y-2">
+                    <h4 className="text-sm font-medium text-gray-700">
+                      Current View
+                    </h4>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <span className="text-gray-500">Zoom:</span>
+                        <span className="ml-1 font-medium">
+                          {Math.round(map.getZoom() * 10) / 10}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Bearing:</span>
+                        <span className="ml-1 font-medium">
+                          {Math.round(map.getBearing())}°
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={copyCoordinates}
+                      className="w-full text-left text-xs text-gray-600 hover:text-gray-800 hover:bg-gray-100 p-2 rounded transition-colors"
+                      title="Click to copy coordinates"
+                    >
+                      <span className="text-gray-500">Center:</span>
+                      <span className="ml-1 font-mono">{`${map.getCenter().lat.toFixed(4)}, ${map.getCenter().lng.toFixed(4)}`}</span>
+                    </button>
+                  </div>
+                )}
+
+                {currentSearchResults && currentSearchResults.length > 0 && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">
+                      Search Results ({currentSearchResults.length})
+                    </label>
+                    <SearchResultsPanel
+                      searchResults={currentSearchResults}
+                      onLocationClick={handleLocationSelect}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
           </DrawerContent>
         </Drawer>
       )}
 
       {/* Map Container */}
-      <div className="flex-1 relative overflow-hidden rounded-lg shadow-lg">
+      <div className="flex-1 relative overflow-hidden rounded-lg shadow-lg min-h-0">
+        {/* Location Header Overlay - positioned relative to map */}
+        <MapHeaderOverlay
+          currentSearchResults={currentSearchResults}
+          highlightedLocation={highlightedLocation}
+        />
+
         <MapErrorBoundary onError={handleMapError}>
           <MapView
             initialOptions={{
@@ -819,7 +839,40 @@ function MapWrapper({
         </MapErrorBoundary>
 
         {map && isLoaded && showDrawingTools && (
-          <MapDrawingTools map={map} className="pointer-events-auto" />
+          <MapDrawingTools
+            map={map}
+            className="pointer-events-auto"
+            onShapeDrawn={feature => {
+              // Wire to URL params for spatial search (polygons/lines/points)
+              try {
+                if (feature.geometry.type === "Polygon") {
+                  const coords = (feature.geometry.coordinates?.[0] || []) as [
+                    number,
+                    number
+                  ][]
+                  if (coords.length >= 4) {
+                    const xs = coords.map(c => c[0])
+                    const ys = coords.map(c => c[1])
+                    updateUrlParams({
+                      useSpatialSearch: "true",
+                      bbox_north: Math.max(...ys).toString(),
+                      bbox_south: Math.min(...ys).toString(),
+                      bbox_east: Math.max(...xs).toString(),
+                      bbox_west: Math.min(...xs).toString(),
+                      page: "1"
+                    })
+                  }
+                }
+              } catch {}
+            }}
+            onShapesExported={features => {
+              // Placeholder hook to pipe features to analysis pipeline
+              console.log("Exported features for analysis:", features.length)
+            }}
+            onShapesImported={features => {
+              console.log("Imported features:", features.length)
+            }}
+          />
         )}
 
         {/* Toggle Drawing Tools */}
@@ -832,18 +885,18 @@ function MapWrapper({
             {showDrawingTools ? "Hide" : "Show"} Drawing Tools
           </Button>
         </div>
-      </div>
 
-      {/* Floating Action Buttons */}
-      <MapFabGroup
-        map={map}
-        isMobile={isMobile}
-        onToggleDrawer={() => setDrawerOpen(open => !open)}
-        drawerOpen={drawerOpen}
-        onClearSearchResults={clearSearchResults}
-        onToggleSidebar={toggleSidebar}
-        sidebarCollapsed={sidebarCollapsed}
-      />
+        {/* Floating Action Buttons - positioned relative to map container */}
+        <MapFabGroup
+          map={map}
+          isMobile={isMobile}
+          onToggleDrawer={() => setDrawerOpen(open => !open)}
+          drawerOpen={drawerOpen}
+          onClearSearchResults={clearSearchResults}
+          onToggleSidebar={toggleSidebar}
+          sidebarCollapsed={sidebarCollapsed}
+        />
+      </div>
     </div>
   )
 }

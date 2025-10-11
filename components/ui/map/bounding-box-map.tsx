@@ -30,6 +30,7 @@ export default function BoundingBoxMap({
   const mapRef = useRef<Map | null>(null)
   const isDraggingRef = useRef(false)
   const dragStartRef = useRef<[number, number] | null>(null)
+  const bboxCoordsRef = useRef<[number, number][]>([])
 
   const [ready, setReady] = useState(false)
 
@@ -68,6 +69,27 @@ export default function BoundingBoxMap({
         }
       })
     }
+
+    // Handles source/layer
+    if (!map.getSource("bbox-handles-source")) {
+      map.addSource("bbox-handles-source", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] }
+      })
+    }
+    if (!map.getLayer("bbox-handles")) {
+      map.addLayer({
+        id: "bbox-handles",
+        type: "circle",
+        source: "bbox-handles-source",
+        paint: {
+          "circle-radius": 5,
+          "circle-color": "#1f2937",
+          "circle-stroke-color": "#ffffff",
+          "circle-stroke-width": 2
+        }
+      })
+    }
   }, [])
 
   const setBbox = useCallback(
@@ -93,6 +115,40 @@ export default function BoundingBoxMap({
         properties: {}
       }
       source.setData({ type: "FeatureCollection", features: [polygon] })
+      // Track ring coordinates and update handles
+      bboxCoordsRef.current = (polygon.geometry as any).coordinates[0]
+      const handlesSource = map.getSource(
+        "bbox-handles-source"
+      ) as maplibregl.GeoJSONSource
+      if (handlesSource && bboxCoordsRef.current.length >= 4) {
+        const [swC, seC, neC, nwC] = bboxCoordsRef.current
+        const handleFeatures: GeoJSON.Feature[] = [
+          {
+            type: "Feature",
+            geometry: { type: "Point", coordinates: swC },
+            properties: { corner: "sw" }
+          },
+          {
+            type: "Feature",
+            geometry: { type: "Point", coordinates: seC },
+            properties: { corner: "se" }
+          },
+          {
+            type: "Feature",
+            geometry: { type: "Point", coordinates: neC },
+            properties: { corner: "ne" }
+          },
+          {
+            type: "Feature",
+            geometry: { type: "Point", coordinates: nwC },
+            properties: { corner: "nw" }
+          }
+        ]
+        handlesSource.setData({
+          type: "FeatureCollection",
+          features: handleFeatures
+        })
+      }
 
       onBoundsChange?.({ north, south, east, west })
     },
@@ -105,60 +161,38 @@ export default function BoundingBoxMap({
       const source = map.getSource("bbox-source") as maplibregl.GeoJSONSource
       if (!source) return
 
-      // Add corner handles layer
-      if (!map.getLayer("bbox-handles")) {
-        map.addLayer({
-          id: "bbox-handles",
-          type: "circle",
-          source: "bbox-source",
-          filter: ["==", "$type", "Point"],
-          paint: {
-            "circle-radius": 5,
-            "circle-color": "#1f2937",
-            "circle-stroke-color": "#ffffff",
-            "circle-stroke-width": 2
-          }
-        })
-      }
-
-      // Derive handles from current bbox data
-      const deriveHandles = () => {
-        const data = source._data as any
-        if (!data || !data.features || data.features.length === 0) return null
-        const coords = data.features[0]?.geometry?.coordinates?.[0]
-        if (!coords || coords.length < 4) return null
-        const [sw, se, ne, nw] = coords
-        return { sw, se, ne, nw }
-      }
-
-      // Update source with points for handles overlay by creating a separate feature collection
-      const updateHandlesSource = () => {
-        const handles = deriveHandles()
-        if (!handles) return
-        const features: GeoJSON.Feature[] = [
+      const handlesSource = map.getSource(
+        "bbox-handles-source"
+      ) as maplibregl.GeoJSONSource
+      const refreshHandles = (ring: [number, number][]) => {
+        if (!handlesSource || !ring || ring.length < 4) return
+        const [swC, seC, neC, nwC] = ring
+        const handleFeatures: GeoJSON.Feature[] = [
           {
             type: "Feature",
-            geometry: { type: "Point", coordinates: handles.sw },
+            geometry: { type: "Point", coordinates: swC },
             properties: { corner: "sw" }
           },
           {
             type: "Feature",
-            geometry: { type: "Point", coordinates: handles.se },
+            geometry: { type: "Point", coordinates: seC },
             properties: { corner: "se" }
           },
           {
             type: "Feature",
-            geometry: { type: "Point", coordinates: handles.ne },
+            geometry: { type: "Point", coordinates: neC },
             properties: { corner: "ne" }
           },
           {
             type: "Feature",
-            geometry: { type: "Point", coordinates: handles.nw },
+            geometry: { type: "Point", coordinates: nwC },
             properties: { corner: "nw" }
           }
         ]
-        // Store as a separate in-memory collection within the same source by appending (MapLibre doesn't support multiple geometries per source id for editing);
-        // for simplicity we skip persistent handle rendering on every frame; handles are visualized by hover via queryRenderedFeatures.
+        handlesSource.setData({
+          type: "FeatureCollection",
+          features: handleFeatures
+        })
       }
 
       // Drag state
@@ -175,17 +209,19 @@ export default function BoundingBoxMap({
           draggingBox = true
           dragStartLngLat = [e.lngLat.lng, e.lngLat.lat]
           map.getCanvas().style.cursor = "grabbing"
+          try {
+            map.dragPan.disable()
+          } catch {}
         }
       })
 
       map.on("mousedown", e => {
         const feats = map.queryRenderedFeatures(e.point, {
-          layers: ["bbox-outline"]
+          layers: ["bbox-handles"]
         })
         if (feats.length === 0) return
         // Identify nearest corner by comparing distances
-        const sourceData = source._data as any
-        const coords = sourceData?.features?.[0]?.geometry?.coordinates?.[0]
+        const coords = bboxCoordsRef.current
         if (!coords) return
         const corners = [
           { id: "sw", c: coords[0] },
@@ -207,13 +243,15 @@ export default function BoundingBoxMap({
         if (chosen) {
           draggingHandle = chosen
           map.getCanvas().style.cursor = "grabbing"
+          try {
+            map.dragPan.disable()
+          } catch {}
         }
       })
 
       map.on("mousemove", e => {
         if (!draggingHandle && !draggingBox) return
-        const data = source._data as any
-        const coords = data?.features?.[0]?.geometry?.coordinates?.[0]
+        const coords = bboxCoordsRef.current
         if (!coords) return
         if (draggingHandle) {
           const [lng, lat] = [e.lngLat.lng, e.lngLat.lat]
@@ -233,6 +271,8 @@ export default function BoundingBoxMap({
               }
             ]
           })
+          bboxCoordsRef.current = next
+          refreshHandles(next)
           // Emit updated bounds
           const xs = next.map((c: number[]) => c[0])
           const ys = next.map((c: number[]) => c[1])
@@ -244,7 +284,10 @@ export default function BoundingBoxMap({
         } else if (draggingBox && dragStartLngLat) {
           const dx = e.lngLat.lng - dragStartLngLat[0]
           const dy = e.lngLat.lat - dragStartLngLat[1]
-          const moved = coords.map((c: number[]) => [c[0] + dx, c[1] + dy])
+          const moved: [number, number][] = coords.map((c: number[]) => [
+            (c[0] as number) + dx,
+            (c[1] as number) + dy
+          ]) as [number, number][]
           moved[4] = moved[0]
           source.setData({
             type: "FeatureCollection",
@@ -257,6 +300,8 @@ export default function BoundingBoxMap({
             ]
           })
           dragStartLngLat = [e.lngLat.lng, e.lngLat.lat]
+          bboxCoordsRef.current = moved
+          refreshHandles(moved)
           const xs = moved.map((c: number[]) => c[0])
           const ys = moved.map((c: number[]) => c[1])
           const west = Math.min(...xs)
@@ -272,6 +317,9 @@ export default function BoundingBoxMap({
         draggingBox = false
         dragStartLngLat = null
         map.getCanvas().style.cursor = ""
+        try {
+          map.dragPan.enable()
+        } catch {}
       }
       map.on("mouseup", stopDrag)
       map.on("mouseleave", stopDrag)
@@ -320,8 +368,13 @@ export default function BoundingBoxMap({
     if (!map) return
 
     const handleMouseDown = (e: maplibregl.MapMouseEvent) => {
+      // Only start draw-to-create if no bbox exists yet
+      if (bboxCoordsRef.current && bboxCoordsRef.current.length >= 4) return
       isDraggingRef.current = true
       dragStartRef.current = [e.lngLat.lng, e.lngLat.lat]
+      try {
+        map.dragPan.disable()
+      } catch {}
       // reset layer data
       ensureBboxLayers(map)
       const source = map.getSource("bbox-source") as maplibregl.GeoJSONSource
@@ -348,6 +401,9 @@ export default function BoundingBoxMap({
     const handleMouseUp = () => {
       isDraggingRef.current = false
       dragStartRef.current = null
+      try {
+        map.dragPan.enable()
+      } catch {}
     }
 
     map.on("mousedown", handleMouseDown)

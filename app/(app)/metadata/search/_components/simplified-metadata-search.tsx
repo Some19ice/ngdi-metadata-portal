@@ -45,6 +45,9 @@ import {
   Skeleton,
   DatasetCardSkeleton
 } from "@/components/utilities/loading-skeleton"
+import { PaginationControls } from "@/components/ui/pagination-controls"
+import { AdvancedFiltersPanel } from "./advanced-filters-panel"
+import { SearchResultsMapView } from "./search-results-map-view"
 
 interface ViewMode {
   id: "grid" | "list" | "map"
@@ -181,7 +184,7 @@ export default function SimplifiedMetadataSearch() {
             />
           </div>
           <Button
-            variant="outline"
+            variant={showAdvanced ? "default" : "outline"}
             onClick={() => setShowAdvanced(!showAdvanced)}
             className="px-3"
           >
@@ -189,6 +192,15 @@ export default function SimplifiedMetadataSearch() {
             <span className="sr-only">Advanced Search</span>
           </Button>
         </div>
+
+        {/* Advanced Filters Panel */}
+        {showAdvanced && (
+          <AdvancedFiltersPanel
+            filters={filters}
+            onUpdateFilter={updateFilter}
+            onClearFilter={clearFilter}
+          />
+        )}
 
         {/* Active Filters */}
         {activeFilters.length > 0 && (
@@ -395,9 +407,29 @@ export default function SimplifiedMetadataSearch() {
 
           {/* Results */}
           {results && !isLoading && results.records?.length > 0 && (
-            <Suspense fallback={<DatasetCardSkeleton className="h-64" />}>
-              <SearchResults results={results} viewMode={viewMode} />
-            </Suspense>
+            <>
+              <Suspense fallback={<DatasetCardSkeleton className="h-64" />}>
+                <SearchResults results={results} viewMode={viewMode} />
+              </Suspense>
+
+              {/* Pagination Controls */}
+              {results.currentPage &&
+                results.totalPages &&
+                results.pageSize && (
+                  <PaginationControls
+                    currentPage={results.currentPage}
+                    totalPages={results.totalPages}
+                    pageSize={results.pageSize}
+                    totalItems={results.totalCount}
+                    onPageChange={page => updateFilter("page", page)}
+                    onPageSizeChange={size => {
+                      updateFilter("limit", size)
+                      updateFilter("page", 1) // Reset to first page when changing page size
+                    }}
+                    pageSizeOptions={[10, 20, 50, 100]}
+                  />
+                )}
+            </>
           )}
 
           {/* Empty State: results object present but zero records */}
@@ -521,18 +553,7 @@ function SearchResults({ results, viewMode }: SearchResultsProps) {
   }
 
   if (viewMode === "map") {
-    return (
-      <Card>
-        <CardContent className="p-4">
-          <div className="h-96 bg-muted rounded-md flex items-center justify-center">
-            <div className="text-center">
-              <Map className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
-              <p className="text-muted-foreground">Map view coming soon</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    )
+    return <SearchResultsMapView records={results.records} />
   }
 
   return (

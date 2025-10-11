@@ -181,11 +181,38 @@ export default function IntegratedSearchMapView({
     [router]
   )
 
-  // Handle spatial search toggle - temporarily disabled
+  // Handle spatial search toggle: use current map bounds to enable spatial filter
   const handleToggleSpatialSearch = useCallback(() => {
-    // Spatial search functionality temporarily disabled
-    console.log("Spatial search is temporarily disabled")
-  }, [])
+    try {
+      // If disabling
+      if (urlSearchParams.get("useSpatialSearch") === "true") {
+        const params = new URLSearchParams(urlSearchParams)
+        params.delete("useSpatialSearch")
+        params.delete("bbox_north")
+        params.delete("bbox_south")
+        params.delete("bbox_east")
+        params.delete("bbox_west")
+        params.set("page", "1")
+        router.push(`/metadata/search?${params.toString()}`)
+        return
+      }
+
+      if (!mapInstance || !mapInstance.getBounds) return
+      const b = mapInstance.getBounds()
+      const north = b.getNorth()
+      const south = b.getSouth()
+      const east = b.getEast()
+      const west = b.getWest()
+      const params = new URLSearchParams(urlSearchParams)
+      params.set("useSpatialSearch", "true")
+      params.set("bbox_north", north.toString())
+      params.set("bbox_south", south.toString())
+      params.set("bbox_east", east.toString())
+      params.set("bbox_west", west.toString())
+      params.set("page", "1")
+      router.push(`/metadata/search?${params.toString()}`)
+    } catch {}
+  }, [urlSearchParams, mapInstance, router])
 
   // Handle map instance change
   const handleMapInstanceChange = useCallback((map: any) => {
@@ -251,13 +278,12 @@ export default function IntegratedSearchMapView({
                 </Button>
               </div>
 
-              {/* Spatial Search Toggle - Temporarily Disabled */}
+              {/* Spatial Search Toggle */}
               <Button
                 variant="outline"
                 size="sm"
                 onClick={handleToggleSpatialSearch}
-                title="Spatial search temporarily disabled"
-                disabled={true}
+                title="Toggle spatial search using current map bounds"
               >
                 <Square className="h-4 w-4" />
               </Button>

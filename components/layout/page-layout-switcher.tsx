@@ -1,7 +1,7 @@
 "use client"
 
 import { usePathname } from "next/navigation"
-import Footer from "@/components/footer"
+import { Footer } from "@/components/layout/footer"
 import { AppSidebar } from "@/components/sidebar/app-sidebar"
 import MainHeader from "@/components/layout/main-header"
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"

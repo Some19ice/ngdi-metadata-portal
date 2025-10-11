@@ -97,7 +97,7 @@ export default function MapFabGroup({
         clearTimeout(bearingUpdateTimeoutRef.current)
       }
     }
-  }, [map])
+  }, [map, updateBearing])
 
   const copyCenter = useCallback(() => {
     if (!map) return
@@ -201,7 +201,7 @@ export default function MapFabGroup({
         maximumAge: 300000
       }
     )
-  }, [map, locating, onClearSearchResults])
+  }, [map, locating, onClearSearchResults, reducedMotion])
 
   const toggleFullscreen = useCallback(() => {
     if (!map) return
@@ -302,7 +302,7 @@ export default function MapFabGroup({
         variant: "primary" as const
       }
     ],
-    [locating, isGroupExpanded]
+    [locating, isGroupExpanded, locateUser, toggleGroupExpanded]
   )
 
   const secondaryTools = useMemo(
@@ -347,18 +347,27 @@ export default function MapFabGroup({
         tooltip: "Download screenshot"
       }
     ],
-    [isFullscreen, bearingNorth]
+    [
+      isFullscreen,
+      bearingNorth,
+      copyCenter,
+      toggleFullscreen,
+      resetMapBearing,
+      refreshMap,
+      shareLocation,
+      downloadMapView
+    ]
   )
 
   return (
     <TooltipProvider delayDuration={300} skipDelayDuration={0}>
       <div
-        className="absolute z-20"
+        className="absolute z-20 pointer-events-none"
         style={{ bottom: isMobile ? "4rem" : "1rem", right: "1rem" }}
       >
         {/* Expanded secondary tools */}
         {isGroupExpanded && (
-          <div className="flex flex-col gap-2 mb-3 animate-in slide-in-from-bottom-2 duration-300">
+          <div className="flex flex-col gap-2 mb-3 animate-in slide-in-from-bottom-2 duration-300 pointer-events-auto">
             {secondaryTools.map((tool, index) => (
               <Tooltip key={`secondary-${index}`} delayDuration={300}>
                 <TooltipTrigger asChild>
@@ -381,7 +390,7 @@ export default function MapFabGroup({
         )}
 
         {/* Primary tools always visible */}
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3 pointer-events-auto">
           {/* Mobile Drawer Toggle */}
           {onToggleDrawer && isMobile && (
             <Tooltip delayDuration={300}>

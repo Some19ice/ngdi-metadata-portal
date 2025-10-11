@@ -129,7 +129,7 @@ export default function MetadataMapDisplay({
   )
 
   // Set up map clustering
-  const { clusters, expandCluster, getClusterLeaves } = useMapClustering({
+  const { clusters, expandCluster } = useMapClustering({
     map: mapInstance,
     records,
     onRecordClick,

@@ -7,6 +7,12 @@ import {
   generateSearchUrl,
   normalizeFilters
 } from "@/lib/utils/search-params-utils"
+import {
+  trackSearch,
+  getSessionId,
+  sanitizeQuery,
+  sanitizeFilters
+} from "@/lib/analytics/search-analytics"
 
 /**
  * Threshold for determining meaningful search filters.
@@ -72,6 +78,9 @@ export function useUnifiedSearch(
   const debounceTimeoutRef = useRef<NodeJS.Timeout>()
   const abortControllerRef = useRef<AbortController>()
   const lastSearchFiltersRef = useRef<string>("")
+  const retryCountRef = useRef<number>(0)
+  const maxRetries = 3
+  const retryDelays = [1000, 2000, 3000] // Progressive delays in ms
 
   // Initialize filters from URL on mount
   useEffect(() => {
@@ -92,9 +101,68 @@ export function useUnifiedSearch(
     }
   }, [searchParams, isInitialized, autoSearch])
 
-  // Perform the actual search
+  // Determine if an error is retryable
+  const isRetryableError = (error: any): boolean => {
+    // Network errors are retryable
+    if (error instanceof TypeError && error.message.includes("fetch")) {
+      return true
+    }
+
+    // Timeout errors are retryable
+    if (error.name === "TimeoutError") {
+      return true
+    }
+
+    // HTTP 5xx errors are retryable
+    if (error.message && /5\d{2}/.test(error.message)) {
+      return true
+    }
+
+    // Rate limit errors might be retryable
+    if (error.message && error.message.includes("429")) {
+      return true
+    }
+
+    return false
+  }
+
+  // Categorize errors for better user messaging
+  const categorizeError = (error: any): string => {
+    if (error.name === "AbortError") {
+      return "Search was cancelled"
+    }
+
+    if (error instanceof TypeError && error.message.includes("fetch")) {
+      return "Network error. Please check your connection and try again."
+    }
+
+    if (error.message?.includes("429")) {
+      return "Too many requests. Please wait a moment and try again."
+    }
+
+    if (error.message?.includes("401") || error.message?.includes("403")) {
+      return "Authentication error. Please refresh the page and try again."
+    }
+
+    if (error.message?.includes("500")) {
+      return "Server error. Our team has been notified. Please try again later."
+    }
+
+    if (error.message?.includes("timeout")) {
+      return "Search timed out. Try refining your search criteria."
+    }
+
+    // Extract meaningful error message if available
+    if (error.message && !error.message.includes("Search failed:")) {
+      return error.message
+    }
+
+    return "Search failed. Please try again or contact support if the problem persists."
+  }
+
+  // Perform the actual search with retry logic
   const performSearch = useCallback(
-    async (searchFilters: MetadataSearchFilters) => {
+    async (searchFilters: MetadataSearchFilters, retryCount = 0) => {
       // Cancel previous request
       if (abortControllerRef.current) {
         abortControllerRef.current.abort()
@@ -111,6 +179,7 @@ export function useUnifiedSearch(
         setResults(null)
         setIsLoading(false)
         setError(null)
+        retryCountRef.current = 0
         return
       }
 
@@ -119,10 +188,17 @@ export function useUnifiedSearch(
         searchFilters,
         Object.keys(searchFilters).sort()
       )
-      if (searchKey === lastSearchFiltersRef.current) {
-        return // Skip duplicate search
+      if (searchKey === lastSearchFiltersRef.current && retryCount === 0) {
+        return // Skip duplicate search (but allow retries)
       }
-      lastSearchFiltersRef.current = searchKey
+
+      if (retryCount === 0) {
+        lastSearchFiltersRef.current = searchKey
+        retryCountRef.current = 0
+      }
+
+      let willRetry = false
+      const searchStartTime = Date.now()
 
       try {
         setIsLoading(true)
@@ -138,7 +214,13 @@ export function useUnifiedSearch(
         })
 
         if (!response.ok) {
-          throw new Error(`Search failed: ${response.statusText}`)
+          const errorData = await response.json().catch(() => ({}))
+          const error = new Error(
+            errorData.message ||
+              `HTTP ${response.status}: ${response.statusText}`
+          )
+          ;(error as any).status = response.status
+          throw error
         }
 
         const result = await response.json()
@@ -146,6 +228,19 @@ export function useUnifiedSearch(
         if (result.isSuccess) {
           setResults(result.data)
           setError(null)
+          retryCountRef.current = 0 // Reset retry count on success
+
+          // Track successful search (non-blocking)
+          const searchTime = Date.now() - searchStartTime
+          trackSearch({
+            query: sanitizeQuery(searchFilters.query || ""),
+            filters: sanitizeFilters(searchFilters),
+            resultsCount: result.data.totalCount || 0,
+            searchTime,
+            sessionId: getSessionId()
+          }).catch(() => {
+            // Silently fail - analytics shouldn't break search
+          })
         } else {
           throw new Error(result.message || "Search failed")
         }
@@ -156,28 +251,46 @@ export function useUnifiedSearch(
           (typeof err === "object" && err !== null && "name" in err)
         const errorName = hasName ? (err as { name: string }).name : ""
 
-        if (errorName !== "AbortError") {
-          console.error("Search error:", err)
+        if (errorName === "AbortError") {
+          return // Don't show error for aborted requests
+        }
 
-          // Type guard to safely extract error message
-          let errorMessage = "Search failed"
-          if (err instanceof Error) {
-            errorMessage = err.message
-          } else if (
-            typeof err === "object" &&
-            err !== null &&
-            "message" in err
-          ) {
-            const message = (err as { message: unknown }).message
-            errorMessage =
-              typeof message === "string" ? message : "Search failed"
-          }
+        console.error(
+          "Search error:",
+          err,
+          `(attempt ${retryCount + 1}/${maxRetries + 1})`
+        )
 
+        // Determine if we should retry
+        const shouldRetry = retryCount < maxRetries && isRetryableError(err)
+
+        if (shouldRetry) {
+          willRetry = true
+          // Wait before retrying
+          const delay =
+            retryDelays[retryCount] || retryDelays[retryDelays.length - 1]
+          console.log(`Retrying search in ${delay}ms...`)
+
+          setTimeout(() => {
+            performSearch(searchFilters, retryCount + 1)
+          }, delay)
+
+          // Show user-friendly message about retry
+          setError(
+            `Search failed. Retrying... (attempt ${retryCount + 1}/${maxRetries})`
+          )
+        } else {
+          // Final error - no more retries
+          const errorMessage = categorizeError(err)
           setError(errorMessage)
           setResults(null)
+          retryCountRef.current = 0
         }
       } finally {
-        setIsLoading(false)
+        // Only set loading to false if we're not retrying
+        if (!willRetry) {
+          setIsLoading(false)
+        }
       }
     },
     []

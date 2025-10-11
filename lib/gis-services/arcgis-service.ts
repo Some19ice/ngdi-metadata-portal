@@ -87,11 +87,15 @@ export interface ArcGISServiceResponse {
 }
 
 /**
- * Validates an ArcGIS service URL
+ * Validates an ArcGIS service URL with optional abort signal
  * @param url The URL to validate
+ * @param options Optional configuration including abort signal
  * @returns Promise resolving to validation result
  */
-export async function validateArcGISService(url: string): Promise<{
+export async function validateArcGISService(
+  url: string,
+  options: { signal?: AbortSignal } = {}
+): Promise<{
   isValid: boolean
   service?: ArcGISServiceInfo
   error?: string
@@ -110,9 +114,16 @@ export async function validateArcGISService(url: string): Promise<{
       url = `${url}${url.includes("?") ? "&" : "?"}f=json`
     }
 
-    // Create AbortController for timeout
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
+    // Use provided signal or create a timeout controller
+    const { signal } = options
+    const timeoutController = new AbortController()
+    const timeoutId = setTimeout(() => timeoutController.abort(), 8000) // 8 second timeout
+
+    // Combine signals if both exist (fallback for older browsers)
+    let combinedSignal = signal || timeoutController.signal
+    if (signal && timeoutController.signal && AbortSignal.any) {
+      combinedSignal = AbortSignal.any([signal, timeoutController.signal])
+    }
 
     try {
       const response = await fetch(url, {
@@ -120,7 +131,7 @@ export async function validateArcGISService(url: string): Promise<{
         headers: {
           "Content-Type": "application/json"
         },
-        signal: controller.signal,
+        signal: combinedSignal,
         mode: "cors" // Explicitly specify CORS mode
       })
 

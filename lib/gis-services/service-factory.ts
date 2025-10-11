@@ -22,15 +22,37 @@ export interface ServiceDetectionResult {
   error?: string
 }
 
+export interface ServiceDetectionOptions {
+  signal?: AbortSignal
+  timeout?: number
+}
+
 /**
- * Detects the type of GIS service from a URL
+ * Detects the type of GIS service from a URL with timeout and abort signal support
  * @param url The URL to check
+ * @param options Options including signal and timeout
  * @returns Promise resolving to service detection result
  */
 export async function detectGISServiceType(
-  url: string
+  url: string,
+  options: ServiceDetectionOptions = {}
 ): Promise<ServiceDetectionResult> {
+  const { signal, timeout = 8000 } = options
+
   try {
+    // Create timeout promise
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      const timeoutId = setTimeout(() => {
+        reject(new Error("Service detection timeout"))
+      }, timeout)
+
+      // Cancel timeout if signal is aborted
+      signal?.addEventListener("abort", () => {
+        clearTimeout(timeoutId)
+        reject(new Error("Service detection aborted"))
+      })
+    })
+
     // Check URL patterns to guess service type
     if (
       url.includes("arcgis.com") ||
@@ -39,7 +61,10 @@ export async function detectGISServiceType(
       url.includes("FeatureServer")
     ) {
       // Likely an ArcGIS service
-      return await validateArcGISService(url)
+      return await Promise.race([
+        validateArcGISService(url, { signal }),
+        timeoutPromise
+      ])
     } else if (
       url.includes("SERVICE=WMS") ||
       url.includes("service=wms") ||
@@ -47,7 +72,10 @@ export async function detectGISServiceType(
       url.toLowerCase().includes("geoserver/wms")
     ) {
       // Likely a WMS service
-      return await validateWMSService(url)
+      return await Promise.race([
+        validateWMSService(url, { signal }),
+        timeoutPromise
+      ])
     } else if (
       url.includes("SERVICE=WFS") ||
       url.includes("service=wfs") ||
@@ -55,35 +83,81 @@ export async function detectGISServiceType(
       url.toLowerCase().includes("geoserver/wfs")
     ) {
       // Likely a WFS service
-      return await validateWFSService(url)
+      return await Promise.race([
+        validateWFSService(url, { signal }),
+        timeoutPromise
+      ])
     } else {
-      // Try each service type in sequence
+      // Try each service type in sequence with individual timeouts
+      const individualTimeout = Math.floor(timeout / 3)
 
       // Try ArcGIS first
-      const arcgisResult = await validateArcGISService(url)
-      if (arcgisResult.isValid) {
-        return {
-          ...arcgisResult,
-          serviceType: "ArcGIS"
+      try {
+        const arcgisResult = await Promise.race([
+          validateArcGISService(url, { signal }),
+          new Promise<ServiceDetectionResult>((_, reject) =>
+            setTimeout(
+              () => reject(new Error("ArcGIS validation timeout")),
+              individualTimeout
+            )
+          )
+        ])
+
+        if (arcgisResult.isValid) {
+          return {
+            ...arcgisResult,
+            serviceType: "ArcGIS"
+          }
         }
+      } catch (error) {
+        if (signal?.aborted) throw error
+        // Continue to next service type
       }
 
       // Try WMS next
-      const wmsResult = await validateWMSService(url)
-      if (wmsResult.isValid) {
-        return {
-          ...wmsResult,
-          serviceType: "WMS"
+      try {
+        const wmsResult = await Promise.race([
+          validateWMSService(url, { signal }),
+          new Promise<ServiceDetectionResult>((_, reject) =>
+            setTimeout(
+              () => reject(new Error("WMS validation timeout")),
+              individualTimeout
+            )
+          )
+        ])
+
+        if (wmsResult.isValid) {
+          return {
+            ...wmsResult,
+            serviceType: "WMS"
+          }
         }
+      } catch (error) {
+        if (signal?.aborted) throw error
+        // Continue to next service type
       }
 
       // Try WFS last
-      const wfsResult = await validateWFSService(url)
-      if (wfsResult.isValid) {
-        return {
-          ...wfsResult,
-          serviceType: "WFS"
+      try {
+        const wfsResult = await Promise.race([
+          validateWFSService(url, { signal }),
+          new Promise<ServiceDetectionResult>((_, reject) =>
+            setTimeout(
+              () => reject(new Error("WFS validation timeout")),
+              individualTimeout
+            )
+          )
+        ])
+
+        if (wfsResult.isValid) {
+          return {
+            ...wfsResult,
+            serviceType: "WFS"
+          }
         }
+      } catch (error) {
+        if (signal?.aborted) throw error
+        // No valid service found
       }
 
       // No valid service found
@@ -94,6 +168,23 @@ export async function detectGISServiceType(
     }
   } catch (error) {
     console.error("Error detecting GIS service type:", error)
+
+    if (error instanceof Error) {
+      if (error.name === "AbortError" || error.message.includes("aborted")) {
+        return {
+          isValid: false,
+          error: "Service detection was cancelled"
+        }
+      }
+
+      if (error.message.includes("timeout")) {
+        return {
+          isValid: false,
+          error: "Service detection timed out"
+        }
+      }
+    }
+
     return {
       isValid: false,
       error: error instanceof Error ? error.message : "Unknown error"

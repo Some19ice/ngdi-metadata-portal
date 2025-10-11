@@ -42,7 +42,10 @@ export interface OGCLayerInfo {
  * @param url The URL to validate
  * @returns Promise resolving to validation result
  */
-export async function validateWMSService(url: string): Promise<{
+export async function validateWMSService(
+  url: string,
+  options: { signal?: AbortSignal } = {}
+): Promise<{
   isValid: boolean
   service?: OGCServiceInfo
   error?: string
@@ -200,7 +203,10 @@ export async function validateWMSService(url: string): Promise<{
  * @param url The URL to validate
  * @returns Promise resolving to validation result
  */
-export async function validateWFSService(url: string): Promise<{
+export async function validateWFSService(
+  url: string,
+  options: { signal?: AbortSignal } = {}
+): Promise<{
   isValid: boolean
   service?: OGCServiceInfo
   error?: string

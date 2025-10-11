@@ -180,22 +180,89 @@ export function createSafeSearchMarker(
 }
 
 /**
- * Safe popup content creation
+ * Sanitizes and validates input values for safe DOM insertion
  */
-export function createSafePopupContent(data: {
+function sanitizeValue(value: unknown): string {
+  if (value === null || value === undefined) {
+    return ""
+  }
+
+  // Convert to string and remove any potential HTML
+  const stringValue = String(value)
+
+  // Basic HTML entity encoding
+  return (
+    stringValue
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#x27;")
+      .replace(/\//g, "&#x2F;")
+      // Limit length to prevent DOM issues
+      .substring(0, 1000)
+  )
+}
+
+/**
+ * Validates popup content data structure
+ */
+function validatePopupData(data: unknown): data is {
   title: string
   description?: string
   coordinates?: [number, number]
-  metadata?: Record<string, any>
-}): HTMLElement {
+  metadata?: Record<string, unknown>
+} {
+  if (!data || typeof data !== "object") return false
+
+  const typedData = data as Record<string, unknown>
+
+  // Title is required and must be string
+  if (!typedData.title || typeof typedData.title !== "string") return false
+
+  // Optional fields validation
+  if (typedData.description && typeof typedData.description !== "string")
+    return false
+
+  if (typedData.coordinates) {
+    if (
+      !Array.isArray(typedData.coordinates) ||
+      typedData.coordinates.length !== 2 ||
+      typeof typedData.coordinates[0] !== "number" ||
+      typeof typedData.coordinates[1] !== "number"
+    ) {
+      return false
+    }
+  }
+
+  if (typedData.metadata && typeof typedData.metadata !== "object") return false
+
+  return true
+}
+
+/**
+ * Safe popup content creation with input validation and sanitization
+ */
+export function createSafePopupContent(data: unknown): HTMLElement {
+  // Validate input data
+  if (!validatePopupData(data)) {
+    const errorContainer = document.createElement("div")
+    errorContainer.className = "popup-error"
+    errorContainer.textContent = "Invalid popup data"
+    return errorContainer
+  }
+
   const container = document.createElement("div")
   container.className = "safe-popup-content"
   container.setAttribute("role", "dialog")
-  container.setAttribute("aria-label", `Details for ${data.title}`)
+  container.setAttribute(
+    "aria-label",
+    `Details for ${sanitizeValue(data.title)}`
+  )
 
   const title = document.createElement("h3")
   title.className = "popup-title"
-  title.textContent = data.title
+  title.textContent = sanitizeValue(data.title)
   title.id = `popup-title-${Date.now()}`
   container.setAttribute("aria-labelledby", title.id)
   container.appendChild(title)
@@ -203,33 +270,31 @@ export function createSafePopupContent(data: {
   if (data.description) {
     const description = document.createElement("p")
     description.className = "popup-description"
-    description.textContent = data.description
+    description.textContent = sanitizeValue(data.description)
     container.appendChild(description)
   }
 
   if (data.coordinates) {
     const coordinates = document.createElement("div")
     coordinates.className = "popup-coordinates"
-    coordinates.textContent = `${data.coordinates[1].toFixed(4)}, ${data.coordinates[0].toFixed(4)}`
-    coordinates.setAttribute(
-      "aria-label",
-      `Coordinates: ${coordinates.textContent}`
-    )
+    const coordText = `${data.coordinates[1].toFixed(4)}, ${data.coordinates[0].toFixed(4)}`
+    coordinates.textContent = coordText
+    coordinates.setAttribute("aria-label", `Coordinates: ${coordText}`)
     container.appendChild(coordinates)
   }
 
-  if (data.metadata) {
+  if (data.metadata && typeof data.metadata === "object") {
     const metadataList = document.createElement("dl")
     metadataList.className = "popup-metadata"
 
     Object.entries(data.metadata).forEach(([key, value]) => {
-      if (value) {
+      if (value !== null && value !== undefined) {
         const dt = document.createElement("dt")
-        dt.textContent = key
+        dt.textContent = sanitizeValue(key)
         dt.className = "popup-metadata-key"
 
         const dd = document.createElement("dd")
-        dd.textContent = String(value)
+        dd.textContent = sanitizeValue(value)
         dd.className = "popup-metadata-value"
 
         metadataList.appendChild(dt)
@@ -340,6 +405,13 @@ export class MapEventManager {
       })
       this.elementHandlers.delete(element)
     }
+  }
+
+  /**
+   * Remove all event listeners from a DOM element (alias for compatibility)
+   */
+  removeAllElementListeners(element: HTMLElement): void {
+    this.removeElementHandlers(element)
   }
 
   /**

@@ -2,7 +2,7 @@
  * Hook for managing GIS services in a MapLibre map
  */
 
-import { useState, useCallback, useEffect } from "react"
+import { useState, useCallback, useEffect, useRef } from "react"
 import { Map } from "maplibre-gl"
 import { toast } from "sonner"
 import {
@@ -13,6 +13,7 @@ import {
   type ServiceDetectionResult
 } from "@/lib/gis-services/service-factory"
 import { useMapLayers } from "./use-map-layers"
+import { useIsMounted, useAbortController } from "./use-map-performance"
 
 export interface GISServiceLayerConfig {
   id: string
@@ -34,8 +35,11 @@ export function useGISServices({ map }: UseGISServicesOptions) {
     []
   )
   const { addLayer, removeLayer, toggleLayerVisibility } = useMapLayers({ map })
+  const isMounted = useIsMounted()
+  const { createController } = useAbortController(10000) // 10 second timeout
+  const pendingRequestsRef = useRef<Set<string>>(new Set())
 
-  // Add a GIS service by URL
+  // Add a GIS service by URL with proper error handling and abort control
   const addServiceByUrl = useCallback(
     async (url: string, name?: string): Promise<boolean> => {
       if (!map || !map.isStyleLoaded()) {
@@ -43,24 +47,44 @@ export function useGISServices({ map }: UseGISServicesOptions) {
         return false
       }
 
+      // Prevent duplicate requests
+      if (pendingRequestsRef.current.has(url)) {
+        toast.warning("Service request already in progress")
+        return false
+      }
+
       // Generate a unique ID for this service
-      const serviceId = `gis-service-${Date.now()}`
+      const serviceId = `gis-service-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+      pendingRequestsRef.current.add(url)
 
       // Add a placeholder while loading
-      setServiceLayers(prev => [
-        ...prev,
-        {
-          id: serviceId,
-          name: name || "Loading service...",
-          serviceUrl: url,
-          isVisible: true,
-          isLoading: true
-        }
-      ])
+      if (isMounted()) {
+        setServiceLayers(prev => [
+          ...prev,
+          {
+            id: serviceId,
+            name: name || "Loading service...",
+            serviceUrl: url,
+            isVisible: true,
+            isLoading: true
+          }
+        ])
+      }
 
       try {
-        // Detect service type
-        const result = await detectGISServiceType(url)
+        // Create abort controller for this request
+        const controller = createController()
+
+        // Detect service type with timeout and abort signal
+        const result = await detectGISServiceType(url, {
+          signal: controller.signal,
+          timeout: 8000
+        })
+
+        // Check if component is still mounted
+        if (!isMounted()) {
+          return false
+        }
 
         if (!result.isValid || !result.service) {
           setServiceLayers(prev =>
@@ -88,23 +112,25 @@ export function useGISServices({ map }: UseGISServicesOptions) {
         const layer = createMapLibreLayer(result.service, sourceId, layerId)
 
         if (!source || !layer) {
-          setServiceLayers(prev =>
-            prev.map(layer =>
-              layer.id === serviceId
-                ? {
-                    ...layer,
-                    isLoading: false,
-                    error: "Unsupported service type"
-                  }
-                : layer
+          if (isMounted()) {
+            setServiceLayers(prev =>
+              prev.map(layer =>
+                layer.id === serviceId
+                  ? {
+                      ...layer,
+                      isLoading: false,
+                      error: "Unsupported service type"
+                    }
+                  : layer
+              )
             )
-          )
+          }
           toast.error("Unsupported service type")
           return false
         }
 
         // Add the layer to the map
-        addLayer({
+        await addLayer({
           id: layerId,
           sourceId: sourceId,
           source: source,
@@ -112,45 +138,57 @@ export function useGISServices({ map }: UseGISServicesOptions) {
         })
 
         // Update service layers state
-        setServiceLayers(prev =>
-          prev.map(layer =>
-            layer.id === serviceId
-              ? {
-                  ...layer,
-                  name: name || result.service?.name || "GIS Service",
-                  serviceType: result.serviceType,
-                  serviceInfo: result.service,
-                  isLoading: false
-                }
-              : layer
+        if (isMounted()) {
+          setServiceLayers(prev =>
+            prev.map(layer =>
+              layer.id === serviceId
+                ? {
+                    ...layer,
+                    name: name || result.service?.name || "GIS Service",
+                    serviceType: result.serviceType,
+                    serviceInfo: result.service,
+                    isLoading: false
+                  }
+                : layer
+            )
           )
-        )
+        }
 
         toast.success(`Added service: ${result.service?.name || "GIS Service"}`)
         return true
       } catch (error) {
         console.error("Error adding GIS service:", error)
 
-        setServiceLayers(prev =>
-          prev.map(layer =>
-            layer.id === serviceId
-              ? {
-                  ...layer,
-                  isLoading: false,
-                  error:
-                    error instanceof Error ? error.message : "Unknown error"
-                }
-              : layer
-          )
-        )
+        if (isMounted()) {
+          const errorMessage =
+            error instanceof Error ? error.message : "Unknown error"
+          const isAborted =
+            error instanceof Error && error.name === "AbortError"
 
-        toast.error(
-          `Failed to add service: ${error instanceof Error ? error.message : "Unknown error"}`
-        )
+          setServiceLayers(prev =>
+            prev.map(layer =>
+              layer.id === serviceId
+                ? {
+                    ...layer,
+                    isLoading: false,
+                    error: isAborted ? "Request timeout" : errorMessage
+                  }
+                : layer
+            )
+          )
+
+          if (!isAborted) {
+            toast.error(`Failed to add service: ${errorMessage}`)
+          } else {
+            toast.error("Service request timed out")
+          }
+        }
         return false
+      } finally {
+        pendingRequestsRef.current.delete(url)
       }
     },
-    [map, addLayer]
+    [map, addLayer, isMounted, createController]
   )
 
   // Remove a GIS service
@@ -167,12 +205,14 @@ export function useGISServices({ map }: UseGISServicesOptions) {
       removeLayer(layerId)
 
       // Update service layers state
-      setServiceLayers(prev => prev.filter(layer => layer.id !== serviceId))
+      if (isMounted()) {
+        setServiceLayers(prev => prev.filter(layer => layer.id !== serviceId))
+      }
 
       toast.success(`Removed service: ${service.name}`)
       return true
     },
-    [serviceLayers, removeLayer]
+    [serviceLayers, removeLayer, isMounted]
   )
 
   // Toggle service visibility
@@ -189,18 +229,28 @@ export function useGISServices({ map }: UseGISServicesOptions) {
       toggleLayerVisibility(layerId)
 
       // Update service layers state
-      setServiceLayers(prev =>
-        prev.map(layer =>
-          layer.id === serviceId
-            ? { ...layer, isVisible: !layer.isVisible }
-            : layer
+      if (isMounted()) {
+        setServiceLayers(prev =>
+          prev.map(layer =>
+            layer.id === serviceId
+              ? { ...layer, isVisible: !layer.isVisible }
+              : layer
+          )
         )
-      )
+      }
 
       return true
     },
-    [serviceLayers, toggleLayerVisibility]
+    [serviceLayers, toggleLayerVisibility, isMounted]
   )
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      // Clear any pending requests
+      pendingRequestsRef.current.clear()
+    }
+  }, [])
 
   return {
     serviceLayers,

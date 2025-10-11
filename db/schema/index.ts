@@ -19,6 +19,7 @@ export * from "./notifications-schema"
 export * from "./system-settings-schema"
 export * from "./profiles-schema"
 export * from "./analytics-schema"
+export * from "./newsletter-subscriptions-schema"
 
 export type {
   ConstraintsInfo,

@@ -9,8 +9,17 @@ interface ClusterMarkerProps {
 }
 
 // Type guard to check if properties are cluster properties
-function isClusterProperties(properties: any): properties is { cluster: boolean; cluster_id: number; point_count: number; point_count_abbreviated: string } {
-  return properties && typeof properties.cluster === 'boolean' && properties.cluster === true
+function isClusterProperties(properties: any): properties is {
+  cluster: boolean
+  cluster_id: number
+  point_count: number
+  point_count_abbreviated: string
+} {
+  return (
+    properties &&
+    typeof properties.cluster === "boolean" &&
+    properties.cluster === true
+  )
 }
 
 export default function ClusterMarker({

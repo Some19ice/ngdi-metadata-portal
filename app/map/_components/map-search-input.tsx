@@ -30,6 +30,15 @@ export default function MapSearchInput({
   const router = useRouter()
   const pathname = usePathname()
 
+  // Cleanup abort controller on unmount
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+      }
+    }
+  }, [])
+
   // Debounce search term
   const debouncedSearchTerm = useDebounce(searchTerm, 300)
 
