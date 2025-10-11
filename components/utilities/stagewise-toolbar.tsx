@@ -33,11 +33,16 @@ function StagewiseComponent() {
       setIsLoading(true)
       setError(null)
 
-      const { StagewiseToolbar } = await import("@stagewise/toolbar-next")
+      // Dynamic import with type assertion to avoid build-time module resolution
+      const toolbarModule = await import("@stagewise/toolbar-next" as any)
+      const { StagewiseToolbar } = toolbarModule
       setToolbarComponent(() => StagewiseToolbar)
     } catch (error) {
       console.warn("Failed to load Stagewise toolbar:", error)
-      setError("Failed to load development toolbar")
+      // Don't show error in production builds where the module doesn't exist
+      if (process.env.NODE_ENV === "development") {
+        setError("Failed to load development toolbar")
+      }
     } finally {
       setIsLoading(false)
     }

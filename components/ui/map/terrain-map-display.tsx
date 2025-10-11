@@ -99,10 +99,31 @@ export default function TerrainMapDisplay({
       // If API key is valid, try to add terrain
       if (isApiKeyValid && apiKey) {
         try {
-          // This is a simplified example - in a real implementation,
-          // you would add actual terrain data from MapTiler
-          map.setPitch(initialPitch)
-          map.setBearing(initialBearing)
+          // Add raster-dem terrain source and enable terrain
+          if (!map.getSource("terrain-dem")) {
+            map.addSource("terrain-dem", {
+              type: "raster-dem",
+              url: `https://api.maptiler.com/tiles/terrain-rgb/tiles.json?key=${apiKey}`,
+              tileSize: 256
+            } as any)
+          }
+
+          // Some styles need exaggeration set after style is loaded
+          if (map.isStyleLoaded()) {
+            map.setTerrain({ source: "terrain-dem", exaggeration: 1.2 } as any)
+            map.setPitch(initialPitch)
+            map.setBearing(initialBearing)
+          } else {
+            map.once("style.load", () => {
+              map.setTerrain({
+                source: "terrain-dem",
+                exaggeration: 1.2
+              } as any)
+              map.setPitch(initialPitch)
+              map.setBearing(initialBearing)
+            })
+          }
+
           toast.success("3D terrain view enabled")
         } catch (err) {
           toast.error("Failed to enable 3D terrain view")
@@ -123,9 +144,18 @@ export default function TerrainMapDisplay({
       // Disable 3D view
       mapRef.current.setPitch(0)
       mapRef.current.setBearing(0)
+      try {
+        mapRef.current.setTerrain(undefined as any)
+      } catch {}
       setIs3DEnabled(false)
     } else {
       // Enable 3D view
+      try {
+        mapRef.current.setTerrain({
+          source: "terrain-dem",
+          exaggeration: 1.2
+        } as any)
+      } catch {}
       mapRef.current.setPitch(initialPitch)
       mapRef.current.setBearing(initialBearing)
       setIs3DEnabled(true)

@@ -3,13 +3,21 @@
 import { SelectOrganization } from "@/db/schema"
 import { Button } from "@/components/ui/button"
 import { ArrowRight, Building } from "lucide-react"
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious
+} from "@/components/ui/carousel"
+import GlassCard from "@/components/ui/glass-card"
 import Link from "next/link"
 import Image from "next/image"
 
 // Type for public organizations display (subset of SelectOrganization)
 type PublicOrganization = Pick<
   SelectOrganization,
-  "id" | "name" | "logoUrl" | "websiteUrl"
+  "id" | "name" | "logoUrl" | "websiteUrl" | "description"
 >
 
 interface ContributingOrganizationsProps {
@@ -21,7 +29,7 @@ export function ContributingOrganizations({
 }: ContributingOrganizationsProps) {
   return (
     <section
-      className="py-16 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800"
+      className="pt-8 pb-16 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800"
       aria-labelledby="contributing-orgs"
     >
       <div className="container mx-auto px-4">
@@ -35,47 +43,39 @@ export function ContributingOrganizations({
           </p>
         </div>
 
-        <div className="flex flex-wrap justify-center items-center gap-8">
-          {organizations.length > 0
-            ? organizations.map(org => (
-                <div
-                  key={org.id}
-                  className="h-16 w-32 rounded-md bg-background shadow-sm flex items-center justify-center hover:shadow-md transition-all duration-300 hover:scale-105 border relative group"
-                  role="img"
-                  aria-label={`${org.name} logo`}
-                >
-                  {org.logoUrl ? (
-                    <Image
-                      src={org.logoUrl}
-                      alt={`${org.name} logo`}
-                      fill
-                      className="object-contain p-2 rounded-md"
-                      sizes="(max-width: 128px) 100vw, 128px"
-                    />
-                  ) : (
-                    <div className="flex items-center justify-center h-full w-full text-muted-foreground">
-                      <Building className="h-6 w-6" />
-                    </div>
-                  )}
-
-                  {/* Tooltip on hover */}
-                  <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-popover text-popover-foreground px-2 py-1 rounded text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-10 shadow-md">
-                    {org.name}
-                  </div>
-                </div>
-              ))
-            : // Fallback when no organizations are loaded
-              Array.from({ length: 6 }).map((_, index) => (
-                <div
-                  key={index}
-                  className="h-16 w-32 rounded-md bg-background shadow-sm flex items-center justify-center hover:shadow-md transition-all duration-300 hover:scale-105 border"
-                  role="img"
-                  aria-label={`Organization ${index + 1} logo placeholder`}
-                >
-                  <div className="bg-gradient-to-r from-muted to-muted-foreground/20 h-8 w-20 rounded" />
-                </div>
+        {organizations.length > 1 ? (
+          <Carousel className="relative" opts={{ align: "center", loop: true }}>
+            <CarouselContent>
+              {organizations.map(org => (
+                <CarouselItem key={org.id} className="flex justify-center px-4">
+                  <GlassCard
+                    className="h-[300px] w-[290px]"
+                    logoUrl={org.logoUrl ?? undefined}
+                    name={org.name ?? undefined}
+                    description={org.description ?? undefined}
+                    websiteUrl={org.websiteUrl ?? undefined}
+                    socials={[]}
+                  />
+                </CarouselItem>
               ))}
-        </div>
+            </CarouselContent>
+            <CarouselPrevious className="-left-6" />
+            <CarouselNext className="-right-6" />
+          </Carousel>
+        ) : (
+          <div className="flex justify-center">
+            {organizations.length === 1 ? (
+              <GlassCard
+                className="h-[300px] w-[290px]"
+                logoUrl={organizations[0].logoUrl ?? undefined}
+                name={organizations[0].name ?? undefined}
+                description={organizations[0].description ?? undefined}
+                websiteUrl={organizations[0].websiteUrl ?? undefined}
+                socials={[]}
+              />
+            ) : null}
+          </div>
+        )}
 
         <div className="text-center mt-10">
           <Link href="/committee">

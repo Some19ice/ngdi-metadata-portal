@@ -1,0 +1,216 @@
+/* Search Result Marker Styles */
+.safe-search-marker {
+  position: relative;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  will-change: transform;
+  transition: transform 0.2s ease;
+  touch-action: manipulation; /* Improve touch performance on mobile */
+}
+
+.safe-search-marker:hover {
+  transform: translateY(-2px) scale(1.05);
+  z-index: 10;
+}
+
+.search-marker-head {
+  width: 32px;
+  height: 32px;
+  background: #2563eb; /* bg-blue-600 */
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: bold;
+  font-size: 14px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  position: relative;
+  z-index: 2;
+}
+
+.search-marker-tail {
+  width: 0;
+  height: 0;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-top: 12px solid #2563eb;
+  margin-top: -1px;
+  z-index: 1;
+}
+
+.search-marker-pulse {
+  position: absolute;
+  width: 48px;
+  height: 48px;
+  background: rgba(37, 99, 235, 0.3); /* bg-blue-600/30 */
+  border-radius: 50%;
+  top: -8px;
+  left: -8px;
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  z-index: 0;
+}
+
+.search-marker-label {
+  position: absolute;
+  bottom: -25px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.safe-search-marker:hover .search-marker-label,
+.safe-search-marker:focus .search-marker-label {
+  opacity: 1;
+}
+
+/* User Location Marker */
+.user-location-marker .search-marker-head {
+  background: #16a34a; /* bg-green-600 */
+}
+
+.user-location-marker .search-marker-pulse {
+  background: rgba(22, 163, 74, 0.3); /* bg-green-600/30 */
+}
+
+/* Animations */
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Safe Popup Content Styles */
+.safe-popup-content {
+  padding: 12px;
+  max-width: 250px;
+  font-family:
+    system-ui,
+    -apple-system,
+    sans-serif;
+}
+
+.popup-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 8px 0;
+  color: #111827;
+}
+
+.popup-description {
+  font-size: 13px;
+  color: #6b7280;
+  margin: 0 0 8px 0;
+  line-height: 1.4;
+}
+
+.popup-coordinates {
+  font-size: 12px;
+  font-family: "Courier New", monospace;
+  color: #9ca3af;
+  padding: 4px 6px;
+  background: #f3f4f6;
+  border-radius: 4px;
+  margin-top: 8px;
+}
+
+.popup-metadata {
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.popup-metadata-key {
+  font-weight: 500;
+  color: #6b7280;
+  display: inline-block;
+  margin-right: 4px;
+}
+
+.popup-metadata-value {
+  color: #111827;
+  display: inline-block;
+  margin-bottom: 4px;
+}
+
+/* Accessibility */
+.safe-search-marker:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  background: #000;
+  color: #fff;
+  padding: 8px;
+  text-decoration: none;
+  z-index: 100;
+}
+
+.skip-link:focus {
+  top: 0;
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+  .safe-search-marker {
+    transform: scale(
+      1.1
+    ); /* Slightly larger on mobile for better touch targets */
+  }
+
+  .search-marker-head {
+    width: 36px;
+    height: 36px;
+    font-size: 16px;
+  }
+
+  .search-marker-label {
+    font-size: 14px;
+    max-width: 150px;
+  }
+
+  .safe-popup-content {
+    max-width: 200px;
+    padding: 10px;
+  }
+}
+
+/* High DPI displays */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .search-marker-head {
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
+  }
+}
