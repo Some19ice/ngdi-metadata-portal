@@ -31,6 +31,8 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
 import { toast } from "@/hooks/use-toast"
+import { generateSearchUrl } from "@/lib/utils/search-params-utils"
+import { MetadataSearchFilters } from "@/types"
 
 const searchFormSchema = z.object({
   q: z
@@ -84,13 +86,26 @@ export default function CentralSearchForm({
         return
       }
 
-      const params = new URLSearchParams()
-      params.set("q", values.q.trim())
-      if (values.type !== "auto") {
-        params.set("type", values.type)
-      }
+      const searchQuery = values.q.trim()
 
-      router.push(`/search?${params.toString()}`)
+      // Route based on search type
+      if (values.type === "metadata") {
+        // Direct route to metadata search with standardized parameters
+        const searchFilters: MetadataSearchFilters = { query: searchQuery }
+        const url = generateSearchUrl(searchFilters, "/metadata/search")
+        router.push(url)
+      } else if (values.type === "location") {
+        // Route to map search
+        router.push(`/map?search=${encodeURIComponent(searchQuery)}`)
+      } else {
+        // Route to central search for other types (news, docs, auto)
+        const params = new URLSearchParams()
+        params.set("q", searchQuery)
+        if (values.type !== "auto") {
+          params.set("type", values.type)
+        }
+        router.push(`/search?${params.toString()}`)
+      }
     } catch (error) {
       console.error("Search error:", error)
       toast({

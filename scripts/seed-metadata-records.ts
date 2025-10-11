@@ -35,12 +35,12 @@ import { eq } from "drizzle-orm"
 // Load .env.local so we can access database creds as well as the seed user id.
 config({ path: ".env.local" })
 
-const CREATOR_USER_ID = process.env.SEED_CREATOR_USER_ID as string
-if (!CREATOR_USER_ID) {
-  console.error(
-    "❌  SEED_CREATOR_USER_ID is not set. Please export a valid Clerk userId before running this script."
+const CREATOR_USER_ID =
+  (process.env.SEED_CREATOR_USER_ID as string) || "seed_user"
+if (!process.env.SEED_CREATOR_USER_ID) {
+  console.warn(
+    "⚠️  SEED_CREATOR_USER_ID not provided. Using placeholder creatorUserId 'seed_user'. For realistic data attribution, set SEED_CREATOR_USER_ID to a real Clerk user ID."
   )
-  process.exit(1)
 }
 
 // Feel free to tweak the sample data as required for your tests.
@@ -82,14 +82,21 @@ const SAMPLE_RECORDS: SampleRecordInput[] = [
 async function main() {
   console.log("🚀  Seeding metadata records…")
 
-  // Pick the first organization in the table. You can tweak the where-clause if you need a specific org.
-  const [org] = await db.select().from(organizationsTable).limit(1)
-
+  // Ensure there is at least one organization. If none exists, create a default one for seeding.
+  let [org] = await db.select().from(organizationsTable).limit(1)
   if (!org) {
-    console.error(
-      "❌  No organizations found. Seed at least one organization before running this script."
+    console.warn(
+      "⚠️  No organizations found. Creating a default 'Seed Organization'."
     )
-    process.exit(1)
+    const [insertedOrg] = await db
+      .insert(organizationsTable)
+      .values({
+        name: "Seed Organization",
+        description: "Auto-created for seeding"
+      })
+      .returning()
+    org = insertedOrg
+    console.log(`✅  Created default organization: ${org.name} (${org.id})`)
   }
 
   for (const record of SAMPLE_RECORDS) {
@@ -112,7 +119,8 @@ async function main() {
       keywords: record.keywords ?? [],
       frameworkType: record.frameworkType ?? null,
       creatorUserId: CREATOR_USER_ID,
-      organizationId: org.id
+      organizationId: org.id,
+      status: "Published"
     }
 
     await db.insert(metadataRecordsTable).values(payload)

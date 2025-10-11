@@ -9,15 +9,7 @@ import {
   TableRow
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import {
-  Pagination,
-  PaginationContent,
-  PaginationEllipsis,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious
-} from "@/components/ui/pagination"
+import { Pagination } from "@/components/ui/pagination"
 import { SelectAuditLog } from "@/db/schema"
 import { useRouter, useSearchParams } from "next/navigation"
 import { format } from "date-fns"
@@ -146,57 +138,11 @@ export default function AuditLogsTable({
       </div>
 
       {totalPages > 1 && (
-        <Pagination>
-          <PaginationContent>
-            <PaginationItem>
-              <PaginationPrevious
-                href="#"
-                onClick={e => {
-                  e.preventDefault()
-                  if (currentPage > 1) handlePageChange(currentPage - 1)
-                }}
-                className={
-                  currentPage === 1
-                    ? "pointer-events-none opacity-50"
-                    : undefined
-                }
-              />
-            </PaginationItem>
-            {getPaginationItems().map((item, index) => (
-              <PaginationItem key={index}>
-                {typeof item === "number" ? (
-                  <PaginationLink
-                    href="#"
-                    onClick={e => {
-                      e.preventDefault()
-                      handlePageChange(item)
-                    }}
-                    isActive={currentPage === item}
-                  >
-                    {item}
-                  </PaginationLink>
-                ) : (
-                  <PaginationEllipsis />
-                )}
-              </PaginationItem>
-            ))}
-            <PaginationItem>
-              <PaginationNext
-                href="#"
-                onClick={e => {
-                  e.preventDefault()
-                  if (currentPage < totalPages)
-                    handlePageChange(currentPage + 1)
-                }}
-                className={
-                  currentPage === totalPages
-                    ? "pointer-events-none opacity-50"
-                    : undefined
-                }
-              />
-            </PaginationItem>
-          </PaginationContent>
-        </Pagination>
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={handlePageChange}
+        />
       )}
     </div>
   )

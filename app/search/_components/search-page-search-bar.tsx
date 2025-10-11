@@ -99,7 +99,10 @@ export default function SearchPageSearchBar({
             `/api/search/metadata-suggestions?q=${encodeURIComponent(debouncedSearchTerm)}`
           )
             .then(res => res.json())
-            .then(data => ({ type: "metadata", data: data.suggestions || [] }))
+            .then(data => ({
+              type: "metadata",
+              data: data.data || data.suggestions || []
+            }))
             .catch(() => ({ type: "metadata", data: [] }))
         )
       }

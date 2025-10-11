@@ -52,60 +52,34 @@ export function getSearchTypeName(type: string): string {
 /**
  * Transforms search parameters for metadata search, standardizing parameter names
  */
+// Deprecated: use filtersToSearchParams/generateSearchUrl in search-params-utils
 export function transformToMetadataParams(
   params: SearchParams
 ): URLSearchParams {
-  const metadataParams = new URLSearchParams()
-
-  // Map central search 'q' to metadata search 'query' for consistency
-  if (params.q) {
-    metadataParams.set("query", params.q)
-  }
-
-  // Handle pagination
-  if (params.page && params.page !== "1") {
-    metadataParams.set("page", params.page)
-  }
-
-  // Map all metadata-specific parameters, handling both naming conventions
-  const paramMappings: Array<[string, string]> = [
-    ["organization", "organization"],
-    ["dataType", "dataType"],
-    ["topicCategory", "topicCategory"],
-    ["startDate", "temporalExtentStartDate"],
-    ["endDate", "temporalExtentEndDate"],
-    ["temporalExtentStartDate", "temporalExtentStartDate"],
-    ["temporalExtentEndDate", "temporalExtentEndDate"],
-    ["frameworkType", "frameworkType"],
-    ["datasetType", "datasetType"],
-    ["useSpatialSearch", "useSpatialSearch"],
-    ["bbox_north", "bbox_north"],
-    ["bbox_south", "bbox_south"],
-    ["bbox_east", "bbox_east"],
-    ["bbox_west", "bbox_west"],
-    ["bbox", "bbox"],
-    ["sortBy", "sortBy"],
-    ["sortOrder", "sortOrder"]
-  ]
-
-  paramMappings.forEach(([sourceKey, targetKey]) => {
-    const value = params[sourceKey as keyof SearchParams]
-    if (value && value !== "") {
-      metadataParams.set(targetKey, value)
-    }
-  })
-
-  return metadataParams
+  const url = new URLSearchParams()
+  if (params.q) url.set("q", params.q)
+  if (params.page && params.page !== "1") url.set("page", params.page)
+  return url
 }
 
 /**
  * Builds a metadata search URL with proper parameter transformation
  */
+// Delegate to canonical generator in search-params-utils to avoid duplication
 export function buildMetadataSearchUrl(params: SearchParams): string {
-  const transformedParams = transformToMetadataParams(params)
-  const baseUrl = "/(app)/metadata/search"
-  const queryString = transformedParams.toString()
-  return queryString ? `${baseUrl}?${queryString}` : baseUrl
+  try {
+    const { generateSearchUrl } = require("@/lib/utils/search-params-utils")
+    // Map older shape to canonical filters
+    const filters = {
+      query: params.q,
+      page: params.page ? parseInt(params.page, 10) : undefined
+    }
+    return generateSearchUrl(filters as any, "/metadata/search")
+  } catch {
+    const baseUrl = "/metadata/search"
+    const query = params.q ? `?q=${encodeURIComponent(params.q)}` : ""
+    return `${baseUrl}${query}`
+  }
 }
 
 /**

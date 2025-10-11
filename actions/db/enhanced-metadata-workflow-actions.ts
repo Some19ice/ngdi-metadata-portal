@@ -411,30 +411,27 @@ async function generateTopicCategoriesFacet(whereClause: any) {
       "Other"
     ]
 
-    // Count occurrences of each topic category in keywords
-    const topicCategoryCounts = await Promise.all(
-      topicCategories.map(async category => {
-        const [{ count: categoryCount }] = await db
-          .select({ count: count() })
-          .from(metadataRecordsTable)
-          .where(
-            and(
-              whereClause,
-              sql`${metadataRecordsTable.keywords} @> ${[category]}`
-            )
-          )
-
-        return {
-          value: category,
-          count: categoryCount
-        }
+    const categorySubquery = db
+      .select({
+        category: sql<string>`unnest(${metadataRecordsTable.keywords})`.as(
+          "category"
+        )
       })
-    )
+      .from(metadataRecordsTable)
+      .where(whereClause)
+      .as("categorySubquery")
 
-    // Filter out categories with zero count and sort by count
+    const topicCategoryCounts = await db
+      .select({
+        value: categorySubquery.category,
+        count: count()
+      })
+      .from(categorySubquery)
+      .where(sql`${categorySubquery.category} = ANY(${topicCategories})`)
+      .groupBy(categorySubquery.category)
+      .orderBy(desc(count()))
+
     return topicCategoryCounts
-      .filter(tc => tc.count > 0)
-      .sort((a, b) => b.count - a.count)
   } catch (error) {
     console.error("Error generating topic categories facet:", error)
     return []
@@ -701,11 +698,12 @@ export async function submitForReviewAction(
       // Send notification to each approver
       for (const approver of approvers) {
         await createNotificationAction({
-          recipientUserId: approver.userId,
-          type: "MetadataStatusChange",
+          userId: approver.userId,
+          organizationId: record.organizationId!,
+          type: "approval_required",
           title: "New Metadata Submission for Review",
           message: `A metadata record titled "${record.title}" has been submitted for your review by the creator.`,
-          link: `/metadata/${recordId}`
+          actionUrl: `/app/metadata/${recordId}`
         })
       }
 
@@ -719,11 +717,12 @@ export async function submitForReviewAction(
 
       for (const officer of nodeOfficers) {
         await createNotificationAction({
-          recipientUserId: officer.userId,
-          type: "MetadataStatusChange",
+          userId: officer.userId,
+          organizationId: record.organizationId!,
+          type: "approval_required",
           title: "Metadata Submitted for Review",
           message: `A metadata record titled "${record.title}" has been submitted for review in your organization.`,
-          link: `/officer-dashboard`
+          actionUrl: `/app/(node-officer)/officer-dashboard`
         })
       }
     }
@@ -807,11 +806,13 @@ export async function approveMetadataAction(
 
     // Notify the creator that their metadata has been approved
     await createNotificationAction({
-      recipientUserId: record.creatorUserId,
-      type: "MetadataStatusChange",
+      userId: record.creatorUserId,
+      organizationId:
+        record.organizationId || "00000000-0000-0000-0000-000000000000",
+      type: "record_published",
       title: "Metadata Record Approved",
       message: `Your metadata record "${record.title}" has been approved and published!`,
-      link: `/metadata/${recordId}`
+      actionUrl: `/app/metadata/${recordId}`
     })
 
     revalidatePath("/metadata")
@@ -892,11 +893,13 @@ export async function rejectMetadataAction(
 
     // Notify the creator about the rejection
     await createNotificationAction({
-      recipientUserId: record.creatorUserId,
-      type: "MetadataStatusChange",
+      userId: record.creatorUserId,
+      organizationId:
+        record.organizationId || "00000000-0000-0000-0000-000000000000",
+      type: "record_rejected",
       title: "Metadata Record Needs Revision",
       message: `Your metadata record "${record.title}" needs revisions. Reason: ${rejectionReason}`,
-      link: `/metadata/${recordId}/edit`
+      actionUrl: `/app/metadata/${recordId}/edit`
     })
 
     revalidatePath("/metadata")

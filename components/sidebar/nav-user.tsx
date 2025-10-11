@@ -20,6 +20,7 @@ import {
 } from "lucide-react"
 import { useUser, useClerk } from "@clerk/nextjs"
 import { useRouter } from "next/navigation"
+import { useEffect, useState } from "react"
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
@@ -39,14 +40,54 @@ import {
 } from "@/components/ui/sidebar"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
+import {
+  getCurrentUserPermissionsAction,
+  UserPermissions
+} from "@/actions/user-permissions-actions"
 
 export function NavUser() {
   const { isMobile } = useSidebar()
   const { user, isLoaded } = useUser()
   const { signOut } = useClerk()
   const router = useRouter()
+  const [permissions, setPermissions] = useState<UserPermissions>({
+    canAccessAdmin: false,
+    canAccessBilling: false,
+    isSystemAdmin: false,
+    isPro: false
+  })
+  const [permissionsLoaded, setPermissionsLoaded] = useState(false)
 
-  if (!isLoaded) {
+  // Fetch user permissions when component mounts and user is loaded
+  useEffect(() => {
+    if (isLoaded && user) {
+      const fetchPermissions = async () => {
+        try {
+          const result = await getCurrentUserPermissionsAction()
+          if (result.isSuccess && result.data) {
+            setPermissions(result.data)
+          }
+        } catch (error) {
+          console.error("Failed to fetch user permissions:", error)
+        } finally {
+          setPermissionsLoaded(true)
+        }
+      }
+
+      fetchPermissions()
+    } else if (isLoaded && !user) {
+      // User is not authenticated, set permissions to false
+      setPermissions({
+        canAccessAdmin: false,
+        canAccessBilling: false,
+        isSystemAdmin: false,
+        isPro: false
+      })
+      setPermissionsLoaded(true)
+    }
+  }, [isLoaded, user])
+
+  if (!isLoaded || !permissionsLoaded) {
     return (
       <SidebarMenu>
         <SidebarMenuItem>
@@ -162,26 +203,39 @@ export function NavUser() {
                 Notifications
               </DropdownMenuItem>
             </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <DropdownMenuItem
-                onClick={() => router.push("/billing")}
-                className="cursor-pointer"
-              >
-                <CreditCard className="mr-2 h-4 w-4" />
-                Billing
-                <Badge variant="outline" className="ml-auto text-xs">
-                  Pro
-                </Badge>
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => router.push("/admin")}
-                className="cursor-pointer"
-              >
-                <Shield className="mr-2 h-4 w-4" />
-                Admin
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
+
+            {/* Conditionally render Billing and Admin based on permissions */}
+            {(permissions.canAccessBilling || permissions.canAccessAdmin) && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuGroup>
+                  {permissions.canAccessBilling && (
+                    <DropdownMenuItem
+                      onClick={() => router.push("/billing")}
+                      className="cursor-pointer"
+                    >
+                      <CreditCard className="mr-2 h-4 w-4" />
+                      Billing
+                      {permissions.isPro && (
+                        <Badge variant="outline" className="ml-auto text-xs">
+                          Pro
+                        </Badge>
+                      )}
+                    </DropdownMenuItem>
+                  )}
+                  {permissions.canAccessAdmin && (
+                    <DropdownMenuItem
+                      onClick={() => router.push("/admin")}
+                      className="cursor-pointer"
+                    >
+                      <Shield className="mr-2 h-4 w-4" />
+                      Admin
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuGroup>
+              </>
+            )}
+
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={handleSignOut}

@@ -8,6 +8,7 @@ import {
   createSafePopupContent,
   MapEventManager
 } from "@/lib/map-security"
+import { useMapPerformance, useIsMounted } from "./use-map-performance"
 
 interface ClusterProperties {
   cluster: boolean
@@ -43,10 +44,12 @@ export function useMapClustering({
   minZoom = 0,
   maxZoom = 16
 }: UseMapClusteringOptions) {
-  const [clusters, setClusters] = useState<any[]>([])
+  const [clusters, setClusters] = useState<ClusterFeature[]>([])
   const superclusterRef = useRef<Supercluster | null>(null)
   const markersRef = useRef<Map<string, Marker>>(new Map())
   const eventManagerRef = useRef<MapEventManager>(new MapEventManager())
+  const isMounted = useIsMounted()
+  const { debounce } = useMapPerformance({ debounceMs: 300 })
 
   // Initialize Supercluster
   useEffect(() => {
@@ -80,45 +83,48 @@ export function useMapClustering({
     superclusterRef.current.load(features)
   }, [records, clusterRadius, minZoom, maxZoom])
 
-  // Update clusters when map moves
-  const updateClusters = useCallback(() => {
-    if (!map || !superclusterRef.current) return
+  // Debounced cluster update function
+  const debouncedUpdateClusters = useCallback(
+    debounce(() => {
+      if (!map || !superclusterRef.current || !isMounted()) return
 
-    const bounds = map.getBounds()
-    const zoom = Math.floor(map.getZoom())
+      const bounds = map.getBounds()
+      const zoom = Math.floor(map.getZoom())
 
-    const clusters = superclusterRef.current.getClusters(
-      [
-        bounds.getWest(),
-        bounds.getSouth(),
-        bounds.getEast(),
-        bounds.getNorth()
-      ],
-      zoom
-    )
+      const newClusters = superclusterRef.current.getClusters(
+        [
+          bounds.getWest(),
+          bounds.getSouth(),
+          bounds.getEast(),
+          bounds.getNorth()
+        ],
+        zoom
+      ) as ClusterFeature[]
 
-    setClusters(clusters)
-  }, [map])
+      if (isMounted()) {
+        setClusters(newClusters)
+      }
+    }),
+    [map, debounce, isMounted]
+  )
 
-  // Set up map event listeners
+  // Set up map event listeners with debouncing
   useEffect(() => {
     if (!map) return
 
-    const handleMapMove = () => updateClusters()
+    const handleMapMove = () => debouncedUpdateClusters()
 
-    map.on("move", handleMapMove)
-    map.on("zoom", handleMapMove)
-    map.on("load", handleMapMove)
+    map.on("moveend", handleMapMove)
+    map.on("zoomend", handleMapMove)
 
     // Initial update
-    updateClusters()
+    debouncedUpdateClusters()
 
     return () => {
-      map.off("move", handleMapMove)
-      map.off("zoom", handleMapMove)
-      map.off("load", handleMapMove)
+      map.off("moveend", handleMapMove)
+      map.off("zoomend", handleMapMove)
     }
-  }, [map, updateClusters])
+  }, [map, debouncedUpdateClusters])
 
   // Render markers
   useEffect(() => {
@@ -232,37 +238,49 @@ export function useMapClustering({
     return () => {
       if (markersRef.current) {
         markersRef.current.forEach((marker: Marker) => {
-          eventManagerRef.current.removeMarkerHandler(marker)
-          marker.remove()
+          try {
+            eventManagerRef.current.removeAllElementListeners(
+              marker.getElement()
+            )
+            marker.remove()
+          } catch (error) {
+            console.warn("Error cleaning up marker:", error)
+          }
         })
+        markersRef.current.clear()
       }
-      eventManagerRef.current.cleanup()
+
+      if (eventManagerRef.current) {
+        try {
+          eventManagerRef.current.cleanup()
+        } catch (error) {
+          console.warn("Error cleaning up event manager:", error)
+        }
+      }
     }
   }, [])
 
   // Function to expand a cluster by zooming in
   const expandCluster = useCallback(
     (clusterId: number) => {
-      if (!map || !superclusterRef.current) return
+      if (!map || !superclusterRef.current || !isMounted()) return
 
       const expansionZoom =
         superclusterRef.current.getClusterExpansionZoom(clusterId)
       const cluster = clusters.find(
-        c =>
-          "cluster" in c.properties &&
-          c.properties.cluster &&
-          c.properties.cluster_id === clusterId
+        c => "cluster" in c.properties && c.properties.cluster_id === clusterId
       )
 
       if (cluster) {
+        const [lng, lat] = cluster.geometry.coordinates
         map.flyTo({
-          center: cluster.geometry.coordinates,
-          zoom: expansionZoom,
+          center: [lng, lat],
+          zoom: Math.min(expansionZoom, maxZoom),
           duration: 500
         })
       }
     },
-    [map, clusters]
+    [map, clusters, maxZoom, isMounted]
   )
 
   // Function to get leaves (individual points) of a cluster
@@ -277,9 +295,7 @@ export function useMapClustering({
 
   return {
     clusters,
-    updateClusters,
-    expandCluster,
-    getClusterLeaves
+    expandCluster
   }
 }
 

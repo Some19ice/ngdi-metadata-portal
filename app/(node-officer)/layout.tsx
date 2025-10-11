@@ -5,6 +5,7 @@ import { redirect } from "next/navigation"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { getNodeOfficerManagedOrganizationsAction } from "@/actions/db/user-organizations-actions"
 import { ShieldAlert } from "lucide-react"
+import NodeOfficerErrorBoundary from "./_components/node-officer-error-boundary"
 
 export default async function NodeOfficerLayout({
   children
@@ -52,5 +53,7 @@ export default async function NodeOfficerLayout({
   // The actual content (e.g. dashboard) will be rendered as children.
   // This layout does not provide its own sidebar or navigation structure,
   // assuming main app layout handles that.
-  return <>{children}</>
+  return (
+    <NodeOfficerErrorBoundary level="page">{children}</NodeOfficerErrorBoundary>
+  )
 }

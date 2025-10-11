@@ -1,125 +1,139 @@
 "use server"
 
 import { Suspense } from "react"
-import MetadataSearchForm from "./_components/metadata-search-form"
-import UnifiedSearchFetcher from "./_components/unified-search-fetcher"
-import MetadataSearchSkeleton from "./_components/metadata-search-skeleton"
-import EnhancedMetadataSearch from "./_components/enhanced-metadata-search"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { redirect } from "next/navigation"
+import SearchErrorBoundary from "./_components/search-error-boundary"
+import SimplifiedMetadataSearch from "./_components/simplified-metadata-search"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Card, CardContent, CardHeader } from "@/components/ui/card"
+import { parseSearchParams } from "@/lib/utils/search-params-utils"
 
 interface SearchParams {
-  query?: string
-  temporalExtentStartDate?: string
-  temporalExtentEndDate?: string
-  frameworkType?: string
-  datasetType?: string
-  useSpatialSearch?: string
-  bbox_north?: string
-  bbox_south?: string
-  bbox_east?: string
-  bbox_west?: string
-  sortBy?: string
-  sortOrder?: string
-  page?: string
+  // Support both old and new parameter names for backward compatibility
+  [key: string]: string | undefined
 }
 
 interface SearchPageProps {
   searchParams: Promise<SearchParams>
 }
 
-const DEFAULT_PAGE_SIZE = 10
-
-export default async function MetadataSearchPage({
-  searchParams: searchParamsPromise
-}: SearchPageProps) {
-  const searchParams = await searchParamsPromise
-
-  const query = searchParams?.query || ""
-  const startDate = searchParams?.temporalExtentStartDate || ""
-  const endDate = searchParams?.temporalExtentEndDate || ""
-  const frameworkType = searchParams?.frameworkType || ""
-  const datasetType = searchParams?.datasetType || ""
-  const useSpatialSearch = searchParams?.useSpatialSearch === "true"
-  const bbox_north = searchParams?.bbox_north || ""
-  const bbox_south = searchParams?.bbox_south || ""
-  const bbox_east = searchParams?.bbox_east || ""
-  const bbox_west = searchParams?.bbox_west || ""
-  const sortBy = searchParams?.sortBy || "updatedAt" // Default sort
-  const sortOrder = searchParams?.sortOrder || "desc" // Default order
-  const page = searchParams?.page || "1"
-
-  // A key for the Suspense boundary based on all search params to force re-render on change
-  const suspenseKey = `${query}-${startDate}-${endDate}-${frameworkType}-${datasetType}-${useSpatialSearch}-${bbox_north}-${bbox_south}-${bbox_east}-${bbox_west}-${sortBy}-${sortOrder}-${page}`
-
-  const parsedPage = parseInt(page, 10)
-  const currentPage = isNaN(parsedPage) || parsedPage < 1 ? 1 : parsedPage
-
-  const parsedSortOrder =
-    sortOrder === "asc" || sortOrder === "desc" ? sortOrder : "desc"
-
+// Loading skeleton for the search interface
+function SearchLoadingSkeleton() {
   return (
-    <div className="space-y-6">
-      <Tabs defaultValue="enhanced" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="enhanced">Enhanced Search</TabsTrigger>
-          <TabsTrigger value="basic">Basic Search</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="enhanced" className="space-y-6">
-          <EnhancedMetadataSearch />
-        </TabsContent>
-
-        <TabsContent value="basic" className="space-y-6">
+    <div className="container mx-auto px-4 py-8">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* Sidebar skeleton */}
+        <div className="lg:col-span-1 space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Search Metadata Records</CardTitle>
+              <Skeleton className="h-6 w-20" />
             </CardHeader>
-            <CardContent>
-              <MetadataSearchForm
-                initialQuery={query}
-                initialStartDate={startDate}
-                initialEndDate={endDate}
-                initialFrameworkType={frameworkType}
-                initialDatasetType={datasetType}
-                initialUseSpatialSearch={useSpatialSearch}
-                initialBboxNorth={bbox_north}
-                initialBboxSouth={bbox_south}
-                initialBboxEast={bbox_east}
-                initialBboxWest={bbox_west}
-              />
+            <CardContent className="space-y-4">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-4 w-24" />
             </CardContent>
           </Card>
 
-          {/* Conditionally render results section only if any search parameter is active */}
-          {(query ||
-            startDate ||
-            endDate ||
-            frameworkType ||
-            datasetType ||
-            useSpatialSearch) && (
-            <Suspense key={suspenseKey} fallback={<MetadataSearchSkeleton />}>
-              <UnifiedSearchFetcher
-                query={query}
-                startDate={startDate}
-                endDate={endDate}
-                frameworkType={frameworkType}
-                datasetType={datasetType}
-                useSpatialSearch={useSpatialSearch}
-                bbox_north={bbox_north}
-                bbox_south={bbox_south}
-                bbox_east={bbox_east}
-                bbox_west={bbox_west}
-                sortBy={sortBy}
-                sortOrder={parsedSortOrder}
-                page={currentPage}
-                pageSize={DEFAULT_PAGE_SIZE}
-                viewMode="map"
-              />
-            </Suspense>
-          )}
-        </TabsContent>
-      </Tabs>
+          <Card>
+            <CardHeader>
+              <Skeleton className="h-6 w-16" />
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="space-y-2">
+                  <Skeleton className="h-4 w-20" />
+                  <div className="space-y-1">
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-3/4" />
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Results skeleton */}
+        <div className="lg:col-span-3 space-y-6">
+          <Card>
+            <CardHeader>
+              <Skeleton className="h-6 w-32" />
+            </CardHeader>
+          </Card>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Card key={i} className="p-4">
+                <div className="space-y-3">
+                  <Skeleton className="h-5 w-3/4" />
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-2/3" />
+                  <div className="flex space-x-2">
+                    <Skeleton className="h-6 w-16" />
+                    <Skeleton className="h-6 w-20" />
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
+  )
+}
+
+/**
+ * Generate metadata for the search page
+ */
+export async function generateMetadata({
+  searchParams
+}: {
+  searchParams: Promise<SearchParams>
+}) {
+  const params = await searchParams
+  const urlSearchParams = new URLSearchParams(params as Record<string, string>)
+  const filters = parseSearchParams(urlSearchParams)
+
+  let title = "Search Metadata - NGDI Portal"
+  let description =
+    "Search and discover geospatial datasets, maps, and services in Nigeria's National Geospatial Data Infrastructure portal."
+
+  if (filters.query) {
+    title = `Search Results for "${filters.query}" - NGDI Portal`
+    description = `Search results for "${filters.query}" in Nigeria's geospatial data catalog. Find datasets, maps, and services.`
+  }
+
+  return {
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      type: "website"
+    },
+    robots: {
+      index: false, // Don't index search result pages
+      follow: true
+    }
+  }
+}
+
+/**
+ * Main metadata search page component
+ */
+export default async function MetadataSearchPage({
+  searchParams
+}: SearchPageProps) {
+  const params = await searchParams
+
+  // Handle legacy redirects if needed
+  // For example, if someone uses old parameter names, we could redirect to new ones
+  // This is optional and depends on your backward compatibility strategy
+
+  return (
+    <SearchErrorBoundary>
+      <Suspense fallback={<SearchLoadingSkeleton />}>
+        <SimplifiedMetadataSearch />
+      </Suspense>
+    </SearchErrorBoundary>
   )
 }

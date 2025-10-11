@@ -7,10 +7,8 @@ import { searchMetadataRecordsAction } from "@/actions/db/metadata-records-actio
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
-import {
-  transformToMetadataParams,
-  type SearchParams
-} from "@/lib/utils/search-utils"
+import { type SearchParams } from "@/lib/utils/search-utils"
+import { filtersToSearchParams } from "@/lib/utils/search-params-utils"
 import { SEARCH_RESULTS_PAGE_SIZE } from "@/lib/constants"
 
 interface InlineMetadataResultsProps {
@@ -70,27 +68,46 @@ async function MetadataResultsFetcher({
       )
     }
 
-    // Transform search parameters to match metadata search expectations
-    const metadataParams = transformToMetadataParams(searchParams)
+    // Build metadata params from canonical filters
+    const metadataParams = filtersToSearchParams({
+      query,
+      // Map commonly used filters from central page params when available
+      startDate: searchParams.startDate,
+      endDate: searchParams.endDate,
+      temporalExtentStartDate: searchParams.temporalExtentStartDate,
+      temporalExtentEndDate: searchParams.temporalExtentEndDate,
+      frameworkTypes: searchParams.frameworkType
+        ? [searchParams.frameworkType]
+        : undefined,
+      dataTypes: searchParams.datasetType
+        ? [searchParams.datasetType]
+        : undefined,
+      // Map canonical params to the legacy fields expected by the server action
+      bbox_north: (searchParams.bbox_north as any) || undefined,
+      bbox_south: (searchParams.bbox_south as any) || undefined,
+      bbox_east: (searchParams.bbox_east as any) || undefined,
+      bbox_west: (searchParams.bbox_west as any) || undefined,
+      sortBy: (searchParams.sortBy as any) || "updated",
+      sortOrder: (searchParams.sortOrder as any) || "desc",
+      page,
+      limit: Math.min(Math.max(1, maxResults), 50)
+    })
 
     // Build search criteria from URL parameters with validation
     const searchCriteria = {
       query: query.trim(),
-      organizationId: metadataParams.get("organization") || undefined,
-      temporalExtentStartDate:
-        metadataParams.get("temporalExtentStartDate") || undefined,
-      temporalExtentEndDate:
-        metadataParams.get("temporalExtentEndDate") || undefined,
-      frameworkType: metadataParams.get("frameworkType") || undefined,
-      datasetType: metadataParams.get("datasetType") || undefined,
-      bbox_north: metadataParams.get("bbox_north") || undefined,
-      bbox_south: metadataParams.get("bbox_south") || undefined,
-      bbox_east: metadataParams.get("bbox_east") || undefined,
-      bbox_west: metadataParams.get("bbox_west") || undefined,
-      sortBy: metadataParams.get("sortBy") || "updatedAt",
-      sortOrder: (metadataParams.get("sortOrder") as "asc" | "desc") || "desc",
+      temporalExtentStartDate: metadataParams.get("tempFrom") || undefined,
+      temporalExtentEndDate: metadataParams.get("tempTo") || undefined,
+      frameworkType: (searchParams.frameworkType as any) || undefined,
+      datasetType: (searchParams.datasetType as any) || undefined,
+      bbox_north: (searchParams.bbox_north as any) || undefined,
+      bbox_south: (searchParams.bbox_south as any) || undefined,
+      bbox_east: (searchParams.bbox_east as any) || undefined,
+      bbox_west: (searchParams.bbox_west as any) || undefined,
+      sortBy: (searchParams.sortBy as any) || "updatedAt",
+      sortOrder: (searchParams.sortOrder as any) || "desc",
       page: Math.max(1, page),
-      pageSize: Math.min(Math.max(1, maxResults), 50) // Clamp between 1 and 50
+      pageSize: Math.min(Math.max(1, maxResults), 50)
     }
 
     const result = await searchMetadataRecordsAction(searchCriteria)
@@ -141,7 +158,7 @@ async function MetadataResultsFetcher({
                   Try searching with different keywords or explore all metadata
                 </p>
                 <Button asChild variant="outline">
-                  <Link href="/(app)/metadata/search">
+                  <Link href="/metadata/search">
                     <FileText className="h-4 w-4 mr-2" />
                     Browse All Datasets
                   </Link>
@@ -153,7 +170,7 @@ async function MetadataResultsFetcher({
       )
     }
 
-    const metadataSearchUrl = `/(app)/metadata/search?${transformToMetadataParams(searchParams).toString()}`
+    const metadataSearchUrl = `/metadata/search?${filtersToSearchParams({ query }).toString()}`
 
     return (
       <Card>
@@ -216,9 +233,7 @@ async function MetadataResultsFetcher({
 
                 <div className="flex flex-col gap-2">
                   <Button asChild size="sm" variant="outline">
-                    <Link href={`/(app)/metadata/${record.id}`}>
-                      View Details
-                    </Link>
+                    <Link href={`/metadata/${record.id}`}>View Details</Link>
                   </Button>
                 </div>
               </div>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useState, useTransition, useEffect } from "react"
 import { SelectMetadataRecord } from "@/db/schema"
 import {
   Card,
@@ -43,66 +43,103 @@ import {
   Clock,
   AlertTriangle,
   Filter,
-  Search
+  Search,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react"
 import Link from "next/link"
 import { toast } from "sonner"
 import {
   approveMetadataAction,
-  rejectMetadataAction
+  rejectMetadataAction,
+  getPendingValidationMetadataPaginatedAction
 } from "@/actions/db/metadata-workflow-actions"
+import { Pagination, PaginationInfo } from "@/components/ui/pagination"
 
 interface MetadataApprovalQueueProps {
-  initialRecords: SelectMetadataRecord[]
+  initialRecords?: SelectMetadataRecord[]
   organizationId: string
 }
 
 export default function MetadataApprovalQueue({
-  initialRecords,
+  initialRecords = [],
   organizationId
 }: MetadataApprovalQueueProps) {
-  const [records, setRecords] = useState(initialRecords)
+  const [records, setRecords] = useState<SelectMetadataRecord[]>(initialRecords)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
-  const [sortBy, setSortBy] = useState<string>("submittedAt")
+  const [sortBy, setSortBy] = useState<"submittedAt" | "title" | "priority">(
+    "submittedAt"
+  )
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalRecords, setTotalRecords] = useState(0)
+  const [totalPages, setTotalPages] = useState(0)
+  const [isLoading, setIsLoading] = useState(false)
   const [isPending, startTransition] = useTransition()
 
-  const filteredRecords = records
-    .filter(record => {
-      const matchesSearch =
-        record.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        record.abstract?.toLowerCase().includes(searchTerm.toLowerCase())
-      const matchesStatus =
-        statusFilter === "all" || record.status === statusFilter
-      return matchesSearch && matchesStatus
-    })
-    .sort((a, b) => {
-      switch (sortBy) {
-        case "submittedAt":
-          return (
-            new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-          )
-        case "title":
-          return a.title.localeCompare(b.title)
-        case "priority":
-          // Assuming priority logic: Pending Validation > Needs Revision > others
-          const priorityOrder = { "Pending Validation": 3, "Needs Revision": 2 }
-          return (
-            (priorityOrder[b.status as keyof typeof priorityOrder] || 1) -
-            (priorityOrder[a.status as keyof typeof priorityOrder] || 1)
-          )
-        default:
-          return 0
+  const pageSize = 10
+
+  // Load records with pagination
+  const loadRecords = async (page: number = currentPage) => {
+    setIsLoading(true)
+    try {
+      const filters = {
+        searchTerm: searchTerm || undefined,
+        status: statusFilter === "all" ? undefined : statusFilter,
+        sortBy
       }
-    })
+
+      const result = await getPendingValidationMetadataPaginatedAction(
+        organizationId,
+        page,
+        pageSize,
+        filters
+      )
+
+      if (result.isSuccess && result.data) {
+        setRecords(result.data.records)
+        setTotalRecords(result.data.total)
+        setTotalPages(Math.ceil(result.data.total / pageSize))
+        setCurrentPage(page)
+      } else {
+        toast.error(result.message || "Failed to load metadata records")
+      }
+    } catch (error) {
+      toast.error("Failed to load metadata records")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Load records when filters change
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      loadRecords(1) // Reset to first page when filters change
+    }, 300) // Debounce search
+
+    return () => clearTimeout(timeoutId)
+  }, [searchTerm, statusFilter, sortBy, organizationId])
+
+  // Load records when page changes
+  useEffect(() => {
+    loadRecords(currentPage)
+  }, [currentPage])
+
+  // Initial load
+  useEffect(() => {
+    if (initialRecords.length === 0) {
+      loadRecords(1)
+    }
+  }, [organizationId])
 
   const handleApprove = async (recordId: string) => {
     startTransition(async () => {
       try {
         const result = await approveMetadataAction(recordId)
         if (result.isSuccess) {
-          setRecords(prev => prev.filter(r => r.id !== recordId))
           toast.success("Metadata record approved successfully")
+          // Reload the current page to refresh data
+          await loadRecords(currentPage)
         } else {
           toast.error(result.message || "Failed to approve record")
         }
@@ -120,14 +157,9 @@ export default function MetadataApprovalQueue({
       try {
         const result = await rejectMetadataAction(recordId, reason)
         if (result.isSuccess) {
-          setRecords(prev =>
-            prev.map(r =>
-              r.id === recordId
-                ? { ...r, status: "Needs Revision" as const }
-                : r
-            )
-          )
           toast.success("Metadata record sent back for revision")
+          // Reload the current page to refresh data
+          await loadRecords(currentPage)
         } else {
           toast.error(result.message || "Failed to reject record")
         }
@@ -211,7 +243,12 @@ export default function MetadataApprovalQueue({
               <SelectItem value="Needs Revision">Needs Revision</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={sortBy} onValueChange={setSortBy}>
+          <Select
+            value={sortBy}
+            onValueChange={value =>
+              setSortBy(value as "submittedAt" | "title" | "priority")
+            }
+          >
             <SelectTrigger className="w-[150px]">
               <SelectValue placeholder="Sort by" />
             </SelectTrigger>
@@ -224,93 +261,125 @@ export default function MetadataApprovalQueue({
         </div>
 
         {/* Records Table */}
-        {filteredRecords.length === 0 ? (
+        {isLoading && records.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            Loading metadata records...
+          </div>
+        ) : records.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
             {searchTerm || statusFilter !== "all"
               ? "No records match your filters"
               : "No records pending approval"}
           </div>
         ) : (
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Title</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Creator</TableHead>
-                  <TableHead>Submitted</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredRecords.map(record => (
-                  <TableRow key={record.id}>
-                    <TableCell>
-                      <div>
-                        <div className="font-medium">{record.title}</div>
-                        {record.abstract && (
-                          <div className="text-sm text-muted-foreground truncate max-w-[300px]">
-                            {record.abstract}
-                          </div>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>{getStatusBadge(record.status)}</TableCell>
-                    <TableCell>
-                      <div className="text-sm">{record.creatorUserId}</div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="text-sm text-muted-foreground">
-                        {getDaysAgo(record.updatedAt)}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Link href={`/app/metadata/${record.id}`}>
-                          <Button variant="outline" size="sm">
-                            <Eye className="h-4 w-4 mr-1" />
-                            Review
-                          </Button>
-                        </Link>
-                        {record.status === "Pending Validation" && (
-                          <>
-                            <Button
-                              variant="default"
-                              size="sm"
-                              onClick={() => handleApprove(record.id)}
-                              disabled={isPending}
-                            >
-                              <CheckCircle className="h-4 w-4 mr-1" />
-                              Approve
-                            </Button>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="outline" size="sm">
-                                  <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                  onClick={() =>
-                                    handleReject(record.id, "Requires revision")
-                                  }
-                                  className="text-destructive"
-                                >
-                                  <XCircle className="h-4 w-4 mr-2" />
-                                  Request Revision
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </>
-                        )}
-                      </div>
-                    </TableCell>
+          <div className="space-y-4">
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Title</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Creator</TableHead>
+                    <TableHead>Submitted</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {records.map(record => (
+                    <TableRow key={record.id}>
+                      <TableCell>
+                        <div>
+                          <div className="font-medium">{record.title}</div>
+                          {record.abstract && (
+                            <div className="text-sm text-muted-foreground truncate max-w-[300px]">
+                              {record.abstract}
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>{getStatusBadge(record.status)}</TableCell>
+                      <TableCell>
+                        <div className="text-sm">{record.creatorUserId}</div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm text-muted-foreground">
+                          {getDaysAgo(record.updatedAt)}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <Link href={`/app/metadata/${record.id}`}>
+                            <Button variant="outline" size="sm">
+                              <Eye className="h-4 w-4 mr-1" />
+                              Review
+                            </Button>
+                          </Link>
+                          {record.status === "Pending Validation" && (
+                            <>
+                              <Button
+                                variant="default"
+                                size="sm"
+                                onClick={() => handleApprove(record.id)}
+                                disabled={isPending}
+                              >
+                                <CheckCircle className="h-4 w-4 mr-1" />
+                                Approve
+                              </Button>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="outline" size="sm">
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    onClick={() =>
+                                      handleReject(
+                                        record.id,
+                                        "Requires revision"
+                                      )
+                                    }
+                                    className="text-destructive"
+                                  >
+                                    <XCircle className="h-4 w-4 mr-2" />
+                                    Request Revision
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+                <PaginationInfo
+                  currentPage={currentPage}
+                  pageSize={pageSize}
+                  totalItems={totalRecords}
+                />
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={setCurrentPage}
+                  disabled={isLoading || isPending}
+                />
+              </div>
+            )}
+
+            {isLoading && records.length > 0 && (
+              <div className="text-center py-2 text-muted-foreground text-sm">
+                Loading...
+              </div>
+            )}
           </div>
         )}
       </CardContent>

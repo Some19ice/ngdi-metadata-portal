@@ -6,15 +6,37 @@ import {
   SelectMetadataRecord,
   metadataRecordsTable,
   metadataChangeLogsTable,
-  metadataLogActionTypeEnum
+  metadataLogActionTypeEnum,
+  metadataStatusEnum
 } from "@/db/schema"
 import { ActionState } from "@/types"
 import { updateMetadataRecordStatusAction } from "./metadata-records-actions"
 import { hasPermission, isNodeOfficerForOrg, checkUserRole } from "@/lib/rbac"
-import { eq, and, not, inArray } from "drizzle-orm"
+import { eq, and, not, inArray, or, sql, count, desc } from "drizzle-orm"
 
 // Import directly from schema file since it's not exported from the index
 import { userOrganizationsTable } from "@/db/schema/user-organizations-schema"
+
+// Valid metadata status values from the enum
+type ValidMetadataStatus =
+  | "Draft"
+  | "Pending Validation"
+  | "Needs Revision"
+  | "Approved"
+  | "Published"
+  | "Archived"
+
+// Type guard to validate status values
+function isValidMetadataStatus(status: string): status is ValidMetadataStatus {
+  return [
+    "Draft",
+    "Pending Validation",
+    "Needs Revision",
+    "Approved",
+    "Published",
+    "Archived"
+  ].includes(status)
+}
 
 /**
  * Allow a metadata creator to submit a metadata record for validation
@@ -316,7 +338,160 @@ export async function publishMetadataAction(
 }
 
 /**
- * Get all metadata records pending validation for a specific organization
+ * Get metadata records pending validation for a specific organization with pagination
+ */
+export async function getPendingValidationMetadataPaginatedAction(
+  organizationId: string,
+  page: number = 1,
+  pageSize: number = 20,
+  filters?: {
+    searchTerm?: string
+    status?: string
+    sortBy?: "submittedAt" | "title" | "priority"
+  }
+): Promise<
+  ActionState<{
+    records: SelectMetadataRecord[]
+    total: number
+    hasMore: boolean
+    page: number
+    pageSize: number
+  }>
+> {
+  const { userId: currentUserId } = await auth()
+  if (!currentUserId) {
+    return { isSuccess: false, message: "User not authenticated." }
+  }
+
+  try {
+    // Check if the user has permission to view pending records for this org
+    const canView =
+      (await isNodeOfficerForOrg(currentUserId, organizationId)) ||
+      (await hasPermission(currentUserId, "approve", "metadata"))
+
+    if (!canView) {
+      return {
+        isSuccess: false,
+        message:
+          "User does not have permission to view pending records for this organization."
+      }
+    }
+
+    const offset = (page - 1) * pageSize
+
+    let conditions = [eq(metadataRecordsTable.organizationId, organizationId)]
+
+    // Apply status filter
+    if (filters?.status) {
+      // Validate the status value before using it
+      if (isValidMetadataStatus(filters.status)) {
+        conditions.push(eq(metadataRecordsTable.status, filters.status))
+      } else {
+        // If invalid status provided, return error
+        return {
+          isSuccess: false,
+          message: `Invalid status filter: ${filters.status}. Valid values are: Draft, Pending Validation, Needs Revision, Approved, Published, Archived.`
+        }
+      }
+    } else {
+      // Default to pending validation and needs revision
+      conditions.push(
+        inArray(metadataRecordsTable.status, [
+          "Pending Validation",
+          "Needs Revision"
+        ])
+      )
+    }
+
+    // Get total count
+    const totalResult = await db
+      .select({ count: count() })
+      .from(metadataRecordsTable)
+      .where(and(...conditions))
+
+    const total = totalResult[0]?.count || 0
+
+    // Build search conditions
+    let searchConditions = conditions
+    if (filters?.searchTerm) {
+      const searchTerm = `%${filters.searchTerm.toLowerCase()}%`
+      const searchCondition = or(
+        sql`LOWER(${metadataRecordsTable.title}) LIKE ${searchTerm}`,
+        sql`LOWER(${metadataRecordsTable.abstract}) LIKE ${searchTerm}`
+      )
+      if (searchCondition) {
+        searchConditions = [...conditions, searchCondition]
+      }
+    }
+
+    // Build order by
+    let orderBy: any[]
+    switch (filters?.sortBy) {
+      case "title":
+        orderBy = [metadataRecordsTable.title]
+        break
+      case "priority":
+        // Custom priority logic - Pending Validation > Needs Revision
+        orderBy = [
+          sql`CASE 
+            WHEN ${metadataRecordsTable.status} = 'Pending Validation' THEN 1 
+            WHEN ${metadataRecordsTable.status} = 'Needs Revision' THEN 2 
+            ELSE 3 
+          END`,
+          metadataRecordsTable.updatedAt
+        ]
+        break
+      case "submittedAt":
+      default:
+        orderBy = [metadataRecordsTable.updatedAt]
+        break
+    }
+
+    const records = await db.query.metadataRecords.findMany({
+      where: and(...searchConditions),
+      orderBy,
+      limit: pageSize,
+      offset,
+      with: {
+        organization: true,
+        changeLogs: {
+          orderBy: [desc(metadataChangeLogsTable.createdAt)],
+          where: and(
+            eq(metadataChangeLogsTable.actionType, "StatusChange"),
+            inArray(metadataChangeLogsTable.newStatus, [
+              "Pending Validation",
+              "Needs Revision"
+            ])
+          ),
+          limit: 1
+        }
+      }
+    })
+
+    const hasMore = offset + records.length < total
+
+    return {
+      isSuccess: true,
+      message: `Retrieved ${records.length} metadata records.`,
+      data: {
+        records,
+        total,
+        hasMore,
+        page,
+        pageSize
+      }
+    }
+  } catch (error) {
+    console.error("Error getting pending validation metadata:", error)
+    return {
+      isSuccess: false,
+      message: "Failed to retrieve pending validation metadata records."
+    }
+  }
+}
+
+/**
+ * Get all metadata records pending validation for a specific organization (legacy)
  */
 export async function getPendingValidationMetadataAction(
   organizationId?: string

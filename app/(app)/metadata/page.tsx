@@ -3,17 +3,9 @@
 import { Suspense } from "react"
 import MetadataListFetcher from "./_components/metadata-list-fetcher"
 import MetadataListSkeleton from "./_components/metadata-list-skeleton"
-import { auth } from "@clerk/nextjs/server"
-import { redirect } from "next/navigation"
+// Public browse page: remove hard auth redirect. Auth-only features handled inside client components.
 
 export default async function MetadataPage() {
-  const { userId } = await auth()
-
-  if (!userId) {
-    // This should ideally be handled by middleware, but as a fallback:
-    redirect("/login")
-  }
-
   // The MetadataListFetcher will handle role-based data fetching.
   // For now, it can default to fetching metadata created by the current user.
 

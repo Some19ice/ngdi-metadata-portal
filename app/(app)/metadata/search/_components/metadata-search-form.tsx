@@ -37,6 +37,12 @@ import {
 } from "@/db/schema/metadata-records-schema"
 import { Checkbox } from "@/components/ui/checkbox"
 import dynamic from "next/dynamic"
+import { MetadataSearchFilters } from "@/types"
+import {
+  generateSearchUrl,
+  parseSearchParams,
+  SEARCH_PARAM_NAMES
+} from "@/lib/utils/search-params-utils"
 
 // Dynamically import the map component to prevent SSR issues
 const BoundingBoxSelector = dynamic(
@@ -44,47 +50,29 @@ const BoundingBoxSelector = dynamic(
   { ssr: false }
 )
 
-// Updated schema to include faceted search options
+// Updated schema to use standardized parameter names
 const searchFormSchema = z.object({
   query: z.string().max(200).optional(),
-  temporalExtentStartDate: z.string().optional(), // Expecting YYYY-MM-DD from date input
-  temporalExtentEndDate: z.string().optional(),
-  frameworkType: z.string().optional(),
-  datasetType: z.string().optional(),
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
+  frameworkTypes: z.array(z.string()).optional(),
+  dataTypes: z.array(z.string()).optional(),
   useSpatialSearch: z.boolean().optional().default(false),
-  // We'll add spatial search coordinates
-  bbox_north: z.string().optional(),
-  bbox_south: z.string().optional(),
-  bbox_east: z.string().optional(),
-  bbox_west: z.string().optional()
+  // Spatial search coordinates using standardized names
+  bboxNorth: z.string().optional(),
+  bboxSouth: z.string().optional(),
+  bboxEast: z.string().optional(),
+  bboxWest: z.string().optional()
 })
 
 type SearchFormValues = z.infer<typeof searchFormSchema>
 
 interface MetadataSearchFormProps {
-  initialQuery?: string
-  initialStartDate?: string
-  initialEndDate?: string
-  initialFrameworkType?: string
-  initialDatasetType?: string
-  initialBboxNorth?: string
-  initialBboxSouth?: string
-  initialBboxEast?: string
-  initialBboxWest?: string
-  initialUseSpatialSearch?: boolean
+  initialFilters?: MetadataSearchFilters
 }
 
 export default function MetadataSearchForm({
-  initialQuery = "",
-  initialStartDate,
-  initialEndDate,
-  initialFrameworkType,
-  initialDatasetType,
-  initialBboxNorth,
-  initialBboxSouth,
-  initialBboxEast,
-  initialBboxWest,
-  initialUseSpatialSearch = false
+  initialFilters = {}
 }: MetadataSearchFormProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -93,66 +81,79 @@ export default function MetadataSearchForm({
   const form = useForm<SearchFormValues>({
     resolver: zodResolver(searchFormSchema),
     defaultValues: {
-      query: initialQuery || "",
-      temporalExtentStartDate: initialStartDate || "",
-      temporalExtentEndDate: initialEndDate || "",
-      frameworkType: initialFrameworkType || "",
-      datasetType: initialDatasetType || "",
-      useSpatialSearch: initialUseSpatialSearch || false,
-      bbox_north: initialBboxNorth || "",
-      bbox_south: initialBboxSouth || "",
-      bbox_east: initialBboxEast || "",
-      bbox_west: initialBboxWest || ""
+      query: initialFilters.query || "",
+      startDate: initialFilters.startDate || "",
+      endDate: initialFilters.endDate || "",
+      frameworkTypes: initialFilters.frameworkTypes || [],
+      dataTypes: initialFilters.dataTypes || [],
+      useSpatialSearch: initialFilters.useSpatialSearch || false,
+      bboxNorth: initialFilters.spatialBounds?.north?.toString() || "",
+      bboxSouth: initialFilters.spatialBounds?.south?.toString() || "",
+      bboxEast: initialFilters.spatialBounds?.east?.toString() || "",
+      bboxWest: initialFilters.spatialBounds?.west?.toString() || ""
     }
   })
 
   // Effect to update form if URL search params change externally
   useEffect(() => {
+    const urlFilters = parseSearchParams(searchParams)
+
     form.reset({
-      query: searchParams.get("query") || "",
-      temporalExtentStartDate:
-        searchParams.get("temporalExtentStartDate") || "",
-      temporalExtentEndDate: searchParams.get("temporalExtentEndDate") || "",
-      frameworkType: searchParams.get("frameworkType") || "",
-      datasetType: searchParams.get("datasetType") || "",
-      useSpatialSearch: searchParams.get("useSpatialSearch") === "true",
-      bbox_north: searchParams.get("bbox_north") || "",
-      bbox_south: searchParams.get("bbox_south") || "",
-      bbox_east: searchParams.get("bbox_east") || "",
-      bbox_west: searchParams.get("bbox_west") || ""
+      query: urlFilters.query || "",
+      startDate: urlFilters.startDate || "",
+      endDate: urlFilters.endDate || "",
+      frameworkTypes: urlFilters.frameworkTypes || [],
+      dataTypes: urlFilters.dataTypes || [],
+      useSpatialSearch: urlFilters.useSpatialSearch || false,
+      bboxNorth: urlFilters.spatialBounds?.north?.toString() || "",
+      bboxSouth: urlFilters.spatialBounds?.south?.toString() || "",
+      bboxEast: urlFilters.spatialBounds?.east?.toString() || "",
+      bboxWest: urlFilters.spatialBounds?.west?.toString() || ""
     })
   }, [searchParams, form])
 
   function onSubmit(values: SearchFormValues) {
-    const params = new URLSearchParams()
-    params.set("type", "metadata") // Add the type for the central search page
+    // Convert form values to MetadataSearchFilters
+    const filters: MetadataSearchFilters = {}
 
-    if (values.query) {
-      params.set("q", values.query) // Use 'q' to match global search
+    if (values.query?.trim()) {
+      filters.query = values.query.trim()
     }
-    if (values.temporalExtentStartDate) {
-      params.set("temporalExtentStartDate", values.temporalExtentStartDate)
+    if (values.startDate) {
+      filters.startDate = values.startDate
     }
-    if (values.temporalExtentEndDate) {
-      params.set("temporalExtentEndDate", values.temporalExtentEndDate)
+    if (values.endDate) {
+      filters.endDate = values.endDate
     }
-    if (values.frameworkType) {
-      params.set("frameworkType", values.frameworkType)
+    if (values.frameworkTypes && values.frameworkTypes.length > 0) {
+      filters.frameworkTypes = values.frameworkTypes
     }
-    if (values.datasetType) {
-      params.set("datasetType", values.datasetType)
+    if (values.dataTypes && values.dataTypes.length > 0) {
+      filters.dataTypes = values.dataTypes
     }
 
-    // Add spatial search params
+    // Handle spatial search
     if (values.useSpatialSearch) {
-      params.set("useSpatialSearch", "true")
-      if (values.bbox_north) params.set("bbox_north", values.bbox_north)
-      if (values.bbox_south) params.set("bbox_south", values.bbox_south)
-      if (values.bbox_east) params.set("bbox_east", values.bbox_east)
-      if (values.bbox_west) params.set("bbox_west", values.bbox_west)
+      filters.useSpatialSearch = true
+
+      if (
+        values.bboxNorth &&
+        values.bboxSouth &&
+        values.bboxEast &&
+        values.bboxWest
+      ) {
+        filters.spatialBounds = {
+          north: parseFloat(values.bboxNorth),
+          south: parseFloat(values.bboxSouth),
+          east: parseFloat(values.bboxEast),
+          west: parseFloat(values.bboxWest)
+        }
+      }
     }
 
-    router.push(`/search?${params.toString()}`)
+    // Use the standardized URL generation
+    const url = generateSearchUrl(filters, "/metadata/search")
+    router.push(url)
   }
 
   // Handle bounding box selection from map
@@ -165,11 +166,31 @@ export default function MetadataSearchForm({
     } | null
   ) => {
     if (bounds) {
-      form.setValue("bbox_north", bounds.north.toString())
-      form.setValue("bbox_south", bounds.south.toString())
-      form.setValue("bbox_east", bounds.east.toString())
-      form.setValue("bbox_west", bounds.west.toString())
+      form.setValue("bboxNorth", bounds.north.toString())
+      form.setValue("bboxSouth", bounds.south.toString())
+      form.setValue("bboxEast", bounds.east.toString())
+      form.setValue("bboxWest", bounds.west.toString())
       form.setValue("useSpatialSearch", true)
+
+      // Update URL immediately to reflect current bbox selection
+      const values = form.getValues()
+      const filters: MetadataSearchFilters = {
+        query: values.query?.trim() || undefined,
+        startDate: values.startDate || undefined,
+        endDate: values.endDate || undefined,
+        frameworkTypes:
+          values.frameworkTypes && values.frameworkTypes.length > 0
+            ? values.frameworkTypes
+            : undefined,
+        dataTypes:
+          values.dataTypes && values.dataTypes.length > 0
+            ? values.dataTypes
+            : undefined,
+        useSpatialSearch: true,
+        spatialBounds: bounds
+      }
+      const url = generateSearchUrl(filters, "/metadata/search")
+      router.replace(url)
     }
   }
 
@@ -227,7 +248,7 @@ export default function MetadataSearchForm({
                   <div className="grid md:grid-cols-2 gap-6">
                     <FormField
                       control={form.control}
-                      name="temporalExtentStartDate"
+                      name="startDate"
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel className="flex items-center">
@@ -245,7 +266,7 @@ export default function MetadataSearchForm({
                     />
                     <FormField
                       control={form.control}
-                      name="temporalExtentEndDate"
+                      name="endDate"
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel className="flex items-center">
@@ -269,31 +290,41 @@ export default function MetadataSearchForm({
                   <div className="grid md:grid-cols-2 gap-6">
                     <FormField
                       control={form.control}
-                      name="frameworkType"
+                      name="frameworkTypes"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Framework Type</FormLabel>
-                          <Select
-                            onValueChange={field.onChange}
-                            defaultValue={field.value}
-                            value={field.value}
-                          >
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Any Framework Type" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {/* <SelectItem value="">All Framework Types</SelectItem> */}
-                              {frameworkTypeEnum.enumValues.map(type => (
-                                <SelectItem key={type} value={type}>
+                          <FormLabel>Framework Types</FormLabel>
+                          <div className="space-y-2">
+                            {frameworkTypeEnum.enumValues.map(type => (
+                              <div
+                                key={type}
+                                className="flex items-center space-x-2"
+                              >
+                                <Checkbox
+                                  id={`framework-${type}`}
+                                  checked={field.value?.includes(type) || false}
+                                  onCheckedChange={checked => {
+                                    const current = field.value || []
+                                    if (checked) {
+                                      field.onChange([...current, type])
+                                    } else {
+                                      field.onChange(
+                                        current.filter(t => t !== type)
+                                      )
+                                    }
+                                  }}
+                                />
+                                <label
+                                  htmlFor={`framework-${type}`}
+                                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                                >
                                   {type}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                                </label>
+                              </div>
+                            ))}
+                          </div>
                           <FormDescription>
-                            Filter by framework type
+                            Select framework types
                           </FormDescription>
                           <FormMessage />
                         </FormItem>
@@ -302,31 +333,41 @@ export default function MetadataSearchForm({
 
                     <FormField
                       control={form.control}
-                      name="datasetType"
+                      name="dataTypes"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Dataset Type</FormLabel>
-                          <Select
-                            onValueChange={field.onChange}
-                            defaultValue={field.value}
-                            value={field.value}
-                          >
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Any Dataset Type" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {/* <SelectItem value="">All Dataset Types</SelectItem> */}
-                              {datasetTypeEnum.enumValues.map(type => (
-                                <SelectItem key={type} value={type}>
+                          <FormLabel>Dataset Types</FormLabel>
+                          <div className="space-y-2">
+                            {datasetTypeEnum.enumValues.map(type => (
+                              <div
+                                key={type}
+                                className="flex items-center space-x-2"
+                              >
+                                <Checkbox
+                                  id={`dataset-${type}`}
+                                  checked={field.value?.includes(type) || false}
+                                  onCheckedChange={checked => {
+                                    const current = field.value || []
+                                    if (checked) {
+                                      field.onChange([...current, type])
+                                    } else {
+                                      field.onChange(
+                                        current.filter(t => t !== type)
+                                      )
+                                    }
+                                  }}
+                                />
+                                <label
+                                  htmlFor={`dataset-${type}`}
+                                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                                >
                                   {type}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                                </label>
+                              </div>
+                            ))}
+                          </div>
                           <FormDescription>
-                            Filter by dataset type
+                            Select dataset types
                           </FormDescription>
                           <FormMessage />
                         </FormItem>
@@ -367,22 +408,22 @@ export default function MetadataSearchForm({
                         <BoundingBoxSelector
                           onBoundsChange={handleBoundingBoxChange}
                           initialBounds={
-                            form.watch("bbox_north") &&
-                            form.watch("bbox_south") &&
-                            form.watch("bbox_east") &&
-                            form.watch("bbox_west")
+                            form.watch("bboxNorth") &&
+                            form.watch("bboxSouth") &&
+                            form.watch("bboxEast") &&
+                            form.watch("bboxWest")
                               ? {
                                   north: parseFloat(
-                                    form.watch("bbox_north") || "0"
+                                    form.watch("bboxNorth") || "0"
                                   ),
                                   south: parseFloat(
-                                    form.watch("bbox_south") || "0"
+                                    form.watch("bboxSouth") || "0"
                                   ),
                                   east: parseFloat(
-                                    form.watch("bbox_east") || "0"
+                                    form.watch("bboxEast") || "0"
                                   ),
                                   west: parseFloat(
-                                    form.watch("bbox_west") || "0"
+                                    form.watch("bboxWest") || "0"
                                   )
                                 }
                               : undefined
@@ -392,7 +433,7 @@ export default function MetadataSearchForm({
                       <div className="grid grid-cols-2 gap-2 mt-2">
                         <FormField
                           control={form.control}
-                          name="bbox_north"
+                          name="bboxNorth"
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>North</FormLabel>
@@ -404,7 +445,7 @@ export default function MetadataSearchForm({
                         />
                         <FormField
                           control={form.control}
-                          name="bbox_south"
+                          name="bboxSouth"
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>South</FormLabel>
@@ -416,7 +457,7 @@ export default function MetadataSearchForm({
                         />
                         <FormField
                           control={form.control}
-                          name="bbox_east"
+                          name="bboxEast"
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>East</FormLabel>
@@ -428,7 +469,7 @@ export default function MetadataSearchForm({
                         />
                         <FormField
                           control={form.control}
-                          name="bbox_west"
+                          name="bboxWest"
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>West</FormLabel>

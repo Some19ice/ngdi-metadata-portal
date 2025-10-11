@@ -103,7 +103,10 @@ export function useMapStyles({
     const onStyleDataHandler = () => {
       if (map.isStyleLoaded()) {
         setIsStyleActuallyLoaded(true)
-        lastAppliedStyleUrlRef.current = styleToLoad.url // Successfully loaded this URL
+        lastAppliedStyleUrlRef.current =
+          typeof styleToLoad.url === "string"
+            ? styleToLoad.url
+            : JSON.stringify(styleToLoad.url) // Convert style object to string for comparison
 
         // Ensure map resizes to fill container after style change
         setTimeout(() => {

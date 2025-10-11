@@ -35,6 +35,7 @@ import {
 import { createAuditLogAction } from "@/actions/audit-log-actions"
 // Import caching utilities
 import { metadataCache, CacheKeys, CacheInvalidation } from "@/lib/cache"
+import { invalidateSearchFacetsCache } from "@/lib/search/facets"
 
 // Helper function to log metadata changes
 async function logMetadataChange(
@@ -147,6 +148,7 @@ export async function createMetadataRecordAction(
       newRecord.organizationId || ""
     )
     CacheInvalidation.metadata.invalidateByUser(newRecord.creatorUserId)
+    await invalidateSearchFacetsCache() // Invalidate facets when new records are created
 
     return {
       isSuccess: true,
@@ -168,9 +170,6 @@ export async function getMetadataRecordByIdAction(
   id: string
 ): Promise<ActionState<SelectMetadataRecord | null>> {
   const { userId: currentUserId } = await auth()
-  if (!currentUserId) {
-    return { isSuccess: false, message: "User not authenticated." }
-  }
 
   try {
     const record = await db.query.metadataRecords.findFirst({
@@ -182,11 +181,20 @@ export async function getMetadataRecordByIdAction(
       return { isSuccess: false, message: "Metadata record not found." }
     }
 
-    const canViewGlobal = await hasPermission(currentUserId, "view", "metadata")
+    const canViewGlobal = currentUserId
+      ? await hasPermission(currentUserId, "view", "metadata")
+      : false
 
     if (record.status !== "Published" && !canViewGlobal) {
+      if (!currentUserId) {
+        return {
+          isSuccess: false,
+          message:
+            "User does not have permission to view this non-published metadata record."
+        }
+      }
       const isCreator = record.creatorUserId === currentUserId
-      const isNOForRecordOrg = record.organizationId // Check if organizationId is not null
+      const isNOForRecordOrg = record.organizationId
         ? await isNodeOfficerForOrg(currentUserId, record.organizationId)
         : false
       const isAdmin = await hasPermission(currentUserId, "manage", "metadata")
@@ -519,6 +527,7 @@ export async function updateMetadataRecordAction(params: {
       )
     }
     CacheInvalidation.metadata.invalidateByUser(updatedRecord.creatorUserId)
+    await invalidateSearchFacetsCache() // Invalidate facets when records are updated
 
     return {
       isSuccess: true,
@@ -658,6 +667,7 @@ export async function updateMetadataRecordStatusAction(
       )
     }
     CacheInvalidation.metadata.invalidateByUser(updatedRecord.creatorUserId)
+    await invalidateSearchFacetsCache() // Invalidate facets when record status changes
 
     return {
       isSuccess: true,
@@ -726,6 +736,7 @@ export async function deleteMetadataRecordAction(
       )
     }
     CacheInvalidation.metadata.invalidateByUser(existingRecord.creatorUserId)
+    await invalidateSearchFacetsCache() // Invalidate facets when records are deleted
 
     // --- Audit Log ---
     await createAuditLogAction({
@@ -766,12 +777,19 @@ export async function deleteMetadataRecordAction(
 
 export async function searchMetadataRecordsAction(params: {
   query?: string
-  organizationId?: string
-  status?: SelectMetadataRecord["status"]
+  // Multi-select capable filters (arrays); legacy single fields still respected below
+  organizationIds?: string[]
+  statuses?: SelectMetadataRecord["status"][]
   temporalExtentStartDate?: string // ISO Date string
   temporalExtentEndDate?: string // ISO Date string
+  frameworkTypes?: string[]
+  datasetTypes?: string[]
+  // Legacy single-value support
+  organizationId?: string
+  status?: SelectMetadataRecord["status"]
   frameworkType?: string
   datasetType?: string
+  // Spatial
   bbox_north?: string
   bbox_south?: string
   bbox_east?: string
@@ -782,6 +800,25 @@ export async function searchMetadataRecordsAction(params: {
   pageSize?: number
 }): Promise<ActionState<PaginatedMetadataRecords>> {
   const { userId: currentUserId } = await auth()
+
+  // Generate cache key from search parameters
+  const cacheKey = CacheKeys.metadata.search(
+    params.query || "",
+    JSON.stringify({
+      ...params,
+      userId: currentUserId // Include user ID in cache key for permission-based results
+    })
+  )
+
+  // Check cache first (3 minute TTL for search results)
+  const cached = metadataCache.get(cacheKey)
+  if (cached) {
+    return {
+      isSuccess: true,
+      message: `Found ${cached.totalRecords} metadata record${cached.totalRecords === 1 ? "" : "s"} (cached).`,
+      data: cached
+    }
+  }
 
   try {
     // Input validation
@@ -819,30 +856,59 @@ export async function searchMetadataRecordsAction(params: {
     }
 
     const conditions = []
+    let searchRankColumn: any = null
 
-    // Text search conditions - Fixed OR logic structure
+    // Text search conditions with full-text search ranking
     if (params.query && params.query.trim()) {
-      const q = `%${params.query.trim()}%`
-      const textSearchConditions = [
-        ilike(metadataRecordsTable.title, q),
-        ilike(metadataRecordsTable.abstract, q),
-        ilike(metadataRecordsTable.purpose, q),
-        // Keyword search in TEXT[] array
-        sql`EXISTS (SELECT 1 FROM unnest(${metadataRecordsTable.keywords}) keyword WHERE keyword ILIKE ${q})`
-      ]
+      const searchQuery = params.query.trim()
 
-      // Add the OR condition as a single condition
-      conditions.push(or(...textSearchConditions))
+      // Use PostgreSQL full-text search for better performance and ranking
+      // Create a weighted tsvector from title (A), abstract (B), purpose (C), and keywords (D)
+      // Use websearch_to_tsquery for better query parsing (handles phrases, AND, OR, NOT)
+      const tsQuery = searchQuery.replace(/[^\w\s-]/g, " ").trim()
+
+      // Full-text search condition with weighted ranking
+      // Weight: A=1.0, B=0.4, C=0.2, D=0.1 (title most important)
+      conditions.push(
+        sql`(
+          setweight(to_tsvector('english', COALESCE(${metadataRecordsTable.title}, '')), 'A') ||
+          setweight(to_tsvector('english', COALESCE(${metadataRecordsTable.abstract}, '')), 'B') ||
+          setweight(to_tsvector('english', COALESCE(${metadataRecordsTable.purpose}, '')), 'C') ||
+          setweight(to_tsvector('english', COALESCE(array_to_string(${metadataRecordsTable.keywords}, ' '), '')), 'D')
+        ) @@ websearch_to_tsquery('english', ${tsQuery})`
+      )
+
+      // Calculate search rank for sorting by relevance
+      searchRankColumn = sql`ts_rank_cd(
+        setweight(to_tsvector('english', COALESCE(${metadataRecordsTable.title}, '')), 'A') ||
+        setweight(to_tsvector('english', COALESCE(${metadataRecordsTable.abstract}, '')), 'B') ||
+        setweight(to_tsvector('english', COALESCE(${metadataRecordsTable.purpose}, '')), 'C') ||
+        setweight(to_tsvector('english', COALESCE(array_to_string(${metadataRecordsTable.keywords}, ' '), '')), 'D'),
+        websearch_to_tsquery('english', ${tsQuery}),
+        32
+      )`
     }
 
-    if (params.organizationId) {
+    // Organization filter (supports multiple)
+    const orgIds =
+      params.organizationIds && params.organizationIds.length > 0
+        ? params.organizationIds
+        : params.organizationId
+          ? [params.organizationId]
+          : []
+    if (orgIds.length > 0) {
+      // Generate OR conditions for multiple organizations
       conditions.push(
-        eq(metadataRecordsTable.organizationId, params.organizationId)
+        or(...orgIds.map(id => eq(metadataRecordsTable.organizationId, id)))
       )
     }
 
     // Status filtering with permission check
-    if (params.status) {
+    if (params.statuses && params.statuses.length > 0) {
+      conditions.push(
+        or(...params.statuses.map(s => eq(metadataRecordsTable.status, s)))
+      )
+    } else if (params.status) {
       conditions.push(eq(metadataRecordsTable.status, params.status))
     } else {
       // Default to searching only published records if no specific status is given
@@ -883,17 +949,37 @@ export async function searchMetadataRecordsAction(params: {
       )
     }
 
-    // Framework type filtering
-    if (params.frameworkType) {
+    // Framework type filtering (supports multiple)
+    const frameworkTypes =
+      params.frameworkTypes && params.frameworkTypes.length > 0
+        ? params.frameworkTypes
+        : params.frameworkType
+          ? [params.frameworkType]
+          : []
+    if (frameworkTypes.length > 0) {
       conditions.push(
-        sql`${metadataRecordsTable.frameworkType} = ${params.frameworkType}`
+        or(
+          ...frameworkTypes.map(
+            t => sql`${metadataRecordsTable.frameworkType} = ${t}`
+          )
+        )
       )
     }
 
-    // Data type filtering (mapping datasetType to dataType for backward compatibility)
-    if (params.datasetType) {
+    // Data type filtering (supports multiple; datasetType legacy maps to dataType)
+    const datasetTypes =
+      params.datasetTypes && params.datasetTypes.length > 0
+        ? params.datasetTypes
+        : params.datasetType
+          ? [params.datasetType]
+          : []
+    if (datasetTypes.length > 0) {
       conditions.push(
-        sql`${metadataRecordsTable.dataType}::text = ${params.datasetType}`
+        or(
+          ...datasetTypes.map(
+            t => sql`${metadataRecordsTable.dataType}::text = ${t}`
+          )
+        )
       )
     }
 
@@ -957,22 +1043,34 @@ export async function searchMetadataRecordsAction(params: {
     const finalConditions =
       conditions.length > 0 ? and(...conditions) : undefined
 
-    // Sorting with validation
+    // Sorting with validation and full-text search ranking
     let orderByClause: any[] = [desc(metadataRecordsTable.updatedAt)] // Default sort
     if (params.sortBy) {
-      const validSortColumns = ["title", "createdAt", "updatedAt", "status"]
-      if (validSortColumns.includes(params.sortBy)) {
-        const sortColumn = (metadataRecordsTable as any)[params.sortBy]
-        if (sortColumn) {
-          orderByClause = [
-            params.sortOrder === "asc" ? asc(sortColumn) : desc(sortColumn)
-          ]
-        }
+      // Normalize alias: 'date' -> 'createdAt'
+      const normalizedSortBy =
+        params.sortBy === "date" ? "createdAt" : params.sortBy
+
+      // Special handling for relevance sort when there's a search query
+      if (normalizedSortBy === "relevance" && searchRankColumn) {
+        orderByClause = [desc(searchRankColumn)]
       } else {
-        console.warn(
-          `Invalid sortBy column: ${params.sortBy}. Defaulting to updatedAt.`
-        )
+        const validSortColumns = ["title", "createdAt", "updatedAt", "status"]
+        if (validSortColumns.includes(normalizedSortBy)) {
+          const sortColumn = (metadataRecordsTable as any)[normalizedSortBy]
+          if (sortColumn) {
+            orderByClause = [
+              params.sortOrder === "asc" ? asc(sortColumn) : desc(sortColumn)
+            ]
+          }
+        } else {
+          console.warn(
+            `Invalid sortBy column: ${params.sortBy}. Defaulting to updatedAt.`
+          )
+        }
       }
+    } else if (searchRankColumn) {
+      // Default to relevance sorting when there's a search query
+      orderByClause = [desc(searchRankColumn)]
     }
 
     // Use Promise.all for concurrent execution
@@ -995,16 +1093,21 @@ export async function searchMetadataRecordsAction(params: {
     const totalRecords = totalRecordsResult[0]?.count || 0
     const totalPages = Math.ceil(totalRecords / size)
 
+    const result = {
+      records,
+      totalRecords,
+      totalPages,
+      currentPage: pageNumber,
+      pageSize: size
+    }
+
+    // Cache the search results (3 minute TTL)
+    metadataCache.set(cacheKey, result, 3 * 60 * 1000)
+
     return {
       isSuccess: true,
       message: `Found ${totalRecords} metadata record${totalRecords === 1 ? "" : "s"}.`,
-      data: {
-        records,
-        totalRecords,
-        totalPages,
-        currentPage: pageNumber,
-        pageSize: size
-      }
+      data: result
     }
   } catch (error) {
     console.error("Error searching metadata records:", error)

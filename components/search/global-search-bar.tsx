@@ -1,13 +1,19 @@
 "use client"
 
+import React from "react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Search, X, Loader2, MapPin } from "lucide-react"
+import { Search, X, Loader2, MapPin, FileText, Map } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useState, useRef, useEffect, useCallback } from "react"
 import { cn } from "@/lib/utils"
 import { useDebounce } from "@/lib/hooks/use-debounce"
 import { MovingBorderWrapper } from "@/components/ui/moving-border"
+import {
+  SEARCH_PARAM_NAMES,
+  generateSearchUrl
+} from "@/lib/utils/search-params-utils"
+import { MetadataSearchFilters } from "@/types"
 
 interface Suggestion {
   id: string
@@ -15,10 +21,18 @@ interface Suggestion {
   center: [number, number]
 }
 
+interface MetadataSuggestion {
+  id: string
+  title: string
+  type: "metadata"
+}
+
+type SearchSuggestion = Suggestion | MetadataSuggestion
+
 export default function GlobalSearchBar() {
   const [searchTerm, setSearchTerm] = useState("")
   const [isFocused, setIsFocused] = useState(false)
-  const [suggestions, setSuggestions] = useState<Suggestion[]>([])
+  const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
   const inputRef = useRef<HTMLInputElement>(null)
@@ -35,16 +49,48 @@ export default function GlobalSearchBar() {
 
       setIsLoading(true)
       try {
-        const response = await fetch(
-          `/api/map/geocode?q=${encodeURIComponent(debouncedSearchTerm)}`
+        // Fetch both location and metadata suggestions in parallel
+        const [locationResponse, metadataResponse] = await Promise.all([
+          fetch(
+            `/api/map/geocode?q=${encodeURIComponent(debouncedSearchTerm)}`
+          ),
+          fetch(
+            `/api/search/metadata-suggestions?q=${encodeURIComponent(
+              debouncedSearchTerm
+            )}`
+          )
+        ])
+
+        const locationData = locationResponse.ok
+          ? await locationResponse.json()
+          : { features: [] }
+
+        const rawMetadata = metadataResponse.ok
+          ? await metadataResponse.json()
+          : { data: [] }
+
+        // Normalize metadata suggestions and tag them for rendering
+        const metadataSuggestions: MetadataSuggestion[] = Array.isArray(
+          rawMetadata?.data
         )
-        if (!response.ok) {
-          throw new Error("Failed to fetch suggestions")
-        }
-        const data = await response.json()
-        setSuggestions(data.features || [])
+          ? (rawMetadata.data as Array<{ id: string; title: string }>).map(
+              s => ({
+                id: s.id,
+                title: s.title,
+                type: "metadata"
+              })
+            )
+          : []
+
+        // Combine suggestions with priority: metadata first, then locations
+        const allSuggestions: SearchSuggestion[] = [
+          ...metadataSuggestions.slice(0, 3), // Limit metadata suggestions
+          ...(locationData.features || []).slice(0, 4) // Limit location suggestions
+        ]
+
+        setSuggestions(allSuggestions)
       } catch (error) {
-        console.error("Geocoding error:", error)
+        console.error("Suggestions fetch error:", error)
         setSuggestions([])
       } finally {
         setIsLoading(false)
@@ -57,26 +103,47 @@ export default function GlobalSearchBar() {
   const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (searchTerm.trim()) {
-      router.push(`/map?search=${encodeURIComponent(searchTerm.trim())}`)
-      inputRef.current?.blur()
-      setSuggestions([])
+      // Default to metadata search
+      handleMetadataSearch(searchTerm.trim())
     }
   }
 
-  const handleSuggestionClick = (suggestion: Suggestion) => {
-    setSearchTerm(suggestion.place_name)
-    setSuggestions([])
-
-    const [lng, lat] = suggestion.center // GeoJSON center is [lng, lat]
-    const params = new URLSearchParams({
-      search: suggestion.place_name,
-      location: suggestion.place_name,
-      center: `${lng},${lat}`,
-      zoom: "13"
-    })
-
-    router.push(`/map?${params.toString()}`)
+  const handleMetadataSearch = (query: string) => {
+    const searchFilters: MetadataSearchFilters = { query }
+    const url = generateSearchUrl(searchFilters, "/metadata/search")
+    router.push(url)
     inputRef.current?.blur()
+    setSuggestions([])
+  }
+
+  const handleLocationSearch = (query: string) => {
+    router.push(`/map?search=${encodeURIComponent(query)}`)
+    inputRef.current?.blur()
+    setSuggestions([])
+  }
+
+  const handleSuggestionClick = (suggestion: SearchSuggestion) => {
+    if ("type" in suggestion && suggestion.type === "metadata") {
+      // Handle metadata suggestion
+      setSearchTerm(suggestion.title)
+      handleMetadataSearch(suggestion.title)
+    } else {
+      // Handle location suggestion
+      const locationSuggestion = suggestion as Suggestion
+      setSearchTerm(locationSuggestion.place_name)
+      setSuggestions([])
+
+      const [lng, lat] = locationSuggestion.center
+      const params = new URLSearchParams({
+        search: locationSuggestion.place_name,
+        location: locationSuggestion.place_name,
+        center: `${lng},${lat}`,
+        zoom: "13"
+      })
+
+      router.push(`/map?${params.toString()}`)
+      inputRef.current?.blur()
+    }
   }
 
   const clearSearch = () => {
@@ -116,6 +183,38 @@ export default function GlobalSearchBar() {
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
 
+  const renderSuggestion = (suggestion: SearchSuggestion, index: number) => {
+    const isMetadata = "type" in suggestion && suggestion.type === "metadata"
+    const icon = isMetadata ? FileText : MapPin
+    const title = isMetadata
+      ? (suggestion as MetadataSuggestion).title
+      : (suggestion as Suggestion).place_name
+
+    return (
+      <button
+        key={suggestion.id}
+        onClick={() => handleSuggestionClick(suggestion)}
+        className={cn(
+          "flex w-full items-center space-x-3 rounded-md p-2 text-left text-sm transition-colors",
+          "hover:bg-muted/80 focus:bg-muted/80 focus:outline-none"
+        )}
+      >
+        {React.createElement(icon, {
+          className: cn(
+            "h-4 w-4 flex-shrink-0",
+            isMetadata ? "text-blue-500" : "text-green-500"
+          )
+        })}
+        <div className="flex-1 min-w-0">
+          <span className="truncate block">{title}</span>
+          <span className="text-xs text-muted-foreground">
+            {isMetadata ? "Metadata" : "Location"}
+          </span>
+        </div>
+      </button>
+    )
+  }
+
   return (
     <div className="relative w-full md:w-64 lg:w-80 group" ref={containerRef}>
       <MovingBorderWrapper
@@ -147,7 +246,7 @@ export default function GlobalSearchBar() {
             <Input
               ref={inputRef}
               type="text"
-              placeholder="Search locations, metadata..."
+              placeholder="Search metadata, locations..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
               onFocus={() => setIsFocused(true)}
@@ -198,63 +297,56 @@ export default function GlobalSearchBar() {
                 )}
               >
                 <kbd className="font-mono">⌘</kbd>
-                <kbd className="font-mono">K</kbd>
+                <span>K</span>
               </div>
             </div>
           </div>
-          <button type="submit" className="sr-only">
-            Search
-          </button>
         </form>
       </MovingBorderWrapper>
 
-      {isFocused && (debouncedSearchTerm.length > 1 || isLoading) && (
-        <div className="absolute top-full left-0 right-0 mt-2 z-50 suggestions-container">
-          <div className="rounded-lg border bg-background/95 backdrop-blur-sm shadow-xl overflow-hidden">
-            {isLoading && suggestions.length === 0 && (
-              <div className="flex items-center justify-center p-4">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-              </div>
+      {/* Suggestions dropdown */}
+      {isFocused && suggestions.length > 0 && (
+        <div
+          className={cn(
+            "suggestions-container absolute top-full left-0 z-50 mt-2 w-full",
+            "rounded-md border bg-popover p-1 shadow-lg",
+            "animate-in fade-in-0 zoom-in-95"
+          )}
+        >
+          <div className="space-y-1">
+            {suggestions.map((suggestion, index) =>
+              renderSuggestion(suggestion, index)
             )}
-            {!isLoading &&
-              suggestions.length === 0 &&
-              debouncedSearchTerm.length > 1 && (
-                <div className="p-4 text-sm text-center text-muted-foreground">
-                  No results for "{debouncedSearchTerm}"
-                </div>
-              )}
-            {suggestions.length > 0 && (
-              <ul>
-                {suggestions.map(suggestion => (
-                  <li
-                    key={suggestion.id}
-                    className="flex items-center px-4 py-2 text-sm cursor-pointer hover:bg-muted/50"
-                    onMouseDown={e => {
-                      e.preventDefault()
-                      handleSuggestionClick(suggestion)
-                    }}
-                  >
-                    <MapPin className="mr-3 h-4 w-4 text-muted-foreground flex-shrink-0" />
-                    <span className="truncate">{suggestion.place_name}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <div className="border-t border-border/50 px-4 py-2 text-xs text-muted-foreground bg-muted/20">
-              Press Enter to search for "{searchTerm}"
-            </div>
           </div>
+
+          {/* Quick action buttons */}
+          {searchTerm.trim() && (
+            <>
+              <div className="mx-2 my-2 border-t" />
+              <div className="grid grid-cols-2 gap-1 p-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleMetadataSearch(searchTerm.trim())}
+                  className="justify-start h-8 text-xs"
+                >
+                  <FileText className="h-3 w-3 mr-2" />
+                  Search Metadata
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleLocationSearch(searchTerm.trim())}
+                  className="justify-start h-8 text-xs"
+                >
+                  <Map className="h-3 w-3 mr-2" />
+                  Search Map
+                </Button>
+              </div>
+            </>
+          )}
         </div>
       )}
-
-      {/* Animated search ring effect */}
-      <div
-        className={cn(
-          "absolute inset-0 rounded-full transition-all duration-300 pointer-events-none",
-          "bg-gradient-to-r from-primary/10 via-transparent to-primary/10",
-          isFocused ? "opacity-100 scale-105 blur-sm" : "opacity-0 scale-100"
-        )}
-      />
     </div>
   )
 }

@@ -27,6 +27,15 @@ import {
 import { toast } from "sonner"
 import Link from "next/link"
 import { format } from "date-fns"
+import dynamic from "next/dynamic"
+import { transformDatabaseRecordToMapRecord } from "@/lib/map-utils"
+import { MapErrorBoundary } from "@/components/ui/map/map-error-boundary"
+
+// Lazy-load the map to avoid any SSR/hydration issues
+const MetadataMapDisplay = dynamic(
+  () => import("@/components/ui/map/metadata-map-display"),
+  { ssr: false }
+)
 
 interface MetadataRecord extends SelectMetadataRecord {
   organization?: SelectOrganization | null
@@ -81,6 +90,21 @@ export default function EnhancedPublicMetadataViewer({
   const constraintsInfo = record.constraintsInfo as any
   const dataQualityInfo = record.dataQualityInfo as any
   const processingInfo = record.processingInfo as any
+
+  // Prepare map-ready record (if spatial bounds exist)
+  const mapRecord = transformDatabaseRecordToMapRecord(record)
+  const mapRecords = mapRecord ? [mapRecord] : []
+
+  // Derived display fields aligned with schema
+  const formTypeFormat = record.formTypeDistributionFormat as {
+    name?: string
+    version?: string
+  } | null
+  const distributionFormatDisplay =
+    distributionInfo?.distributionFormat ||
+    (formTypeFormat?.name
+      ? `${formTypeFormat.name} ${formTypeFormat.version || ""}`.trim()
+      : null)
 
   const MetadataHeroSection = () => (
     <Card className="mb-6">
@@ -147,9 +171,12 @@ export default function EnhancedPublicMetadataViewer({
 
         {/* Action Buttons */}
         <div className="flex flex-wrap gap-2 pt-4 border-t">
-          {distributionInfo?.downloadUrl && (
+          {(distributionInfo?.downloadUrl || record.downloadUrl) && (
             <Button asChild>
-              <Link href={distributionInfo.downloadUrl} target="_blank">
+              <Link
+                href={(distributionInfo?.downloadUrl || record.downloadUrl)!}
+                target="_blank"
+              >
                 <Download className="h-4 w-4 mr-2" />
                 Download Data
               </Link>
@@ -265,6 +292,76 @@ export default function EnhancedPublicMetadataViewer({
           </div>
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Contact</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div>
+            <label className="text-sm font-medium text-muted-foreground">
+              Name
+            </label>
+            <p className="text-sm mt-1">
+              {record.contactName || "Not specified"}
+            </p>
+          </div>
+          <div>
+            <label className="text-sm font-medium text-muted-foreground">
+              Email
+            </label>
+            <p className="text-sm mt-1">
+              {record.contactEmail || "Not specified"}
+            </p>
+          </div>
+          <div>
+            <label className="text-sm font-medium text-muted-foreground">
+              Phone
+            </label>
+            <p className="text-sm mt-1">
+              {record.contactPhone || "Not specified"}
+            </p>
+          </div>
+          <div>
+            <label className="text-sm font-medium text-muted-foreground">
+              Address
+            </label>
+            <p className="text-sm mt-1 whitespace-pre-wrap">
+              {record.contactAddress || "Not specified"}
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Metadata Admin</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div>
+            <label className="text-sm font-medium text-muted-foreground">
+              DOI
+            </label>
+            <p className="text-sm mt-1 break-all">
+              {record.doi || "Not specified"}
+            </p>
+          </div>
+          <div>
+            <label className="text-sm font-medium text-muted-foreground">
+              Licence
+            </label>
+            <p className="text-sm mt-1">{record.licence || "Not specified"}</p>
+          </div>
+          <div>
+            <label className="text-sm font-medium text-muted-foreground">
+              Internal Notes
+            </label>
+            <p className="text-sm mt-1 whitespace-pre-wrap">
+              {record.internalNotes || "Not specified"}
+            </p>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 
@@ -358,20 +455,32 @@ export default function EnhancedPublicMetadataViewer({
         </Card>
       )}
 
-      {/* Interactive Map Placeholder */}
+      {/* Interactive Map */}
       <Card>
         <CardHeader>
           <CardTitle>Interactive Map</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="aspect-video bg-muted rounded-lg flex items-center justify-center">
-            <div className="text-center">
-              <MapPin className="h-12 w-12 text-muted-foreground mx-auto mb-2" />
-              <p className="text-muted-foreground">
-                Interactive map will be displayed here
-              </p>
+          {mapRecords.length > 0 ? (
+            <div className="h-[500px] w-full rounded-lg overflow-hidden">
+              <MapErrorBoundary level="section" showDetails={false}>
+                <MetadataMapDisplay
+                  key={`map-${record.id}`}
+                  records={mapRecords}
+                  showBoundingBoxes={true}
+                />
+              </MapErrorBoundary>
             </div>
-          </div>
+          ) : (
+            <div className="aspect-video bg-muted rounded-lg flex items-center justify-center">
+              <div className="text-center">
+                <MapPin className="h-12 w-12 text-muted-foreground mx-auto mb-2" />
+                <p className="text-muted-foreground">
+                  No spatial extent available
+                </p>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
@@ -469,13 +578,23 @@ export default function EnhancedPublicMetadataViewer({
 
   const AccessTab = () => (
     <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Distribution Format</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm">
+            {distributionFormatDisplay || "Not specified"}
+          </p>
+        </CardContent>
+      </Card>
       {/* Access Information */}
       <Card>
         <CardHeader>
           <CardTitle>Data Access</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {distributionInfo?.downloadUrl && (
+          {(distributionInfo?.downloadUrl || record.downloadUrl) && (
             <div className="flex items-center justify-between p-4 border rounded-lg">
               <div>
                 <h4 className="font-medium">Direct Download</h4>
@@ -484,7 +603,10 @@ export default function EnhancedPublicMetadataViewer({
                 </p>
               </div>
               <Button asChild>
-                <Link href={distributionInfo.downloadUrl} target="_blank">
+                <Link
+                  href={(distributionInfo?.downloadUrl || record.downloadUrl)!}
+                  target="_blank"
+                >
                   <Download className="h-4 w-4 mr-2" />
                   Download
                 </Link>
@@ -492,7 +614,7 @@ export default function EnhancedPublicMetadataViewer({
             </div>
           )}
 
-          {distributionInfo?.apiEndpoint && (
+          {(distributionInfo?.apiEndpoint || record.apiEndpoint) && (
             <div className="flex items-center justify-between p-4 border rounded-lg">
               <div>
                 <h4 className="font-medium">API Access</h4>
@@ -501,7 +623,10 @@ export default function EnhancedPublicMetadataViewer({
                 </p>
               </div>
               <Button variant="outline" asChild>
-                <Link href={distributionInfo.apiEndpoint} target="_blank">
+                <Link
+                  href={(distributionInfo?.apiEndpoint || record.apiEndpoint)!}
+                  target="_blank"
+                >
                   <Globe className="h-4 w-4 mr-2" />
                   API Docs
                 </Link>
@@ -524,12 +649,55 @@ export default function EnhancedPublicMetadataViewer({
           <CardTitle>Usage Rights & Constraints</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {distributionInfo?.licenseInfo && (
+          {(distributionInfo?.licenseInfo?.licenseType ||
+            record.licenseType) && (
             <div>
               <label className="text-sm font-medium text-muted-foreground">
                 License
               </label>
-              <p className="text-sm mt-1">{distributionInfo.licenseInfo}</p>
+              <p className="text-sm mt-1">
+                {distributionInfo?.licenseInfo?.licenseType ||
+                  record.licenseType}
+              </p>
+            </div>
+          )}
+          {(distributionInfo?.licenseInfo?.usageTerms || record.usageTerms) && (
+            <div>
+              <label className="text-sm font-medium text-muted-foreground">
+                Usage Terms
+              </label>
+              <p className="text-sm mt-1">
+                {distributionInfo?.licenseInfo?.usageTerms || record.usageTerms}
+              </p>
+            </div>
+          )}
+          {(distributionInfo?.licenseInfo?.accessRestrictions ||
+            record.accessRestrictions) && (
+            <div>
+              <label className="text-sm font-medium text-muted-foreground">
+                Access Restrictions
+              </label>
+              <div className="flex flex-wrap gap-2 mt-1">
+                {Array.isArray(
+                  distributionInfo?.licenseInfo?.accessRestrictions
+                )
+                  ? distributionInfo!.licenseInfo!.accessRestrictions!.map(
+                      (r: string, idx: number) => (
+                        <Badge key={idx} variant="secondary">
+                          {r}
+                        </Badge>
+                      )
+                    )
+                  : Array.isArray(record.accessRestrictions)
+                    ? (record.accessRestrictions as unknown as string[]).map(
+                        (r: string, idx: number) => (
+                          <Badge key={idx} variant="secondary">
+                            {r}
+                          </Badge>
+                        )
+                      )
+                    : null}
+              </div>
             </div>
           )}
           {constraintsInfo?.accessConstraints && (

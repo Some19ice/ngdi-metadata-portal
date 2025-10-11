@@ -1,7 +1,8 @@
 "use server"
 
 import { NextRequest, NextResponse } from "next/server"
-import { applyRateLimit, RATE_LIMIT_CONFIGS } from "@/lib/rate-limiter"
+// Note: Global API rate limiting is applied via middleware.
+// This route no longer applies an additional per-route limiter to avoid double counting.
 import { geocodeLocationShared } from "@/lib/gis-services/geocoding-service"
 
 // Try multiple environment variable names for the API key
@@ -280,14 +281,6 @@ async function searchNigerianLocations(query: string, limit: number = 10) {
 }
 
 export async function GET(request: NextRequest) {
-  // ---------- Rate limiting ----------
-  // Apply a lightweight rate-limit for search endpoints to protect MapTiler quota.
-  const rateLimitResponse = await applyRateLimit(
-    request,
-    RATE_LIMIT_CONFIGS.search
-  )
-  if (rateLimitResponse) return rateLimitResponse
-
   try {
     // Log the API key status for debugging (without exposing the key)
     if (process.env.NODE_ENV !== "production") {
@@ -297,11 +290,34 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
     const searchText = searchParams.get("q")
 
-    // Removed the 2-character minimum restriction to allow single character searches
-    if (!searchText || searchText.trim().length < 1) {
+    // Implement minimum search length to prevent excessive API calls
+    if (!searchText || searchText.trim().length < 2) {
       return NextResponse.json(
         {
-          error: "Search term is required",
+          error: "Search term must be at least 2 characters long",
+          features: []
+        },
+        { status: 400 }
+      )
+    }
+
+    // Additional validation for search patterns
+    const cleanSearchText = searchText.trim()
+    if (cleanSearchText.length > 100) {
+      return NextResponse.json(
+        {
+          error: "Search term too long",
+          features: []
+        },
+        { status: 400 }
+      )
+    }
+
+    // Prevent obviously invalid searches
+    if (/^\d+$/.test(cleanSearchText) && cleanSearchText.length < 3) {
+      return NextResponse.json(
+        {
+          error: "Invalid search pattern",
           features: []
         },
         { status: 400 }

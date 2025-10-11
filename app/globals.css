@@ -326,13 +326,13 @@ Global styles for the app.
   /* Glass Effect */
   .glass {
     background: rgba(255, 255, 255, 0.8);
-    backdrop-filter: blur(10px);
+    backdrop-filter: blur(2px);
     border: 1px solid rgba(255, 255, 255, 0.2);
   }
 
   .glass-dark {
     background: rgba(0, 0, 0, 0.8);
-    backdrop-filter: blur(10px);
+    backdrop-filter: blur(2px);
     border: 1px solid rgba(255, 255, 255, 0.1);
   }
 
@@ -549,6 +549,86 @@ Global styles for the app.
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* Performance Optimizations for Animated Elements */
+.animate-float,
+.animate-pulse-soft {
+  /* Optimize for transform and opacity animations */
+  will-change: transform, opacity;
+  /* Use GPU acceleration for smooth animations */
+  transform: translateZ(0);
+  /* Optimize compositing */
+  backface-visibility: hidden;
+}
+
+/* Optimize float animation performance */
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0px) translateZ(0);
+  }
+  50% {
+    transform: translateY(-4px) translateZ(0);
+  }
+}
+
+/* Optimized backdrop-filter fallbacks */
+@supports not (backdrop-filter: blur(2px)) {
+  .backdrop-blur-sm {
+    background-color: rgba(255, 255, 255, 0.8);
+  }
+
+  .dark .backdrop-blur-sm {
+    background-color: rgba(0, 0, 0, 0.8);
+  }
+}
+
+/* GPU acceleration for complex backgrounds */
+.bg-gradient-radial {
+  will-change: transform;
+  transform: translateZ(0);
+}
+
+/* Optimize blur effects for performance */
+.blur-xl,
+.blur-3xl {
+  filter: blur(2px);
+}
+
+/* Low-end device optimizations */
+@media (max-width: 768px) and (pointer: coarse) {
+  /* Reduce animation complexity on touch devices */
+  .animate-float {
+    animation-duration: 8s;
+    animation-timing-function: ease-in-out;
+  }
+
+  .animate-pulse-soft {
+    animation-duration: 6s;
+    animation-timing-function: ease-in-out;
+  }
+
+  /* Simplify blur effects on mobile */
+  .blur-xl {
+    filter: blur(3px);
+  }
+
+  .blur-lg {
+    filter: blur(2px);
+  }
+}
+
+/* High performance mode for capable devices */
+@media (min-width: 1024px) and (prefers-reduced-motion: no-preference) {
+  /* Enhanced animations for desktop */
+  .animate-float {
+    animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .animate-pulse-soft {
+    animation-timing-function: cubic-bezier(0.4, 0, 0.6, 1);
   }
 }
 
@@ -878,4 +958,234 @@ Global styles for the app.
 
 .delay-700 {
   animation-delay: 700ms;
+}
+
+/* Enhanced background pattern and animation utilities */
+.bg-gradient-radial {
+  background: radial-gradient(circle, var(--tw-gradient-stops));
+}
+
+/* Enhanced radial gradients for floating elements */
+.bg-gradient-radial-soft {
+  background: radial-gradient(circle at center, var(--tw-gradient-stops));
+  filter: blur(0.5px);
+}
+
+.bg-gradient-radial-sharp {
+  background: radial-gradient(ellipse at center, var(--tw-gradient-stops));
+}
+
+/* Enhanced mesh and network pattern colors */
+.mesh-emerald {
+  --mesh-primary: #10b981;
+  --mesh-secondary: #0d9488;
+  --mesh-tertiary: #0891b2;
+}
+
+.mesh-cyan {
+  --mesh-primary: #06b6d4;
+  --mesh-secondary: #3b82f6;
+  --mesh-tertiary: #6366f1;
+}
+
+/* Enhanced floating element animations */
+@keyframes float-enhanced {
+  0%,
+  100% {
+    transform: translateY(0px) translateZ(0) rotate(0deg);
+  }
+  33% {
+    transform: translateY(-8px) translateZ(0) rotate(1deg);
+  }
+  66% {
+    transform: translateY(-4px) translateZ(0) rotate(-0.5deg);
+  }
+}
+
+@keyframes pulse-glow {
+  0%,
+  100% {
+    opacity: 0.6;
+    transform: scale(1) translateZ(0);
+    filter: brightness(1);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.05) translateZ(0);
+    filter: brightness(1.2);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+/* Enhanced SVG animation performance */
+.animate-float-enhanced {
+  animation: float-enhanced 6s ease-in-out infinite;
+  will-change: transform;
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 4s ease-in-out infinite;
+  will-change: opacity, transform;
+  backface-visibility: hidden;
+}
+
+.animate-shimmer {
+  animation: shimmer 2s linear infinite;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.1),
+    transparent
+  );
+  background-size: 200% 100%;
+}
+
+/* Enhanced backdrop effects */
+.backdrop-glow {
+  backdrop-filter: blur(1px) brightness(1.1);
+  -webkit-backdrop-filter: blur(1px) brightness(1.1);
+}
+
+.backdrop-glow-soft {
+  backdrop-filter: blur(0.5px) saturate(1.2);
+  -webkit-backdrop-filter: blur(0.5px) saturate(1.2);
+}
+
+/* Enhanced border styles for floating elements */
+.border-glow-emerald {
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  box-shadow:
+    0 0 10px rgba(16, 185, 129, 0.1),
+    inset 0 1px 0 rgba(16, 185, 129, 0.2);
+}
+
+.border-glow-cyan {
+  border: 1px solid rgba(6, 182, 212, 0.3);
+  box-shadow:
+    0 0 10px rgba(6, 182, 212, 0.1),
+    inset 0 1px 0 rgba(6, 182, 212, 0.2);
+}
+
+.border-glow-blue {
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  box-shadow:
+    0 0 10px rgba(59, 130, 246, 0.1),
+    inset 0 1px 0 rgba(59, 130, 246, 0.2);
+}
+
+.border-glow-indigo {
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  box-shadow:
+    0 0 10px rgba(99, 102, 241, 0.1),
+    inset 0 1px 0 rgba(99, 102, 241, 0.2);
+}
+
+/* Enhanced floating shadow effects */
+.shadow-glow-emerald {
+  box-shadow:
+    0 4px 14px 0 rgba(16, 185, 129, 0.25),
+    0 2px 8px 0 rgba(16, 185, 129, 0.15);
+}
+
+.shadow-glow-cyan {
+  box-shadow:
+    0 4px 14px 0 rgba(6, 182, 212, 0.25),
+    0 2px 8px 0 rgba(6, 182, 212, 0.15);
+}
+
+.shadow-glow-blue {
+  box-shadow:
+    0 4px 14px 0 rgba(59, 130, 246, 0.25),
+    0 2px 8px 0 rgba(59, 130, 246, 0.15);
+}
+
+.shadow-glow-indigo {
+  box-shadow:
+    0 4px 14px 0 rgba(99, 102, 241, 0.25),
+    0 2px 8px 0 rgba(99, 102, 241, 0.15);
+}
+
+/* Enhanced SVG pattern performance optimizations */
+.svg-pattern-optimized {
+  transform: translateZ(0);
+  will-change: auto;
+  contain: layout style paint;
+}
+
+.svg-pattern-optimized svg {
+  shape-rendering: optimizeSpeed;
+  color-rendering: optimizeSpeed;
+}
+
+/* Enhanced geometric accent styles */
+.geometric-accent {
+  background: linear-gradient(
+    45deg,
+    rgba(16, 185, 129, 0.4) 0%,
+    rgba(6, 182, 212, 0.3) 50%,
+    rgba(59, 130, 246, 0.2) 100%
+  );
+  border-radius: 50px;
+  animation: pulse-glow 3s ease-in-out infinite;
+}
+
+/* Enhanced dark mode optimizations */
+.dark .animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.05),
+    transparent
+  );
+}
+
+.dark .backdrop-glow {
+  backdrop-filter: blur(1px) brightness(0.9);
+  -webkit-backdrop-filter: blur(1px) brightness(0.9);
+}
+
+.dark .border-glow-emerald {
+  border-color: rgba(16, 185, 129, 0.4);
+  box-shadow:
+    0 0 12px rgba(16, 185, 129, 0.15),
+    inset 0 1px 0 rgba(16, 185, 129, 0.25);
+}
+
+.dark .border-glow-cyan {
+  border-color: rgba(6, 182, 212, 0.4);
+  box-shadow:
+    0 0 12px rgba(6, 182, 212, 0.15),
+    inset 0 1px 0 rgba(6, 182, 212, 0.25);
+}
+
+.dark .border-glow-blue {
+  border-color: rgba(59, 130, 246, 0.4);
+  box-shadow:
+    0 0 12px rgba(59, 130, 246, 0.15),
+    inset 0 1px 0 rgba(59, 130, 246, 0.25);
+}
+
+.dark .border-glow-indigo {
+  border-color: rgba(99, 102, 241, 0.4);
+  box-shadow:
+    0 0 12px rgba(99, 102, 241, 0.15),
+    inset 0 1px 0 rgba(99, 102, 241, 0.25);
+}
+
+/* Enhanced size utilities for floating elements */
+.w-18 {
+  width: 4.5rem;
+}
+.h-18 {
+  height: 4.5rem;
 }

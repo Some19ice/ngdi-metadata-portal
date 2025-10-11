@@ -37,6 +37,201 @@ export interface OrganizationUsersData {
   }
 }
 
+// --- Get Users in an Organization with Pagination (for Node Officer) ---
+export async function getOrganizationUsersForNOPaginatedAction(
+  organizationId: string,
+  page: number = 1,
+  pageSize: number = 20,
+  searchTerm?: string
+): Promise<
+  ActionState<{
+    users: OrganizationUser[]
+    total: number
+    hasMore: boolean
+    page: number
+    pageSize: number
+    counts: {
+      metadataCreator: number
+      metadataApprover: number
+      nodeOfficer: number
+      total: number
+    }
+  }>
+> {
+  const { userId: nodeOfficerId } = await auth()
+  if (!nodeOfficerId) {
+    return {
+      isSuccess: false,
+      message: "Unauthorized: Node Officer not logged in."
+    }
+  }
+
+  // 1. RBAC: Check if current user is Node Officer for the given organization
+  const isNO = await isNodeOfficerForOrg(nodeOfficerId, organizationId)
+  if (!isNO) {
+    return {
+      isSuccess: false,
+      message: "Forbidden: You are not a Node Officer for this organization."
+    }
+  }
+
+  // 2. RBAC: Check if Node Officer has permission to view organization users
+  const canViewOrgUsers = await hasPermission(
+    nodeOfficerId,
+    "view",
+    "organization_users"
+  )
+  if (!canViewOrgUsers) {
+    return {
+      isSuccess: false,
+      message:
+        "Forbidden: You do not have permission to view users in this organization."
+    }
+  }
+
+  try {
+    // 3. Get user IDs associated with the organization
+    const orgUserEntries = await db
+      .select({
+        userId: userOrganizationsTable.userId,
+        joinedAt: userOrganizationsTable.createdAt,
+        organizationRole: userOrganizationsTable.role
+      })
+      .from(userOrganizationsTable)
+      .where(eq(userOrganizationsTable.organizationId, organizationId))
+
+    if (orgUserEntries.length === 0) {
+      return {
+        isSuccess: true,
+        message: "No users found in this organization.",
+        data: {
+          users: [],
+          total: 0,
+          hasMore: false,
+          page,
+          pageSize,
+          counts: {
+            metadataCreator: 0,
+            metadataApprover: 0,
+            nodeOfficer: 0,
+            total: 0
+          }
+        }
+      }
+    }
+
+    const organizationUserIds = orgUserEntries.map(entry => entry.userId)
+
+    // 4. Fetch Clerk user details for these user IDs
+    const client = await clerkClient()
+    const clerkUsersResponse = await client.users.getUserList({
+      userId: organizationUserIds,
+      limit: organizationUserIds.length
+    })
+
+    const clerkUsers = clerkUsersResponse.data
+
+    // 5. Fetch global roles for these users from userRolesTable
+    const userRoleAssignments = await db
+      .select({
+        userId: userRolesTable.userId,
+        roleName: rolesTable.name
+      })
+      .from(userRolesTable)
+      .innerJoin(rolesTable, eq(userRolesTable.roleId, rolesTable.id))
+      .where(inArray(userRolesTable.userId, organizationUserIds))
+
+    const userRolesMap = new Map<
+      string,
+      Array<(typeof roleEnum.enumValues)[number]>
+    >()
+    userRoleAssignments.forEach(assignment => {
+      if (!userRolesMap.has(assignment.userId)) {
+        userRolesMap.set(assignment.userId, [])
+      }
+      userRolesMap.get(assignment.userId)!.push(assignment.roleName)
+    })
+
+    // 6. Combine data into OrganizationUser objects
+    let organizationUsers: OrganizationUser[] = clerkUsers.map(
+      (clerkUser: ClerkUserType) => {
+        const orgEntry = orgUserEntries.find(e => e.userId === clerkUser.id)
+        return {
+          clerkId: clerkUser.id,
+          firstName: clerkUser.firstName,
+          lastName: clerkUser.lastName,
+          emailAddress:
+            clerkUser.emailAddresses.find(
+              e => e.id === clerkUser.primaryEmailAddressId
+            )?.emailAddress ||
+            clerkUser.emailAddresses[0]?.emailAddress ||
+            "N/A",
+          imageUrl: clerkUser.imageUrl,
+          roles: userRolesMap.get(clerkUser.id) || ["Registered User"],
+          joinedOrganizationAt: orgEntry?.joinedAt,
+          organizationRole:
+            orgEntry?.organizationRole as UserOrganizationRole | null
+        }
+      }
+    )
+
+    // 7. Apply search filter
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase()
+      organizationUsers = organizationUsers.filter(
+        user =>
+          user.firstName?.toLowerCase().includes(searchLower) ||
+          user.lastName?.toLowerCase().includes(searchLower) ||
+          user.emailAddress.toLowerCase().includes(searchLower)
+      )
+    }
+
+    // 8. Calculate pagination
+    const total = organizationUsers.length
+    const offset = (page - 1) * pageSize
+    const paginatedUsers = organizationUsers.slice(offset, offset + pageSize)
+    const hasMore = offset + paginatedUsers.length < total
+
+    // 9. Calculate counts
+    const counts = {
+      metadataCreator: 0,
+      metadataApprover: 0,
+      nodeOfficer: 0,
+      total: organizationUsers.length
+    }
+
+    organizationUsers.forEach(user => {
+      if (user.roles.includes("Node Officer")) counts.nodeOfficer++
+      if (user.roles.includes("Metadata Creator")) counts.metadataCreator++
+      if (user.roles.includes("Metadata Approver")) counts.metadataApprover++
+    })
+
+    return {
+      isSuccess: true,
+      message: "Organization users retrieved successfully.",
+      data: {
+        users: paginatedUsers,
+        total,
+        hasMore,
+        page,
+        pageSize,
+        counts
+      }
+    }
+  } catch (error) {
+    console.error(
+      `Error getting users for organization ${organizationId}:`,
+      error
+    )
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error"
+    return {
+      isSuccess: false,
+      message: `Failed to retrieve organization users: ${errorMessage}`
+    }
+  }
+}
+
 // --- Get Users in an Organization (for Node Officer) ---
 export async function getOrganizationUsersForNOAction(
   organizationId: string

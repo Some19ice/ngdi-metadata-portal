@@ -6,9 +6,9 @@ Contains middleware for protecting routes, checking user authentication, and red
 
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server"
 import { NextResponse } from "next/server"
-import { applyRateLimit, RATE_LIMIT_CONFIGS } from "@/lib/rate-limiter"
+import { applyRateLimitDetailed, RATE_LIMIT_CONFIGS } from "@/lib/rate-limiter"
 
-// Define public routes
+// Define public routes (pages and APIs that should be accessible without auth)
 const isPublicRoute = createRouteMatcher([
   "/", // Main landing page
   "/login(.*)",
@@ -23,6 +23,13 @@ const isPublicRoute = createRouteMatcher([
   "/privacy(.*)",
   "/publications(.*)",
   "/terms(.*)",
+  // Keep metadata pages public for now
+  "/metadata(.*)",
+  // Public API endpoints used by public pages/search
+  "/api/search(.*)",
+  "/api/metadata(.*)",
+  "/api/map/geocode(.*)",
+  "/api/states-data(.*)",
   "/api/clerk-user(.*)",
   "/api/stripe/webhooks(.*)"
   // Add other explicitly public marketing page routes here
@@ -35,7 +42,9 @@ const isPublicRoute = createRouteMatcher([
 
 export default clerkMiddleware(async (auth, req) => {
   // Apply rate limiting before authentication checks
-  let rateLimitConfig
+  let rateLimitConfig:
+    | (typeof RATE_LIMIT_CONFIGS)[keyof typeof RATE_LIMIT_CONFIGS]
+    | undefined
   const pathname = req.nextUrl.pathname
 
   // Determine rate limit configuration based on route
@@ -50,15 +59,29 @@ export default clerkMiddleware(async (auth, req) => {
       rateLimitConfig = RATE_LIMIT_CONFIGS.api
     }
   } else if (isPublicRoute(req)) {
-    rateLimitConfig = RATE_LIMIT_CONFIGS.public
+    // Do not rate-limit public page views to avoid penalizing normal browsing
+    rateLimitConfig = undefined as any
   } else {
     rateLimitConfig = RATE_LIMIT_CONFIGS.api
   }
 
-  // Apply rate limiting
-  const rateLimitResponse = await applyRateLimit(req, rateLimitConfig)
-  if (rateLimitResponse) {
-    return rateLimitResponse // Return rate limit error response
+  // Apply rate limiting for API routes only
+  if (rateLimitConfig !== undefined) {
+    const { limitedResponse, headers: rlHeaders } =
+      await applyRateLimitDetailed(req, rateLimitConfig)
+    if (limitedResponse) {
+      return limitedResponse // Return rate limit error response
+    }
+    // Attach headers for successful API responses to inform clients
+    const response = NextResponse.next()
+    response.headers.set("x-pathname", pathname)
+    for (const [key, value] of Object.entries(rlHeaders)) {
+      response.headers.set(key, value)
+    }
+    if (isPublicRoute(req)) {
+      return response
+    }
+    return response
   }
 
   // Create response and add pathname to headers for layout
@@ -71,8 +94,6 @@ export default clerkMiddleware(async (auth, req) => {
     return response // Allow public routes
   }
   // For all other routes, Clerk will enforce authentication by default.
-  // If you needed to explicitly protect here, it would be auth().protect(),
-  // but often the default behavior is sufficient when public routes are handled.
 
   return response
 })

@@ -1,0 +1,35 @@
+<svg width='120' height='120' viewBox='0 0 120 120' xmlns='http://www.w3.org/2000/svg'>
+  <defs>
+    <pattern id='topographicGrid' x='0' y='0' width='120' height='120' patternUnits='userSpaceOnUse'>
+      <!-- Enhanced topographic contour lines -->
+      <path d='M20,60 Q40,40 60,60 T100,60' stroke='#00bcd4' stroke-width='1.5' fill='none' opacity='0.6'/>
+      <path d='M10,80 Q30,60 50,80 T90,80' stroke='#06d6a0' stroke-width='1.5' fill='none' opacity='0.5'/>
+      <path d='M30,40 Q50,20 70,40 T110,40' stroke='#2563eb' stroke-width='1.5' fill='none' opacity='0.55'/>
+      <path d='M15,100 Q35,80 55,100 T95,100' stroke='#00a8cc' stroke-width='1' fill='none' opacity='0.4'/>
+      <path d='M25,20 Q45,0 65,20 T105,20' stroke='#04d69f' stroke-width='1' fill='none' opacity='0.4'/>
+      <!-- Enhanced coordinate grid lines -->
+      <line x1='0' y1='30' x2='120' y2='30' stroke='#6366f1' stroke-width='0.8' opacity='0.35'/>
+      <line x1='0' y1='60' x2='120' y2='60' stroke='#10b981' stroke-width='0.8' opacity='0.35'/>
+      <line x1='0' y1='90' x2='120' y2='90' stroke='#06b6d4' stroke-width='0.8' opacity='0.35'/>
+      <line x1='30' y1='0' x2='30' y2='120' stroke='#6366f1' stroke-width='0.8' opacity='0.35'/>
+      <line x1='60' y1='0' x2='60' y2='120' stroke='#10b981' stroke-width='0.8' opacity='0.35'/>
+      <line x1='90' y1='0' x2='90' y2='120' stroke='#06b6d4' stroke-width='0.8' opacity='0.35'/>
+      <!-- Enhanced data points and markers -->
+      <circle cx='25' cy='25' r='3' fill='#00bcd4' opacity='0.6'/>
+      <circle cx='75' cy='35' r='3' fill='#06d6a0' opacity='0.6'/>
+      <circle cx='45' cy='75' r='3' fill='#2563eb' opacity='0.6'/>
+      <circle cx='95' cy='85' r='3' fill='#00a8cc' opacity='0.6'/>
+      <circle cx='15' cy='55' r='2.5' fill='#04d69f' opacity='0.5'/>
+      <circle cx='105' cy='65' r='2.5' fill='#6366f1' opacity='0.5'/>
+      <!-- Enhanced elevation indicators with gradients -->
+      <polygon points='15,10 20,15 15,20 10,15' fill='#06d6a0' opacity='0.4'/>
+      <polygon points='85,50 90,55 85,60 80,55' fill='#2563eb' opacity='0.4'/>
+      <polygon points='105,25 110,30 105,35 100,30' fill='#00bcd4' opacity='0.4'/>
+      <polygon points='55,95 60,100 55,105 50,100' fill='#04d69f' opacity='0.4'/>
+      <!-- Additional topographic features -->
+      <path d='M5,110 Q25,90 45,110 T85,110' stroke='#6366f1' stroke-width='1' fill='none' opacity='0.35'/>
+      <path d='M35,10 Q55,30 75,10 T115,10' stroke='#00a8cc' stroke-width='1' fill='none' opacity='0.35'/>
+    </pattern>
+  </defs>
+  <rect width='100%' height='100%' fill='url(#topographicGrid)'/>
+</svg> 

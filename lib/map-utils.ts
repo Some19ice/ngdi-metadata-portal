@@ -182,18 +182,25 @@ export function calculateBoundsForRecords(
 
   if (validRecords.length === 0) return null
 
-  // Start with the bounds of the first record
-  const firstBounds = getRecordBounds(validRecords[0])
-  if (!firstBounds) return null
+  // Initialize bounds with null and build incrementally
+  let bounds: LngLatBounds | null = null
 
-  // Extend bounds to include all other records
-  return validRecords.slice(1).reduce((bounds, record) => {
+  for (const record of validRecords) {
     const recordBounds = getRecordBounds(record)
     if (recordBounds) {
-      bounds.extend(recordBounds)
+      if (bounds) {
+        bounds.extend(recordBounds)
+      } else {
+        // Create new bounds from the first valid record
+        bounds = new LngLatBounds(
+          recordBounds.getSouthWest(),
+          recordBounds.getNorthEast()
+        )
+      }
     }
-    return bounds
-  }, firstBounds)
+  }
+
+  return bounds
 }
 
 /**

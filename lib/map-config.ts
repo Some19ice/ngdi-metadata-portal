@@ -3,10 +3,12 @@
  */
 
 import { MapStyle } from "@/components/ui/map/map-view"
+import { StyleSpecification } from "maplibre-gl"
 
-// Satellite style object that can be used directly with MapLibre
-export const SATELLITE_STYLE_OBJECT = {
+// Type the style objects properly
+export const SATELLITE_STYLE_OBJECT: StyleSpecification = {
   version: 8 as const,
+  glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
   sources: {
     "esri-satellite": {
       type: "raster" as const,
@@ -30,8 +32,9 @@ export const SATELLITE_STYLE_OBJECT = {
 }
 
 // Streets style object using OpenStreetMap tiles
-export const STREETS_STYLE_OBJECT = {
+export const STREETS_STYLE_OBJECT: StyleSpecification = {
   version: 8 as const,
+  glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
   sources: {
     "osm-raster": {
       type: "raster" as const,
@@ -52,8 +55,9 @@ export const STREETS_STYLE_OBJECT = {
 }
 
 // Terrain style object using OpenTopoMap
-export const TERRAIN_STYLE_OBJECT = {
+export const TERRAIN_STYLE_OBJECT: StyleSpecification = {
   version: 8 as const,
+  glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
   sources: {
     "topo-raster": {
       type: "raster" as const,
@@ -77,7 +81,7 @@ export const TERRAIN_STYLE_OBJECT = {
 export const DEFAULT_FREE_STYLE: MapStyle = {
   id: "satellite",
   name: "Satellite",
-  url: SATELLITE_STYLE_OBJECT as any // Use actual satellite imagery
+  url: SATELLITE_STYLE_OBJECT
 }
 
 // MapTiler style definitions that require an API key
@@ -104,17 +108,17 @@ export const FALLBACK_STYLES: MapStyle[] = [
   {
     id: "fallback-satellite",
     name: "Satellite",
-    url: SATELLITE_STYLE_OBJECT as any
+    url: SATELLITE_STYLE_OBJECT
   },
   {
     id: "fallback-streets",
     name: "Streets",
-    url: STREETS_STYLE_OBJECT as any
+    url: STREETS_STYLE_OBJECT
   },
   {
     id: "fallback-terrain",
     name: "Terrain",
-    url: TERRAIN_STYLE_OBJECT as any
+    url: TERRAIN_STYLE_OBJECT
   }
 ]
 
@@ -187,12 +191,12 @@ export function getAvailableMapStyles(
     styles.push({
       id: "streets",
       name: "Streets",
-      url: STREETS_STYLE_OBJECT as any
+      url: STREETS_STYLE_OBJECT
     })
     styles.push({
       id: "terrain",
       name: "Terrain",
-      url: TERRAIN_STYLE_OBJECT as any
+      url: TERRAIN_STYLE_OBJECT
     })
   }
 
@@ -204,7 +208,7 @@ export function getAvailableMapStyles(
     styles.push({
       id: "ultra-fallback",
       name: "Satellite",
-      url: SATELLITE_STYLE_OBJECT as any // Use satellite as absolute fallback
+      url: SATELLITE_STYLE_OBJECT
     })
   }
 
@@ -223,16 +227,67 @@ export function logMapError(error: any, context: string): void {
   if (error instanceof Error) {
     console.error("Error message:", error.message)
     console.error("Error stack:", error.stack)
-    console.error("Full error object:", error)
+    // Don't log the full error object as it might contain circular references
   } else if (error && typeof error === "object") {
     // For MapLibre errors which might be objects
-    console.error("Error object:", JSON.stringify(error, null, 2))
-    console.error("Error keys:", Object.keys(error))
-    if (error.error) {
-      console.error("Nested error:", error.error)
-    }
-    if (error.message) {
-      console.error("Error message:", error.message)
+    try {
+      // Extract safe properties to avoid circular references
+      const safeError = {
+        message: error.message,
+        error: error.error?.message || error.error,
+        type: error.type,
+        target: error.target ? "[Map Object]" : undefined
+      }
+
+      console.error("Error details:", safeError)
+
+      // Try to stringify with circular reference handling
+      const seen = new WeakSet()
+      const stringified = JSON.stringify(
+        error,
+        (key, value) => {
+          // Avoid circular structures and large map/libre instances
+          if (
+            key === "target" ||
+            key === "_map" ||
+            key === "map" ||
+            key === "style"
+          ) {
+            return "[omitted]"
+          }
+          // Limit depth to prevent circular references
+          if (typeof value === "object" && value !== null) {
+            if (seen.has(value)) {
+              return "[circular]"
+            }
+            seen.add(value)
+          }
+          return value
+        },
+        2
+      )
+
+      if (stringified) {
+        console.error("Error object:", stringified)
+      }
+    } catch (stringifyError) {
+      // Fallback to shallow keys when stringify fails
+      console.error("Error object could not be stringified (circular refs)")
+      console.error("Error keys:", Object.keys(error))
+
+      // Log specific properties that might be useful
+      if (error.error) {
+        console.error(
+          "Nested error message:",
+          error.error.message || error.error
+        )
+      }
+      if (error.message) {
+        console.error("Error message:", error.message)
+      }
+      if (error.type) {
+        console.error("Error type:", error.type)
+      }
     }
   } else {
     console.error("Error value:", error)
