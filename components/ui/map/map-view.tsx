@@ -1,7 +1,7 @@
 "use client"
 
 import "maplibre-gl/dist/maplibre-gl.css"
-import maplibregl, { Map } from "maplibre-gl"
+import maplibregl, { Map, StyleSpecification } from "maplibre-gl"
 import React, { useRef, useState, useEffect, useMemo, useCallback } from "react"
 import {
   useMapInstance,
@@ -20,11 +20,10 @@ import {
 import { preloadMapStyles } from "@/lib/map-loader"
 import MapControls from "./map-controls"
 
-// Define a type for our map styles
 export interface MapStyle {
   id: string
   name: string
-  url: string // URL to the MapLibre style JSON
+  url: string | StyleSpecification // Allow both string URLs and style objects
 }
 
 // Define available base map styles with proper fallbacks
@@ -72,7 +71,8 @@ export default function MapView({
 }: MapViewProps) {
   const [map, setMap] = useState<Map | null>(null)
   const [isLoaded, setIsLoaded] = useState(false)
-  const [activeStyleId, setActiveStyleId] = useState<string>("")
+  // Track the currently active style id; initialize from prop
+  const [activeStyleId, setActiveStyleId] = useState<string>(initialStyleId)
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const [isContainerReady, setIsContainerReady] = useState(false)
   const [isInitialized, setIsInitialized] = useState(false)
@@ -143,10 +143,16 @@ export default function MapView({
     (mapInstance: Map) => {
       setIsInitialized(true)
 
-      // Preload other available styles for faster switching
-      preloadMapStyles(
-        validatedStyles.filter(style => style.url !== activeStyleUrl)
-      )
+      // Preload other available styles for faster switching (only string URLs)
+      const stylesToPreload = validatedStyles
+        .filter(
+          style => style.url !== activeStyleUrl && typeof style.url === "string"
+        )
+        .map(style => ({ url: style.url as string }))
+
+      if (stylesToPreload.length > 0) {
+        preloadMapStyles(stylesToPreload)
+      }
 
       if (onMapLoad) onMapLoad(mapInstance)
     },
@@ -158,8 +164,15 @@ export default function MapView({
       // Use our centralized error logging
       logMapError(err, "Map Initialization")
 
-      // Show user-friendly error message
-      toast.error("Failed to initialize map. Using fallback configuration.")
+      // Show user-friendly error message with more details
+      const userMessage = err.message.includes("API")
+        ? "Map service temporarily unavailable. Please try again later."
+        : "Failed to initialize map. Using fallback configuration."
+
+      toast.error(userMessage, {
+        description:
+          "Check your internet connection and refresh the page if the issue persists."
+      })
 
       // Call the parent's error handler if provided
       if (onError) onError(err)
@@ -217,7 +230,7 @@ export default function MapView({
     [onError, mapInstance]
   )
 
-  // Handle style changes with smooth transition
+  // Handle style changes with proper cleanup and error handling
   const handleStyleChange = useCallback(
     (styleId: string) => {
       if (!mapInstance || !mapLoaded) return
@@ -228,47 +241,95 @@ export default function MapView({
         return
       }
 
-      // Add fade transition before changing style
+      // Get container reference with null check
       const mapContainer = mapInstance.getContainer()
-      mapContainer.style.transition = "opacity 0.3s ease-in-out"
-      mapContainer.style.opacity = "0.7"
+      if (!mapContainer) return
 
-      // Store current view state
-      const center = mapInstance.getCenter()
-      const zoom = mapInstance.getZoom()
-      const bearing = mapInstance.getBearing()
-      const pitch = mapInstance.getPitch()
-
-      // Change style
-      mapInstance.once("style.load", () => {
-        // Restore view state
-        mapInstance.jumpTo({
-          center,
-          zoom,
-          bearing,
-          pitch
-        })
-
-        // Fade back in
-        setTimeout(() => {
-          mapContainer.style.opacity = "1"
-          setTimeout(() => {
-            mapContainer.style.transition = ""
-          }, 300)
-        }, 100)
-
-        setActiveStyleId(styleId)
-        onStyleChange?.(styleId)
-      })
+      // Add fade transition before changing style
+      let transitionCleanup: (() => void) | null = null
+      let styleLoadHandler: (() => void) | null = null
 
       try {
+        mapContainer.style.transition = "opacity 0.3s ease-in-out"
+        mapContainer.style.opacity = "0.7"
+
+        // Store current view state
+        const center = mapInstance.getCenter()
+        const zoom = mapInstance.getZoom()
+        const bearing = mapInstance.getBearing()
+        const pitch = mapInstance.getPitch()
+
+        // Set up cleanup function
+        transitionCleanup = () => {
+          if (mapContainer && mapContainer.isConnected) {
+            mapContainer.style.opacity = "1"
+            setTimeout(() => {
+              if (mapContainer && mapContainer.isConnected) {
+                mapContainer.style.transition = ""
+              }
+            }, 300)
+          }
+        }
+
+        // Set up style load handler with cleanup
+        styleLoadHandler = () => {
+          try {
+            // Restore view state
+            mapInstance.jumpTo({
+              center,
+              zoom,
+              bearing,
+              pitch
+            })
+
+            // Fade back in
+            setTimeout(() => {
+              if (transitionCleanup) {
+                transitionCleanup()
+                transitionCleanup = null
+              }
+            }, 100)
+
+            setActiveStyleId(styleId)
+            onStyleChange?.(styleId)
+          } catch (error) {
+            console.error(
+              "Error restoring map state after style change:",
+              error
+            )
+            if (transitionCleanup) {
+              transitionCleanup()
+              transitionCleanup = null
+            }
+          }
+
+          // Clean up the event listener
+          if (styleLoadHandler) {
+            mapInstance.off("style.load", styleLoadHandler)
+            styleLoadHandler = null
+          }
+        }
+
+        // Add style load listener
+        mapInstance.once("style.load", styleLoadHandler)
+
+        // Change style
         mapInstance.setStyle(style.url)
       } catch (error) {
         console.error("Error changing map style:", error)
         logMapError(error, "handleStyleChange")
-        // Reset opacity on error
-        mapContainer.style.opacity = "1"
-        mapContainer.style.transition = ""
+
+        // Clean up transition on error
+        if (transitionCleanup) {
+          transitionCleanup()
+          transitionCleanup = null
+        }
+
+        // Clean up event listener on error
+        if (styleLoadHandler) {
+          mapInstance.off("style.load", styleLoadHandler)
+          styleLoadHandler = null
+        }
       }
     },
     [mapInstance, mapLoaded, validatedStyles, onStyleChange]
@@ -296,6 +357,13 @@ export default function MapView({
     }
   }, [map, mapLoaded, isInitialized, onMapLoad])
 
+  // Keep internal activeStyleId in sync if the prop changes (e.g., parent decides initial differently)
+  useEffect(() => {
+    if (initialStyleId && initialStyleId !== activeStyleId) {
+      setActiveStyleId(initialStyleId)
+    }
+  }, [initialStyleId])
+
   // Expose the style change handler to parent components
   useEffect(() => {
     if (onStyleChangeHandler) {
@@ -322,10 +390,9 @@ export default function MapView({
     }
   })
 
-  // Expose the map instance and style change handler to parent components
+  // Notify parent of the current active style only when we actually have one
   useEffect(() => {
-    if (mapInstance && isInitialized && onStyleChange) {
-      // Make the style change handler available to parent components
+    if (mapInstance && isInitialized && onStyleChange && activeStyleId) {
       onStyleChange(activeStyleId)
     }
   }, [mapInstance, isInitialized, activeStyleId, onStyleChange])
@@ -355,7 +422,7 @@ export default function MapView({
   }, [activeStyleUrl, initialStyleId])
 
   return (
-    <div className={`relative ${className}`}>
+    <div className={`relative h-full ${className}`}>
       <div ref={mapContainerRef} className="h-full w-full" />
 
       {mapLibreError && (

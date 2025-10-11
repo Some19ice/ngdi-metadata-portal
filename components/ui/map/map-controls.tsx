@@ -42,21 +42,100 @@ interface MapControlsProps {
   activeStyleId: string
   handleStyleChange: (styleId: string) => void
   showLocationSearch?: boolean
+  showResetNorth?: boolean
+  showResetView?: boolean
+  showFullscreen?: boolean
   className?: string
 }
 
-export default function MapControls({
+const MapControls = React.memo(function MapControls({
   map,
   isLoaded,
   validatedStyles,
   activeStyleId,
   handleStyleChange,
   showLocationSearch = true,
+  showResetNorth = true,
+  showResetView = true,
+  showFullscreen = true,
   className
 }: MapControlsProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const controlsRef = useRef<HTMLDivElement>(null)
+  const updateUrlToCurrentView = useCallback(() => {
+    if (!map) return
+    const center = map.getCenter()
+    const zoom = map.getZoom()
+    const bearing = map.getBearing()
+    const pitch = map.getPitch()
+    const url = new URL(window.location.href)
+    url.searchParams.set(
+      "center",
+      `${center.lng.toFixed(5)},${center.lat.toFixed(5)}`
+    )
+    url.searchParams.set("zoom", `${zoom.toFixed(2)}`)
+    url.searchParams.set("bearing", `${Math.round(bearing)}`)
+    url.searchParams.set("pitch", `${Math.round(pitch)}`)
+    window.history.replaceState(
+      {},
+      "",
+      `${url.pathname}?${url.searchParams.toString()}`
+    )
+  }, [map])
+
+  const handleZoomIn = useCallback(() => {
+    if (map) {
+      const currentZoom = map.getZoom()
+      map.zoomTo(currentZoom + 1, { duration: 300 })
+      announceToScreenReader(
+        `Zoomed in to level ${Math.round(currentZoom + 1)}`
+      )
+    }
+  }, [map])
+
+  const handleZoomOut = useCallback(() => {
+    if (map) {
+      const currentZoom = map.getZoom()
+      map.zoomTo(currentZoom - 1, { duration: 300 })
+      announceToScreenReader(
+        `Zoomed out to level ${Math.round(currentZoom - 1)}`
+      )
+    }
+  }, [map])
+
+  const handleResetBearing = useCallback(() => {
+    if (map) {
+      map.rotateTo(0, { duration: 300 })
+      announceToScreenReader("Map rotation reset to north")
+    }
+  }, [map])
+
+  const handleResetView = useCallback(() => {
+    if (map) {
+      map.flyTo({
+        center: [8.6753, 9.082], // Nigeria center
+        zoom: 6,
+        bearing: 0,
+        pitch: 0,
+        duration: 1000
+      })
+      announceToScreenReader("Map view reset to default")
+    }
+  }, [map])
+
+  const handleFullscreen = useCallback(() => {
+    const mapContainer = map?.getContainer()
+    if (!mapContainer) return
+
+    if (document.fullscreenElement) {
+      document.exitFullscreen()
+      announceToScreenReader("Exited fullscreen mode")
+    } else {
+      mapContainer.requestFullscreen()
+      announceToScreenReader("Entered fullscreen mode")
+    }
+  }, [map])
 
   // Keyboard navigation
   useEffect(() => {
@@ -126,72 +205,16 @@ export default function MapControls({
 
     document.addEventListener("keydown", handleKeyDown)
     return () => document.removeEventListener("keydown", handleKeyDown)
-  }, [map, isLoaded, isExpanded])
-
-  const handleZoomIn = useCallback(() => {
-    if (map) {
-      const currentZoom = map.getZoom()
-      map.zoomTo(currentZoom + 1, { duration: 300 })
-      announceToScreenReader(
-        `Zoomed in to level ${Math.round(currentZoom + 1)}`
-      )
-    }
-  }, [map])
-
-  const handleZoomOut = useCallback(() => {
-    if (map) {
-      const currentZoom = map.getZoom()
-      map.zoomTo(currentZoom - 1, { duration: 300 })
-      announceToScreenReader(
-        `Zoomed out to level ${Math.round(currentZoom - 1)}`
-      )
-    }
-  }, [map])
-
-  const handleResetBearing = useCallback(() => {
-    if (map) {
-      map.rotateTo(0, { duration: 300 })
-      announceToScreenReader("Map rotation reset to north")
-    }
-  }, [map])
-
-  const handleResetView = useCallback(() => {
-    if (map) {
-      map.flyTo({
-        center: [8.6753, 9.082], // Nigeria center
-        zoom: 6,
-        bearing: 0,
-        pitch: 0,
-        duration: 1000
-      })
-      announceToScreenReader("Map view reset to default")
-    }
-  }, [map])
-
-  const handleFullscreen = useCallback(() => {
-    const mapContainer = map?.getContainer()
-    if (!mapContainer) return
-
-    if (!document.fullscreenElement) {
-      mapContainer
-        .requestFullscreen()
-        .then(() => {
-          toast.success("Entered fullscreen mode")
-          announceToScreenReader(
-            "Entered fullscreen mode. Press Escape to exit."
-          )
-        })
-        .catch(err => {
-          toast.error("Failed to enter fullscreen")
-          console.error("Fullscreen error:", err)
-        })
-    } else {
-      document.exitFullscreen().then(() => {
-        toast.success("Exited fullscreen mode")
-        announceToScreenReader("Exited fullscreen mode")
-      })
-    }
-  }, [map])
+  }, [
+    map,
+    isLoaded,
+    isExpanded,
+    handleZoomIn,
+    handleZoomOut,
+    handleResetView,
+    handleResetBearing,
+    handleFullscreen
+  ])
 
   const handleLocationSearch = useCallback(() => {
     if (searchQuery.trim()) {
@@ -295,6 +318,13 @@ export default function MapControls({
                   </span>
                 </DropdownMenuItem>
               ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={updateUrlToCurrentView}
+                disabled={!isLoaded || !map}
+              >
+                Update URL to current view
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
 
@@ -329,42 +359,48 @@ export default function MapControls({
               role="group"
               aria-label="Navigation controls"
             >
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={handleResetBearing}
-                disabled={!isLoaded}
-                className="w-full justify-start"
-                title="Reset rotation (Keyboard: N)"
-                aria-label="Reset map rotation to north"
-              >
-                <Compass className="h-4 w-4 mr-2" />
-                Reset North
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={handleResetView}
-                disabled={!isLoaded}
-                className="w-full justify-start"
-                title="Reset view (Keyboard: H)"
-                aria-label="Reset map to default view"
-              >
-                <Home className="h-4 w-4 mr-2" />
-                Reset View
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={handleFullscreen}
-                disabled={!isLoaded}
-                className="w-full justify-start"
-                title="Toggle fullscreen (Keyboard: F)"
-                aria-label="Toggle fullscreen mode"
-              >
-                <Maximize2 className="h-4 w-4 mr-2" />
-                Fullscreen
-              </Button>
+              {showResetNorth && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleResetBearing}
+                  disabled={!isLoaded}
+                  className="w-full justify-start"
+                  title="Reset rotation (Keyboard: N)"
+                  aria-label="Reset map rotation to north"
+                >
+                  <Compass className="h-4 w-4 mr-2" />
+                  Reset North
+                </Button>
+              )}
+              {showResetView && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleResetView}
+                  disabled={!isLoaded}
+                  className="w-full justify-start"
+                  title="Reset view (Keyboard: H)"
+                  aria-label="Reset map to default view"
+                >
+                  <Home className="h-4 w-4 mr-2" />
+                  Reset View
+                </Button>
+              )}
+              {showFullscreen && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleFullscreen}
+                  disabled={!isLoaded}
+                  className="w-full justify-start"
+                  title="Toggle fullscreen (Keyboard: F)"
+                  aria-label="Toggle fullscreen mode"
+                >
+                  <Maximize2 className="h-4 w-4 mr-2" />
+                  Fullscreen
+                </Button>
+              )}
             </div>
 
             {/* Location Search */}
@@ -434,4 +470,6 @@ export default function MapControls({
       </Collapsible>
     </div>
   )
-}
+})
+
+export default MapControls

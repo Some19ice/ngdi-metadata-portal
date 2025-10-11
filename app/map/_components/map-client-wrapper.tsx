@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation"
 import { useEffect, useState, useCallback } from "react"
 import MapLoadingSkeleton from "./map-loading-skeleton"
 import { GeocodingFeature } from "@/types"
-import { toast } from "@/components/ui/use-toast"
+import { toast } from "sonner"
 
 // Lazy load the map wrapper component and show skeleton while loading.
 const MapWrapper = dynamic(() => import("./map-wrapper"), {
@@ -40,10 +40,8 @@ async function fetchGeocode(
 
     if (res.status === 429) {
       // Too many requests: show a user-friendly message via toast
-      toast({
-        title: "Too Many Requests",
+      toast.error("Too Many Requests", {
         description: "You are searching too quickly. Please wait and try again."
-        // Optionally, you can add a variant or status if your toast supports it
       })
       return []
     }

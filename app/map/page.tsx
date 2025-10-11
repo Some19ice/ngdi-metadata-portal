@@ -63,7 +63,7 @@ export default async function MapPage({
   }
 
   return (
-    <div className="relative w-full h-full">
+    <div className="h-full w-full">
       <Suspense fallback={<MapLoadingSkeleton />}>
         <MapClientWrapper
           initialCenter={initialCenter}
