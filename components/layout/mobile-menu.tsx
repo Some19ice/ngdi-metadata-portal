@@ -7,6 +7,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import GlobalSearchBar from "@/components/search/global-search-bar"
+import { useUser } from "@clerk/nextjs"
 
 interface MobileMenuProps {
   isOpen: boolean
@@ -30,6 +31,8 @@ export function MobileMenu({
   onClose,
   showSearchBar = true
 }: MobileMenuProps) {
+  const { isSignedIn } = useUser()
+
   // Lock body scroll when menu is open
   useEffect(() => {
     if (isOpen) {
@@ -133,19 +136,29 @@ export function MobileMenu({
 
             {/* Auth Buttons */}
             <div className="p-6 border-t border-white/10 space-y-3">
-              <Link href="/login" onClick={onClose} className="block">
-                <Button
-                  variant="outline"
-                  className="w-full border-white/30 text-white hover:bg-white/10"
-                >
-                  Sign In
-                </Button>
-              </Link>
-              <Link href="/signup" onClick={onClose} className="block">
-                <Button className="w-full bg-white text-slate-900 hover:bg-white/90">
-                  Get Started
-                </Button>
-              </Link>
+              {isSignedIn ? (
+                <Link href="/dashboard" onClick={onClose} className="block">
+                  <Button className="w-full bg-white text-slate-900 hover:bg-white/90">
+                    Dashboard
+                  </Button>
+                </Link>
+              ) : (
+                <>
+                  <Link href="/login" onClick={onClose} className="block">
+                    <Button
+                      variant="outline"
+                      className="w-full border-white/30 text-white hover:bg-white/10"
+                    >
+                      Sign In
+                    </Button>
+                  </Link>
+                  <Link href="/signup" onClick={onClose} className="block">
+                    <Button className="w-full bg-white text-slate-900 hover:bg-white/90">
+                      Get Started
+                    </Button>
+                  </Link>
+                </>
+              )}
             </div>
           </motion.div>
         </>

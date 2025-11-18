@@ -33,21 +33,19 @@ export function PageLayoutSwitcher({
 
   return (
     <SidebarProvider>
-      <div className="flex flex-col min-h-screen w-full">
-        <div className="flex flex-1 w-full">
-          <AppSidebar />
-          <div className="flex flex-1 flex-col w-full">
-            <Suspense fallback={<MainHeaderFallback />}>
-              <MainHeader />
-            </Suspense>
-            <SidebarInset className="flex flex-1 flex-col w-full">
-              <main className="flex-1 overflow-auto p-4 md:p-6 w-full">
-                <ErrorBoundary>{children}</ErrorBoundary>
-              </main>
-            </SidebarInset>
-          </div>
+      <div className="flex min-h-screen w-full">
+        <AppSidebar />
+        <div className="flex flex-1 flex-col min-h-screen w-full">
+          <Suspense fallback={<MainHeaderFallback />}>
+            <MainHeader />
+          </Suspense>
+          <SidebarInset className="flex flex-1 flex-col w-full">
+            <main className="flex-1 overflow-auto p-4 md:p-6 w-full">
+              <ErrorBoundary>{children}</ErrorBoundary>
+            </main>
+            <Footer className="w-full mt-auto" />
+          </SidebarInset>
         </div>
-        <Footer className="w-full" />
       </div>
     </SidebarProvider>
   )

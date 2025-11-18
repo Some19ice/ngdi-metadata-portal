@@ -6,6 +6,7 @@ import { Globe2, Menu } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import GlobalSearchBar from "@/components/search/global-search-bar"
 import { MobileMenu } from "@/components/layout/mobile-menu"
+import { useUser } from "@clerk/nextjs"
 
 interface LandingHeaderProps {
   showSearchBar?: boolean
@@ -15,6 +16,7 @@ export default function LandingHeader({
   showSearchBar = false
 }: LandingHeaderProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const { isSignedIn } = useUser()
 
   return (
     <>
@@ -84,18 +86,29 @@ export default function LandingHeader({
                 </div>
               )}
 
-              <Link
-                href="/login"
-                className="text-white/90 hover:text-white transition-colors hidden sm:block"
-              >
-                Sign In
-              </Link>
-              <Link
-                href="/signup"
-                className="bg-white text-slate-900 px-4 py-2 rounded-lg font-semibold hover:bg-white/90 transition-colors hidden md:block"
-              >
-                Get Started
-              </Link>
+              {isSignedIn ? (
+                <Link
+                  href="/dashboard"
+                  className="bg-white text-slate-900 px-4 py-2 rounded-lg font-semibold hover:bg-white/90 transition-colors hidden sm:block"
+                >
+                  Dashboard
+                </Link>
+              ) : (
+                <>
+                  <Link
+                    href="/login"
+                    className="text-white/90 hover:text-white transition-colors hidden sm:block"
+                  >
+                    Sign In
+                  </Link>
+                  <Link
+                    href="/signup"
+                    className="bg-white text-slate-900 px-4 py-2 rounded-lg font-semibold hover:bg-white/90 transition-colors hidden md:block"
+                  >
+                    Get Started
+                  </Link>
+                </>
+              )}
 
               {/* Mobile Menu Button */}
               <Button
