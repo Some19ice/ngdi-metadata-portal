@@ -3,7 +3,7 @@
 import Link from "next/link"
 import {
   Facebook,
-  Twitter,
+  Twitter as TwitterIcon,
   Instagram,
   Linkedin,
   Github,
@@ -46,7 +46,7 @@ export default function Footer({ className }: FooterProps) {
                 aria-label="Twitter"
                 className="text-slate-300 hover:text-white"
               >
-                <Twitter className="h-5 w-5" />
+                <TwitterIcon className="h-5 w-5" />
               </a>
               <a
                 href="#"

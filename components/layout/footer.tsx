@@ -92,13 +92,14 @@ export function Footer({ className }: { className?: string }) {
   }
 
   return (
-    <footer
-      className={cn(
-        "relative bg-slate-900 text-white border-t border-slate-800",
-        className
-      )}
-    >
-      <div className="max-w-7xl mx-auto px-4 py-6">
+    <footer className={cn("relative w-full px-4 pb-4", className)}>
+      <div
+        className={cn(
+          "bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 text-white",
+          "rounded-2xl border border-slate-700/50 shadow-xl",
+          "max-w-7xl mx-auto px-6 py-6"
+        )}
+      >
         {/* Main Footer Content */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-4">
           {/* About Section */}
@@ -204,7 +205,7 @@ export function Footer({ className }: { className?: string }) {
         </div>
 
         {/* Bottom Bar */}
-        <div className="pt-4 border-t border-slate-800">
+        <div className="pt-4 border-t border-slate-700/50">
           <div className="flex flex-col md:flex-row justify-between items-center space-y-1 md:space-y-0">
             <p className="text-[10px] text-slate-400">
               © {new Date().getFullYear()} NGDI Metadata Portal. All rights
