@@ -2,7 +2,13 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { Globe2, Mail, Github, Twitter, Linkedin, Send } from "lucide-react"
+import {
+  Globe2,
+  Send,
+  Github as GithubIcon,
+  Twitter as TwitterIcon,
+  Linkedin as LinkedinIcon
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
@@ -50,9 +56,9 @@ const footerSections: FooterSection[] = [
 ]
 
 const socialLinks = [
-  { icon: Twitter, href: "#", label: "Twitter" },
-  { icon: Linkedin, href: "#", label: "LinkedIn" },
-  { icon: Github, href: "#", label: "GitHub" }
+  { icon: TwitterIcon, href: "#", label: "Twitter" },
+  { icon: LinkedinIcon, href: "#", label: "LinkedIn" },
+  { icon: GithubIcon, href: "#", label: "GitHub" }
 ]
 
 export function Footer({ className }: { className?: string }) {
@@ -92,16 +98,16 @@ export function Footer({ className }: { className?: string }) {
         className
       )}
     >
-      <div className="max-w-7xl mx-auto px-4 py-12">
+      <div className="max-w-7xl mx-auto px-4 py-6">
         {/* Main Footer Content */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-12">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-4">
           {/* About Section */}
-          <div className="space-y-4">
+          <div className="space-y-2">
             <div className="flex items-center space-x-2">
-              <Globe2 className="w-8 h-8 text-primary" />
-              <span className="font-bold text-xl">NGDI Portal</span>
+              <Globe2 className="w-5 h-5 text-primary" />
+              <span className="font-bold text-base">NGDI Portal</span>
             </div>
-            <p className="text-sm text-slate-400 leading-relaxed">
+            <p className="text-xs text-slate-400 leading-relaxed">
               Nigeria's National Geospatial Data Infrastructure portal,
               providing comprehensive access to geospatial metadata and
               resources for informed decision-making.
@@ -110,15 +116,15 @@ export function Footer({ className }: { className?: string }) {
 
           {/* Footer Sections */}
           {footerSections.map(section => (
-            <div key={section.title} className="space-y-4">
-              <h3 className="font-semibold text-lg">{section.title}</h3>
-              <ul className="space-y-2">
+            <div key={section.title} className="space-y-2">
+              <h3 className="font-semibold text-sm">{section.title}</h3>
+              <ul className="space-y-1">
                 {section.links.map(link => (
                   <li key={link.href}>
                     <Link
                       href={link.href}
                       className={cn(
-                        "text-sm text-slate-400 hover:text-white",
+                        "text-xs text-slate-400 hover:text-white",
                         "transition-colors duration-200",
                         "inline-block hover:translate-x-1 transform"
                       )}
@@ -136,11 +142,11 @@ export function Footer({ className }: { className?: string }) {
           ))}
 
           {/* Connect Section */}
-          <div className="space-y-4">
-            <h3 className="font-semibold text-lg">Connect</h3>
+          <div className="space-y-2">
+            <h3 className="font-semibold text-sm">Connect</h3>
 
             {/* Social Links */}
-            <div className="flex space-x-3">
+            <div className="flex space-x-1.5">
               {socialLinks.map(social => {
                 const Icon = social.icon
                 return (
@@ -150,30 +156,30 @@ export function Footer({ className }: { className?: string }) {
                     target="_blank"
                     rel="noopener noreferrer"
                     className={cn(
-                      "p-2 rounded-lg bg-slate-800 hover:bg-slate-700",
+                      "p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700",
                       "transition-colors duration-200",
-                      "hover:scale-110 transform"
+                      "hover:scale-105 transform"
                     )}
                     aria-label={social.label}
                   >
-                    <Icon className="w-5 h-5" />
+                    <Icon className="w-3.5 h-3.5" />
                   </a>
                 )
               })}
             </div>
 
             {/* Newsletter Signup */}
-            <div className="space-y-2">
-              <h4 className="text-sm font-medium">Newsletter</h4>
-              <form onSubmit={handleNewsletterSubmit} className="space-y-2">
-                <div className="flex gap-2">
+            <div className="space-y-1.5">
+              <h4 className="text-xs font-medium">Newsletter</h4>
+              <form onSubmit={handleNewsletterSubmit} className="space-y-1">
+                <div className="flex gap-1.5">
                   <Input
                     type="email"
                     placeholder="Your email"
                     value={email}
                     onChange={e => setEmail(e.target.value)}
                     className={cn(
-                      "bg-slate-800 border-slate-700 text-white",
+                      "bg-slate-800 border-slate-700 text-white h-8 text-xs",
                       "placeholder:text-slate-500",
                       "focus:border-primary"
                     )}
@@ -183,14 +189,14 @@ export function Footer({ className }: { className?: string }) {
                     type="submit"
                     size="icon"
                     disabled={isSubmitting}
-                    className="flex-shrink-0"
+                    className="flex-shrink-0 h-8 w-8"
                   >
-                    <Send className="w-4 h-4" />
+                    <Send className="w-3 h-3" />
                     <span className="sr-only">Subscribe</span>
                   </Button>
                 </div>
-                <p className="text-xs text-slate-500">
-                  Get updates on new datasets and features
+                <p className="text-[10px] text-slate-500">
+                  Get updates on new datasets
                 </p>
               </form>
             </div>
@@ -198,9 +204,9 @@ export function Footer({ className }: { className?: string }) {
         </div>
 
         {/* Bottom Bar */}
-        <div className="pt-8 border-t border-slate-800">
-          <div className="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
-            <p className="text-sm text-slate-400">
+        <div className="pt-4 border-t border-slate-800">
+          <div className="flex flex-col md:flex-row justify-between items-center space-y-1 md:space-y-0">
+            <p className="text-[10px] text-slate-400">
               © {new Date().getFullYear()} NGDI Metadata Portal. All rights
               reserved.
             </p>
