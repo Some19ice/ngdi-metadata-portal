@@ -5,9 +5,10 @@ import Link from "next/link"
 import {
   Globe2,
   Send,
-  Github as GithubIcon,
-  Twitter as TwitterIcon,
-  Linkedin as LinkedinIcon
+  Dribbble,
+  Twitter,
+  Instagram,
+  Linkedin
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -56,9 +57,10 @@ const footerSections: FooterSection[] = [
 ]
 
 const socialLinks = [
-  { icon: TwitterIcon, href: "#", label: "Twitter" },
-  { icon: LinkedinIcon, href: "#", label: "LinkedIn" },
-  { icon: GithubIcon, href: "#", label: "GitHub" }
+  { icon: Dribbble, href: "#", label: "Dribbble" },
+  { icon: Twitter, href: "#", label: "Twitter" },
+  { icon: Instagram, href: "#", label: "Instagram" },
+  { icon: Linkedin, href: "#", label: "LinkedIn" }
 ]
 
 export function Footer({ className }: { className?: string }) {
@@ -95,59 +97,101 @@ export function Footer({ className }: { className?: string }) {
     <footer className={cn("relative w-full px-4 pb-4", className)}>
       <div
         className={cn(
-          "bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 text-white",
-          "rounded-2xl border border-slate-700/50 shadow-xl",
-          "max-w-7xl mx-auto px-6 py-6"
+          "bg-[#1a1a1a] text-white",
+          "rounded-3xl border border-slate-800/50 shadow-2xl",
+          "max-w-7xl mx-auto px-8 py-10 md:px-12 md:py-12"
         )}
       >
-        {/* Main Footer Content */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-4">
-          {/* About Section */}
-          <div className="space-y-2">
-            <div className="flex items-center space-x-2">
-              <Globe2 className="w-5 h-5 text-primary" />
-              <span className="font-bold text-base">NGDI Portal</span>
+        <div className="flex flex-col lg:flex-row gap-8 lg:gap-12">
+          {/* Left Section - Branding & Newsletter */}
+          <div className="flex-1 space-y-6 lg:pr-12 lg:border-r border-slate-800/50">
+            {/* Logo & Tagline */}
+            <div className="space-y-4">
+              <div className="flex items-center space-x-2">
+                <div className="w-8 h-8 bg-slate-700 rounded-lg flex items-center justify-center">
+                  <Globe2 className="w-5 h-5 text-slate-300" />
+                </div>
+                <div>
+                  <div className="text-sm font-semibold text-slate-400">
+                    NGDI
+                  </div>
+                  <div className="text-xs text-slate-500">Portal</div>
+                </div>
+              </div>
+
+              <p className="text-sm text-slate-400 leading-relaxed">
+                Nigeria's National Geospatial Data Infrastructure portal,
+                providing comprehensive access to geospatial metadata and
+                resources for informed decision-making.
+              </p>
             </div>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              Nigeria's National Geospatial Data Infrastructure portal,
-              providing comprehensive access to geospatial metadata and
-              resources for informed decision-making.
-            </p>
+
+            {/* Newsletter */}
+            <div className="space-y-3">
+              <p className="text-sm text-slate-400">
+                Subscribe to our newsletter
+              </p>
+              <form onSubmit={handleNewsletterSubmit} className="relative">
+                <Input
+                  type="email"
+                  placeholder="Your email address"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  className={cn(
+                    "bg-slate-800/50 border-slate-700/50 text-white h-11 pr-12",
+                    "placeholder:text-slate-500 rounded-xl",
+                    "focus:border-slate-600 focus:bg-slate-800/70 transition-all"
+                  )}
+                  disabled={isSubmitting}
+                />
+                <Button
+                  type="submit"
+                  size="icon"
+                  disabled={isSubmitting}
+                  className="absolute right-1.5 top-1.5 h-8 w-8 rounded-lg bg-slate-700 hover:bg-slate-600"
+                >
+                  <Send className="w-4 h-4" />
+                  <span className="sr-only">Subscribe</span>
+                </Button>
+              </form>
+            </div>
           </div>
 
-          {/* Footer Sections */}
-          {footerSections.map(section => (
-            <div key={section.title} className="space-y-2">
-              <h3 className="font-semibold text-sm">{section.title}</h3>
-              <ul className="space-y-1">
-                {section.links.map(link => (
-                  <li key={link.href}>
-                    <Link
-                      href={link.href}
-                      className={cn(
-                        "text-xs text-slate-400 hover:text-white",
-                        "transition-colors duration-200",
-                        "inline-block hover:translate-x-1 transform"
-                      )}
-                      {...(link.external && {
-                        target: "_blank",
-                        rel: "noopener noreferrer"
-                      })}
-                    >
-                      {link.label}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
+          {/* Right Section - Links & Social */}
+          <div className="flex-1 flex gap-6 lg:gap-8">
+            {/* Links Columns with Dividers */}
+            <div className="flex-1 flex gap-6 lg:gap-8">
+              {footerSections.map((section, index) => (
+                <div key={section.title} className="flex gap-6 lg:gap-8">
+                  <div className="space-y-3 flex-1">
+                    <h3 className="text-sm font-semibold text-slate-300">
+                      {section.title}
+                    </h3>
+                    <ul className="space-y-2">
+                      {section.links.map(link => (
+                        <li key={link.href}>
+                          <Link
+                            href={link.href}
+                            className="block text-sm text-slate-400 hover:text-white transition-colors"
+                          >
+                            {link.label}
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  {index < footerSections.length - 1 && (
+                    <div className="w-px bg-slate-800/50" />
+                  )}
+                </div>
+              ))}
             </div>
-          ))}
 
-          {/* Connect Section */}
-          <div className="space-y-2">
-            <h3 className="font-semibold text-sm">Connect</h3>
+            {/* Vertical Divider before Social */}
+            <div className="w-px bg-slate-800/50 hidden lg:block" />
 
-            {/* Social Links */}
-            <div className="flex space-x-1.5">
+            {/* Social Icons - Vertical */}
+            <div className="flex flex-col gap-3">
               {socialLinks.map(social => {
                 const Icon = social.icon
                 return (
@@ -157,60 +201,17 @@ export function Footer({ className }: { className?: string }) {
                     target="_blank"
                     rel="noopener noreferrer"
                     className={cn(
-                      "p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700",
-                      "transition-colors duration-200",
-                      "hover:scale-105 transform"
+                      "w-10 h-10 rounded-xl bg-slate-800/50 hover:bg-slate-700/50",
+                      "flex items-center justify-center",
+                      "transition-all duration-200 hover:scale-105"
                     )}
                     aria-label={social.label}
                   >
-                    <Icon className="w-3.5 h-3.5" />
+                    <Icon className="w-4 h-4 text-slate-400" />
                   </a>
                 )
               })}
             </div>
-
-            {/* Newsletter Signup */}
-            <div className="space-y-1.5">
-              <h4 className="text-xs font-medium">Newsletter</h4>
-              <form onSubmit={handleNewsletterSubmit} className="space-y-1">
-                <div className="flex gap-1.5">
-                  <Input
-                    type="email"
-                    placeholder="Your email"
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    className={cn(
-                      "bg-slate-800 border-slate-700 text-white h-8 text-xs",
-                      "placeholder:text-slate-500",
-                      "focus:border-primary"
-                    )}
-                    disabled={isSubmitting}
-                  />
-                  <Button
-                    type="submit"
-                    size="icon"
-                    disabled={isSubmitting}
-                    className="flex-shrink-0 h-8 w-8"
-                  >
-                    <Send className="w-3 h-3" />
-                    <span className="sr-only">Subscribe</span>
-                  </Button>
-                </div>
-                <p className="text-[10px] text-slate-500">
-                  Get updates on new datasets
-                </p>
-              </form>
-            </div>
-          </div>
-        </div>
-
-        {/* Bottom Bar */}
-        <div className="pt-4 border-t border-slate-700/50">
-          <div className="flex flex-col md:flex-row justify-between items-center space-y-1 md:space-y-0">
-            <p className="text-[10px] text-slate-400">
-              © {new Date().getFullYear()} NGDI Metadata Portal. All rights
-              reserved.
-            </p>
           </div>
         </div>
       </div>
