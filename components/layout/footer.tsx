@@ -199,7 +199,7 @@ export function Footer({ className }: { className?: string }) {
 
         {/* Bottom Bar */}
         <div className="pt-8 border-t border-slate-800">
-          <div className="flex flex-col  items-centermd:flex-row justify-between items-center space-y-4 md:space-y-0">
+          <div className="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
             <p className="text-sm text-slate-400">
               © {new Date().getFullYear()} NGDI Metadata Portal. All rights
               reserved.
