@@ -30,7 +30,7 @@ function PostHogPageviewInner(): null {
   return null
 }
 
-export function PostHogPageview(): JSX.Element {
+export function PostHogPageview(): React.ReactElement {
   return (
     <Suspense fallback={null}>
       <PostHogPageviewInner />

@@ -9,6 +9,9 @@ const nextConfig = {
   // Optimize hydration
   reactStrictMode: true,
 
+  // Turbopack config (Next.js 16 default bundler)
+  turbopack: {},
+
   // Reduce hydration mismatches
   experimental: {
     optimizePackageImports: ["@/components", "@/lib"]

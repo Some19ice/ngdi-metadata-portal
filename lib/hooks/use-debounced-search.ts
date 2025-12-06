@@ -46,13 +46,13 @@ export function useDebouncedSearch(options: UseDebouncedSearchOptions = {}) {
   const [searchTime, setSearchTime] = useState<number>(0)
 
   // Refs for cleanup and caching
-  const searchTimeoutRef = useRef<NodeJS.Timeout>()
-  const suggestionTimeoutRef = useRef<NodeJS.Timeout>()
+  const searchTimeoutRef = useRef<NodeJS.Timeout>(undefined)
+  const suggestionTimeoutRef = useRef<NodeJS.Timeout>(undefined)
   const searchCacheRef = useRef<SearchCache>({})
   const suggestionCacheRef = useRef<SuggestionCache>({})
-  const abortControllerRef = useRef<AbortController>()
-  const suggestionAbortControllerRef = useRef<AbortController>()
-  const lastSearchRef = useRef<string>()
+  const abortControllerRef = useRef<AbortController>(undefined)
+  const suggestionAbortControllerRef = useRef<AbortController>(undefined)
+  const lastSearchRef = useRef<string>(undefined)
 
   // Cache management
   const CACHE_TTL = 5 * 60 * 1000 // 5 minutes

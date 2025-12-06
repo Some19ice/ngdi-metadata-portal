@@ -12,8 +12,8 @@ export interface UseMapPerformanceOptions {
 
 export function useMapPerformance(options: UseMapPerformanceOptions = {}) {
   const { debounceMs = 300, throttleMs = 100 } = options
-  const debounceTimerRef = useRef<NodeJS.Timeout>()
-  const throttleTimerRef = useRef<NodeJS.Timeout>()
+  const debounceTimerRef = useRef<NodeJS.Timeout>(undefined)
+  const throttleTimerRef = useRef<NodeJS.Timeout>(undefined)
   const lastExecutedRef = useRef<number>(0)
   const isThrottledRef = useRef<boolean>(false)
 
@@ -107,8 +107,8 @@ export function useIsMounted() {
  * Hook for creating abort controllers with timeout
  */
 export function useAbortController(timeoutMs: number = 10000) {
-  const controllerRef = useRef<AbortController>()
-  const timeoutRef = useRef<NodeJS.Timeout>()
+  const controllerRef = useRef<AbortController>(undefined)
+  const timeoutRef = useRef<NodeJS.Timeout>(undefined)
 
   const createController = useCallback(() => {
     // Cleanup previous controller

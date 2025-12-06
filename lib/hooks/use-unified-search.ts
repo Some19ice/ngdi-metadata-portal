@@ -75,8 +75,8 @@ export function useUnifiedSearch(
   const [isInitialized, setIsInitialized] = useState(false)
 
   // Refs for cleanup and debouncing
-  const debounceTimeoutRef = useRef<NodeJS.Timeout>()
-  const abortControllerRef = useRef<AbortController>()
+  const debounceTimeoutRef = useRef<NodeJS.Timeout>(undefined)
+  const abortControllerRef = useRef<AbortController>(undefined)
   const lastSearchFiltersRef = useRef<string>("")
   const retryCountRef = useRef<number>(0)
   const maxRetries = 3
