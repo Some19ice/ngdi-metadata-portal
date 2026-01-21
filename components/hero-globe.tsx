@@ -1,15 +1,59 @@
 "use client"
-import React, { useEffect } from "react"
-import { motion } from "framer-motion"
+import React, { useEffect, Component, ReactNode } from "react"
 import dynamic from "next/dynamic"
 import { preloadGlobeData } from "@/lib/utils/topojson-loader"
 
 const World = dynamic(
   () => import("@/components/ui/globe").then(m => m.World),
   {
-    ssr: false
+    ssr: false,
+    loading: () => <GlobePlaceholder />
   }
 )
+
+// Placeholder shown while loading or on error
+function GlobePlaceholder() {
+  return (
+    <div className="w-full h-full flex items-center justify-center">
+      <div className="w-full h-full bg-gradient-to-br from-emerald-900/30 to-blue-900/30 rounded-full animate-pulse" />
+    </div>
+  )
+}
+
+// Error boundary for the globe component
+interface GlobeErrorBoundaryProps {
+  children: ReactNode
+}
+
+interface GlobeErrorBoundaryState {
+  hasError: boolean
+}
+
+class GlobeErrorBoundary extends Component<
+  GlobeErrorBoundaryProps,
+  GlobeErrorBoundaryState
+> {
+  constructor(props: GlobeErrorBoundaryProps) {
+    super(props)
+    this.state = { hasError: false }
+  }
+
+  static getDerivedStateFromError(): GlobeErrorBoundaryState {
+    return { hasError: true }
+  }
+
+  componentDidCatch(error: Error) {
+    // Silently log the error - the globe is just a visual enhancement
+    console.warn("Globe failed to load:", error.message)
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return <GlobePlaceholder />
+    }
+    return this.props.children
+  }
+}
 
 export default function GlobeDemo() {
   // Preload globe data when component mounts
@@ -215,12 +259,14 @@ export default function GlobeDemo() {
   ]
 
   return (
-    <div className="absolute inset-0 w-full h-full">
-      <div className="w-full h-full relative overflow-hidden">
-        <div className="absolute inset-0 w-full h-full">
-          <World data={sampleArcs} globeConfig={globeConfig} />
+    <GlobeErrorBoundary>
+      <div className="absolute inset-0 w-full h-full">
+        <div className="w-full h-full relative overflow-hidden">
+          <div className="absolute inset-0 w-full h-full">
+            <World data={sampleArcs} globeConfig={globeConfig} />
+          </div>
         </div>
       </div>
-    </div>
+    </GlobeErrorBoundary>
   )
 }

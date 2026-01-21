@@ -1,11 +1,60 @@
 "use client"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, Component, ReactNode } from "react"
 import { Color, Scene, Fog, PerspectiveCamera, Vector3, Group } from "three"
 import ThreeGlobe from "three-globe"
 import { useThree, Canvas, extend } from "@react-three/fiber"
 import { OrbitControls } from "@react-three/drei"
 import { loadGlobeData } from "@/lib/utils/topojson-loader"
 import { FeatureCollection } from "geojson"
+
+// Check if WebGL is supported
+function isWebGLSupported(): boolean {
+  if (typeof window === "undefined") return false
+
+  try {
+    const canvas = document.createElement("canvas")
+    const gl =
+      canvas.getContext("webgl") || canvas.getContext("experimental-webgl")
+    return gl !== null && gl !== undefined
+  } catch (e) {
+    return false
+  }
+}
+
+// Error boundary specifically for the globe
+interface GlobeErrorBoundaryProps {
+  children: ReactNode
+  fallback?: ReactNode
+}
+
+interface GlobeErrorBoundaryState {
+  hasError: boolean
+}
+
+class GlobeErrorBoundary extends Component<
+  GlobeErrorBoundaryProps,
+  GlobeErrorBoundaryState
+> {
+  constructor(props: GlobeErrorBoundaryProps) {
+    super(props)
+    this.state = { hasError: false }
+  }
+
+  static getDerivedStateFromError(): GlobeErrorBoundaryState {
+    return { hasError: true }
+  }
+
+  componentDidCatch(error: Error) {
+    console.warn("Globe component failed to render:", error.message)
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback || null
+    }
+    return this.props.children
+  }
+}
 declare module "@react-three/fiber" {
   interface ThreeElements {
     threeGlobe: ThreeElements["mesh"] & {
@@ -269,47 +318,82 @@ export function WebGLRendererConfig() {
   const { gl, size } = useThree()
 
   useEffect(() => {
+    if (typeof window === "undefined") return
     gl.setPixelRatio(window.devicePixelRatio)
     gl.setSize(size.width, size.height)
     gl.setClearColor(0xffaaff, 0)
-  }, [])
+  }, [gl, size])
 
   return null
 }
 
+// Fallback component when WebGL is not available
+function GlobeFallback() {
+  return (
+    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-emerald-900/30 to-blue-900/30 rounded-full">
+      <div className="text-center text-white/70 p-8">
+        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-r from-blue-400 to-green-400 opacity-60" />
+        <p className="text-sm">Interactive globe</p>
+      </div>
+    </div>
+  )
+}
+
 export function World(props: WorldProps) {
   const { globeConfig } = props
+  const [webGLSupported, setWebGLSupported] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    setWebGLSupported(isWebGLSupported())
+  }, [])
+
+  // Show nothing while checking WebGL support
+  if (webGLSupported === null) {
+    return <GlobeFallback />
+  }
+
+  // Show fallback if WebGL is not supported
+  if (!webGLSupported) {
+    return <GlobeFallback />
+  }
+
   const scene = new Scene()
   scene.fog = new Fog(0xffffff, 400, 2000)
+
   return (
-    <Canvas scene={scene} camera={new PerspectiveCamera(50, aspect, 180, 1800)}>
-      <WebGLRendererConfig />
-      <ambientLight color={globeConfig.ambientLight} intensity={0.6} />
-      <directionalLight
-        color={globeConfig.directionalLeftLight}
-        position={new Vector3(-400, 100, 400)}
-      />
-      <directionalLight
-        color={globeConfig.directionalTopLight}
-        position={new Vector3(-200, 500, 200)}
-      />
-      <pointLight
-        color={globeConfig.pointLight}
-        position={new Vector3(-200, 500, 200)}
-        intensity={0.8}
-      />
-      <Globe {...props} />
-      <OrbitControls
-        enablePan={false}
-        enableZoom={false}
-        minDistance={cameraZ}
-        maxDistance={cameraZ}
-        autoRotateSpeed={1}
-        autoRotate={true}
-        minPolarAngle={Math.PI / 3.5}
-        maxPolarAngle={Math.PI - Math.PI / 3}
-      />
-    </Canvas>
+    <GlobeErrorBoundary fallback={<GlobeFallback />}>
+      <Canvas
+        scene={scene}
+        camera={new PerspectiveCamera(50, aspect, 180, 1800)}
+      >
+        <WebGLRendererConfig />
+        <ambientLight color={globeConfig.ambientLight} intensity={0.6} />
+        <directionalLight
+          color={globeConfig.directionalLeftLight}
+          position={new Vector3(-400, 100, 400)}
+        />
+        <directionalLight
+          color={globeConfig.directionalTopLight}
+          position={new Vector3(-200, 500, 200)}
+        />
+        <pointLight
+          color={globeConfig.pointLight}
+          position={new Vector3(-200, 500, 200)}
+          intensity={0.8}
+        />
+        <Globe {...props} />
+        <OrbitControls
+          enablePan={false}
+          enableZoom={false}
+          minDistance={cameraZ}
+          maxDistance={cameraZ}
+          autoRotateSpeed={1}
+          autoRotate={true}
+          minPolarAngle={Math.PI / 3.5}
+          maxPolarAngle={Math.PI - Math.PI / 3}
+        />
+      </Canvas>
+    </GlobeErrorBoundary>
   )
 }
 
