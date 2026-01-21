@@ -5,7 +5,6 @@ import {
   motion,
   useMotionTemplate,
   useMotionValue,
-  useTransform,
   animate
 } from "framer-motion"
 import { cn } from "@/lib/utils"
@@ -27,29 +26,9 @@ export function MovingBorder({
 }: MovingBorderProps) {
   const pathRef = useRef<SVGRectElement | null>(null)
   const progress = useMotionValue<number>(0)
+  const x = useMotionValue(0)
+  const y = useMotionValue(0)
   const [isReady, setIsReady] = useState(false)
-
-  const x = useTransform(progress, val => {
-    if (!pathRef.current || !isReady) return 0
-    try {
-      const length = pathRef.current.getTotalLength()
-      if (length === 0) return 0
-      return pathRef.current.getPointAtLength(val)?.x ?? 0
-    } catch {
-      return 0
-    }
-  })
-
-  const y = useTransform(progress, val => {
-    if (!pathRef.current || !isReady) return 0
-    try {
-      const length = pathRef.current.getTotalLength()
-      if (length === 0) return 0
-      return pathRef.current.getPointAtLength(val)?.y ?? 0
-    } catch {
-      return 0
-    }
-  })
 
   const transform = useMotionTemplate`translateX(${x}px) translateY(${y}px) translateX(-50%) translateY(-50%)`
 
@@ -92,6 +71,28 @@ export function MovingBorder({
       if (frameId) cancelAnimationFrame(frameId)
     }
   }, [])
+
+  // Update x and y positions when progress changes - only after path is ready
+  useEffect(() => {
+    if (!isReady || !pathRef.current) return
+
+    const unsubscribe = progress.on("change", val => {
+      if (!pathRef.current) return
+      try {
+        const length = pathRef.current.getTotalLength()
+        if (length === 0) return
+        const point = pathRef.current.getPointAtLength(val)
+        if (point) {
+          x.set(point.x)
+          y.set(point.y)
+        }
+      } catch {
+        // Silently ignore SVG path errors
+      }
+    })
+
+    return () => unsubscribe()
+  }, [isReady, progress, x, y])
 
   // Animate the progress value continuously along the path length
   useEffect(() => {
