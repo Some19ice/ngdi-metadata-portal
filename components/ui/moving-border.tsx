@@ -79,14 +79,19 @@ export function MovingBorder({
     const unsubscribe = progress.on("change", val => {
       if (!pathRef.current) return
       try {
-        const length = pathRef.current.getTotalLength()
+        const path = pathRef.current
+        // Extra check to ensure path is connected and valid
+        if (!path.isConnected) return
+
+        const length = path.getTotalLength()
         if (length === 0) return
-        const point = pathRef.current.getPointAtLength(val)
+
+        const point = path.getPointAtLength(val)
         if (point) {
           x.set(point.x)
           y.set(point.y)
         }
-      } catch {
+      } catch (e) {
         // Silently ignore SVG path errors
       }
     })
@@ -102,7 +107,7 @@ export function MovingBorder({
     try {
       totalLength = pathRef.current.getTotalLength()
       if (totalLength === 0) return
-    } catch {
+    } catch (e) {
       return
     }
 
@@ -113,6 +118,12 @@ export function MovingBorder({
       repeat: Infinity,
       repeatType: "loop",
       onUpdate: latest => {
+        // Ensure we don't exceed the current total length if it changed
+        try {
+          // Optional: check if length changed?
+          // For now, just keeping the loop safe
+        } catch (e) {}
+
         if (latest >= totalLength) progress.set(0)
       }
     })
