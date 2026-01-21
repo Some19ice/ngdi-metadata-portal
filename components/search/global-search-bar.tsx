@@ -154,6 +154,8 @@ export default function GlobalSearchBar() {
 
   // Handle keyboard shortcuts
   useEffect(() => {
+    if (typeof document === "undefined") return
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault()
@@ -170,6 +172,8 @@ export default function GlobalSearchBar() {
 
   // Handle clicks outside to close suggestions
   useEffect(() => {
+    if (typeof document === "undefined") return
+
     const handleClickOutside = (event: MouseEvent) => {
       if (
         containerRef.current &&
@@ -253,6 +257,7 @@ export default function GlobalSearchBar() {
               onBlur={() => {
                 setTimeout(() => {
                   if (
+                    typeof document !== "undefined" &&
                     document.activeElement?.closest(
                       ".suggestions-container"
                     ) === null

@@ -39,6 +39,8 @@ export const GlowCard: React.FC<GlowCardProps> = ({
   const cardRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
+    if (typeof window === "undefined" || typeof document === "undefined") return
+
     const syncPointer = (e: PointerEvent) => {
       const { clientX: x, clientY: y } = e
       cardRef.current?.style.setProperty("--x", x.toFixed(2))

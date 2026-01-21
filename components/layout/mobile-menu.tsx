@@ -35,6 +35,8 @@ export function MobileMenu({
 
   // Lock body scroll when menu is open
   useEffect(() => {
+    if (typeof document === "undefined") return
+
     if (isOpen) {
       document.body.style.overflow = "hidden"
     } else {
@@ -48,6 +50,8 @@ export function MobileMenu({
 
   // Handle escape key
   useEffect(() => {
+    if (typeof document === "undefined") return
+
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === "Escape" && isOpen) {
         onClose()

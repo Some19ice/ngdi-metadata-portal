@@ -37,11 +37,13 @@ export default function AsyncErrorBoundary({
     error: null,
     isRetrying: false,
     retryAttempts: 0,
-    isOnline: navigator.onLine
+    isOnline: typeof navigator !== "undefined" ? navigator.onLine : true
   })
 
   // Monitor online status
   useEffect(() => {
+    if (typeof window === "undefined") return
+
     const handleOnline = () =>
       setAsyncState(prev => ({ ...prev, isOnline: true }))
     const handleOffline = () =>
