@@ -6,17 +6,56 @@ import { motion } from "framer-motion"
 import { ArrowRight, Search, Map, Globe2 } from "lucide-react"
 import Link from "next/link"
 import dynamic from "next/dynamic"
-import { Suspense } from "react"
+import { Suspense, Component, ReactNode } from "react"
 import Image from "next/image"
 import LandingHeader from "@/components/layout/landing-header"
 import { TrustBadges } from "@/components/landing/trust-badges"
 
+// Fallback for globe loading/error states
+function GlobeLoadingFallback() {
+  return (
+    <div className="w-full h-full bg-gradient-to-br from-blue-900/20 to-green-900/20 animate-pulse rounded-full" />
+  )
+}
+
+// Error boundary to catch any globe-related errors
+interface GlobeSectionErrorBoundaryProps {
+  children: ReactNode
+}
+
+interface GlobeSectionErrorBoundaryState {
+  hasError: boolean
+}
+
+class GlobeSectionErrorBoundary extends Component<
+  GlobeSectionErrorBoundaryProps,
+  GlobeSectionErrorBoundaryState
+> {
+  constructor(props: GlobeSectionErrorBoundaryProps) {
+    super(props)
+    this.state = { hasError: false }
+  }
+
+  static getDerivedStateFromError(): GlobeSectionErrorBoundaryState {
+    return { hasError: true }
+  }
+
+  componentDidCatch(error: Error) {
+    console.warn("Globe section error:", error.message)
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return <GlobeLoadingFallback />
+    }
+    return this.props.children
+  }
+}
+
 // Dynamically import the globe component for better performance
 const GlobeDemo = dynamic(() => import("@/components/hero-globe"), {
   ssr: false,
-  loading: () => (
-    <div className="w-full h-full bg-gradient-to-br from-blue-900/20 to-green-900/20 animate-pulse rounded-xl" />
-  )
+  loading: () => <GlobeLoadingFallback />
 })
 
 export function HeroSection() {
@@ -137,13 +176,11 @@ export function HeroSection() {
           >
             <div className="relative aspect-square w-full max-w-lg mx-auto">
               <div className="absolute inset-0 bg-gradient-to-r from-blue-600/20 to-green-600/20 rounded-full blur-3xl animate-pulse" />
-              <Suspense
-                fallback={
-                  <div className="w-full h-full bg-gradient-to-br from-blue-900/20 to-green-900/20 animate-pulse rounded-full" />
-                }
-              >
-                <GlobeDemo />
-              </Suspense>
+              <GlobeSectionErrorBoundary>
+                <Suspense fallback={<GlobeLoadingFallback />}>
+                  <GlobeDemo />
+                </Suspense>
+              </GlobeSectionErrorBoundary>
             </div>
           </motion.div>
         </div>

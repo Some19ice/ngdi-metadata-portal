@@ -342,21 +342,47 @@ function GlobeFallback() {
 export function World(props: WorldProps) {
   const { globeConfig } = props
   const [webGLSupported, setWebGLSupported] = useState<boolean | null>(null)
+  const [hasRenderError, setHasRenderError] = useState(false)
 
   useEffect(() => {
-    setWebGLSupported(isWebGLSupported())
+    // Check WebGL support
+    const supported = isWebGLSupported()
+    setWebGLSupported(supported)
+
+    // Also check for mobile Safari which has known WebGL issues
+    if (typeof navigator !== "undefined") {
+      const ua = navigator.userAgent
+      const isIOSSafari =
+        /iPad|iPhone|iPod/.test(ua) && /WebKit/.test(ua) && !/CriOS/.test(ua)
+
+      // On iOS Safari, check for WebGL context more carefully
+      if (isIOSSafari && supported) {
+        try {
+          const testCanvas = document.createElement("canvas")
+          const gl = testCanvas.getContext("webgl", {
+            failIfMajorPerformanceCaveat: true
+          })
+          if (!gl) {
+            setWebGLSupported(false)
+          }
+        } catch {
+          setWebGLSupported(false)
+        }
+      }
+    }
   }, [])
 
-  // Show nothing while checking WebGL support
+  // Show fallback while checking WebGL support
   if (webGLSupported === null) {
     return <GlobeFallback />
   }
 
-  // Show fallback if WebGL is not supported
-  if (!webGLSupported) {
+  // Show fallback if WebGL is not supported or had render error
+  if (!webGLSupported || hasRenderError) {
     return <GlobeFallback />
   }
 
+  // Create scene and camera outside of render to avoid recreation
   const scene = new Scene()
   scene.fog = new Fog(0xffffff, 400, 2000)
 
@@ -365,6 +391,13 @@ export function World(props: WorldProps) {
       <Canvas
         scene={scene}
         camera={new PerspectiveCamera(50, aspect, 180, 1800)}
+        onCreated={({ gl }) => {
+          // Additional check after canvas creation
+          if (!gl || !gl.getContext) {
+            setHasRenderError(true)
+          }
+        }}
+        fallback={<GlobeFallback />}
       >
         <WebGLRendererConfig />
         <ambientLight color={globeConfig.ambientLight} intensity={0.6} />
