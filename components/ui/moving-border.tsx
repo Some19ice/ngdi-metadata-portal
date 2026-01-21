@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useRef, useEffect } from "react"
+import React, { useRef, useEffect, useState } from "react"
 import {
   motion,
   useMotionTemplate,
@@ -27,37 +27,97 @@ export function MovingBorder({
 }: MovingBorderProps) {
   const pathRef = useRef<SVGRectElement | null>(null)
   const progress = useMotionValue<number>(0)
+  const [isReady, setIsReady] = useState(false)
 
-  const x = useTransform(
-    progress,
-    val => pathRef.current?.getPointAtLength(val)?.x ?? 0
-  )
-  const y = useTransform(
-    progress,
-    val => pathRef.current?.getPointAtLength(val)?.y ?? 0
-  )
+  const x = useTransform(progress, val => {
+    if (!pathRef.current || !isReady) return 0
+    try {
+      const length = pathRef.current.getTotalLength()
+      if (length === 0) return 0
+      return pathRef.current.getPointAtLength(val)?.x ?? 0
+    } catch {
+      return 0
+    }
+  })
+
+  const y = useTransform(progress, val => {
+    if (!pathRef.current || !isReady) return 0
+    try {
+      const length = pathRef.current.getTotalLength()
+      if (length === 0) return 0
+      return pathRef.current.getPointAtLength(val)?.y ?? 0
+    } catch {
+      return 0
+    }
+  })
+
   const transform = useMotionTemplate`translateX(${x}px) translateY(${y}px) translateX(-50%) translateY(-50%)`
+
+  // Check if path is ready after mount
+  useEffect(() => {
+    if (typeof window === "undefined") return
+
+    const checkPath = () => {
+      if (pathRef.current) {
+        try {
+          const length = pathRef.current.getTotalLength()
+          if (length > 0) {
+            setIsReady(true)
+            return true
+          }
+        } catch {
+          // Path not ready yet
+        }
+      }
+      return false
+    }
+
+    // Try immediately
+    if (checkPath()) return
+
+    // Retry with requestAnimationFrame for layout to complete
+    let frameId: number
+    let attempts = 0
+    const maxAttempts = 10
+
+    const tryAgain = () => {
+      attempts++
+      if (checkPath() || attempts >= maxAttempts) return
+      frameId = requestAnimationFrame(tryAgain)
+    }
+
+    frameId = requestAnimationFrame(tryAgain)
+
+    return () => {
+      if (frameId) cancelAnimationFrame(frameId)
+    }
+  }, [])
 
   // Animate the progress value continuously along the path length
   useEffect(() => {
-    if (!pathRef.current) return
+    if (!pathRef.current || !isReady) return
 
-    const totalLength = pathRef.current.getTotalLength()
+    let totalLength: number
+    try {
+      totalLength = pathRef.current.getTotalLength()
+      if (totalLength === 0) return
+    } catch {
+      return
+    }
 
     // Framer motion animate loop
     const controls = animate(progress, totalLength, {
-      duration: duration / 1000, // convert ms to seconds if duration in ms; original default 4000 assumed ms? Actually default 4000, but progress animate expects seconds; We'll convert.
+      duration: duration / 1000,
       ease: "linear",
       repeat: Infinity,
       repeatType: "loop",
       onUpdate: latest => {
-        // Reset to 0 when exceeds length to ensure continuous loop
         if (latest >= totalLength) progress.set(0)
       }
     })
 
     return () => controls.stop()
-  }, [duration, progress])
+  }, [duration, progress, isReady])
 
   return (
     <div
@@ -80,25 +140,26 @@ export function MovingBorder({
           ref={pathRef}
         />
       </svg>
-      <motion.div
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          display: "inline-block",
-          transform
-        }}
-        aria-hidden="true"
-        role="presentation"
-      >
-        {children}
-      </motion.div>
+      {isReady && (
+        <motion.div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            display: "inline-block",
+            transform
+          }}
+          aria-hidden="true"
+          role="presentation"
+        >
+          {children}
+        </motion.div>
+      )}
     </div>
   )
 }
 
-interface MovingBorderWrapperProps
-  extends React.HTMLAttributes<HTMLDivElement> {
+interface MovingBorderWrapperProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode
   duration?: number
   className?: string
